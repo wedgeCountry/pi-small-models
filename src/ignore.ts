@@ -1,6 +1,8 @@
 export const DEFAULT_IGNORE_GLOBS = [
   "**/node_modules/**",
   "**/.git/**",
+  "**/.venv/**",
+  "**/__pycache__/**",
   "**/dist/**",
   "**/build/**",
   "**/.pi/**",

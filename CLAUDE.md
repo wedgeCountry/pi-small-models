@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A [Pi coding agent](https://pi.dev) extension (`@earendil-works/pi-coding-agent`) that disables Pi's built-in `bash` tool and replaces `find`/`grep`/`edit`/`ls` with sandboxed, structured `find`, `grep`, `edit`, `list`, `mkdir`, `remove`, `lstat`, and `insert` tools — intended for smaller/weaker models that do better with constrained, structured tools than with a raw shell.
+A [Pi coding agent](https://pi.dev) extension (`@earendil-works/pi-coding-agent`) that disables Pi's built-in `bash` tool — intended for smaller/weaker models that do better with constrained, structured tools than with a raw shell.
 
 The extension is loaded directly from TypeScript source (`index.ts`, declared via the `pi.extensions` field in `package.json`); there is no build step. Node 24's native TypeScript type-stripping runs the `.ts` files as-is, both for the extension itself and for tests.
 
