@@ -10,11 +10,12 @@ test("lists top-level entries non-recursively", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const entries = await listDir(dir);
+  const result = await listDir(dir);
   assert.deepEqual(
-    entries.map((e) => e.path).sort(),
+    result.entries.map((e) => e.path).sort(),
     ["a.txt", "sub"]
   );
+  assert.equal(result.truncated, false);
 });
 
 test("lists recursively up to maxDepth", async (t) => {
@@ -25,12 +26,12 @@ test("lists recursively up to maxDepth", async (t) => {
 
   const shallow = await listDir(dir, { recursive: true, maxDepth: 1 });
   assert.deepEqual(
-    shallow.map((e) => e.path).sort(),
+    shallow.entries.map((e) => e.path).sort(),
     ["a", "a/b"]
   );
 
   const deep = await listDir(dir, { recursive: true, maxDepth: 5 });
-  assert.ok(deep.some((e) => e.path === "a/b/c/d.txt"));
+  assert.ok(deep.entries.some((e) => e.path === "a/b/c/d.txt"));
 });
 
 test("hides dotfiles by default and shows them with showHidden", async (t) => {
@@ -41,10 +42,10 @@ test("hides dotfiles by default and shows them with showHidden", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   const withoutHidden = await listDir(dir);
-  assert.deepEqual(withoutHidden.map((e) => e.path), ["visible.txt"]);
+  assert.deepEqual(withoutHidden.entries.map((e) => e.path), ["visible.txt"]);
 
   const withHidden = await listDir(dir, { showHidden: true });
-  assert.deepEqual(withHidden.map((e) => e.path).sort(), [".hidden", "visible.txt"]);
+  assert.deepEqual(withHidden.entries.map((e) => e.path).sort(), [".hidden", "visible.txt"]);
 });
 
 test("skips default-ignored directories like node_modules", async (t) => {
@@ -54,6 +55,33 @@ test("skips default-ignored directories like node_modules", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const entries = await listDir(dir, { recursive: true, maxDepth: 5 });
-  assert.ok(!entries.some((e) => e.path.includes("node_modules")));
+  const result = await listDir(dir, { recursive: true, maxDepth: 5 });
+  assert.ok(!result.entries.some((e) => e.path.includes("node_modules")));
+});
+
+test("truncates at maxResults", async (t) => {
+  const dir = await makeFixture({
+    "a.txt": "",
+    "b.txt": "",
+    "c.txt": "",
+    "d.txt": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await listDir(dir, { maxResults: 2 });
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.total, 4);
+  assert.equal(result.truncated, true);
+});
+
+test("does not report truncated when entry count exactly equals maxResults", async (t) => {
+  const dir = await makeFixture({
+    "a.txt": "",
+    "b.txt": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await listDir(dir, { maxResults: 2 });
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.truncated, false);
 });

@@ -17,5 +17,6 @@ export const LIST_TOOL_DEFINITION = {
       Type.Integer({ description: "Maximum recursion depth when recursive is true.", default: 3 })
     ),
     showHidden: Type.Optional(Type.Boolean({ description: "Include dotfiles and dot-directories.", default: false })),
+    maxResults: Type.Optional(Type.Integer({ description: "Maximum number of entries to return.", default: 200 })),
   }),
 };

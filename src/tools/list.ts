@@ -9,6 +9,7 @@ export interface ListOptions {
   recursive?: boolean;
   maxDepth?: number;
   showHidden?: boolean;
+  maxResults?: number;
   signal?: AbortSignal;
 }
 
@@ -17,9 +18,16 @@ export interface ListEntry {
   isDirectory: boolean;
 }
 
+export interface ListResult {
+  entries: ListEntry[];
+  total: number;
+  truncated: boolean;
+}
+
 /** Lists directory entries under `base`, optionally recursively. */
-export async function listDir(base: string, opts: ListOptions = {}): Promise<ListEntry[]> {
+export async function listDir(base: string, opts: ListOptions = {}): Promise<ListResult> {
   const maxDepth = opts.recursive ? (opts.maxDepth ?? 3) : 0;
+  const max = opts.maxResults ?? 200;
   const entries: ListEntry[] = [];
 
   async function walk(dir: string, relPrefix: string, depth: number): Promise<void> {
@@ -41,7 +49,8 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
   }
 
   await walk(base, "", 0);
-  return entries;
+  const truncated = entries.length > max;
+  return { entries: entries.slice(0, max), total: entries.length, truncated };
 }
 
 export function registerListTool(pi: ExtensionAPI) {
@@ -49,20 +58,23 @@ export function registerListTool(pi: ExtensionAPI) {
     ...LIST_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSafePath(ctx.cwd, params.path ?? ".");
-      const entries = await listDir(base, {
+      const result = await listDir(base, {
         recursive: params.recursive,
         maxDepth: params.maxDepth,
         showHidden: params.showHidden,
+        maxResults: params.maxResults,
         signal,
       });
 
-      const text = entries.length
-        ? entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n")
+      const remaining = result.total - result.entries.length;
+      const text = result.entries.length
+        ? result.entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n") +
+          (result.truncated ? `\n… ${remaining} more entr${remaining === 1 ? "y" : "ies"} truncated` : "")
         : "(empty directory)";
 
       return {
         content: [{ type: "text", text }],
-        details: { entries },
+        details: result,
       };
     },
   });
