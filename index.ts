@@ -2,6 +2,7 @@ import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
 import {registerGrepTool} from "./src/tools/grep.ts";
+import {registerInsertTool} from "./src/tools/insert.ts";
 import {registerListTool} from "./src/tools/list.ts";
 import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
@@ -15,6 +16,7 @@ export default function (pi: ExtensionAPI) {
   registerEditTool(pi);
   registerFindTool(pi);
   registerGrepTool(pi);
+  registerInsertTool(pi);
   registerListTool(pi);
   registerLstatTool(pi);
   registerMkdirTool(pi);
