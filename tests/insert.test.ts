@@ -41,6 +41,15 @@ test("splits multi-line text across multiple inserted lines", async (t) => {
   assert.equal(content, "line1\nfoo\nbar\nline2");
 });
 
+test("preserves CRLF line endings instead of mixing them with bare LF", async (t) => {
+  const dir = await makeFixture({ "a.txt": "line1\r\nline2\r\nline3" });
+  t.after(() => cleanupFixture(dir));
+
+  await insertText(path.join(dir, "a.txt"), 1, "inserted");
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "line1\r\ninserted\r\nline2\r\nline3");
+});
+
 test("rejects a negative line number", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1" });
   t.after(() => cleanupFixture(dir));

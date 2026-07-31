@@ -16,13 +16,17 @@ export async function insertText(filePath: string, line: number, text: string): 
     throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
   }
 
-  const lines = content.split("\n");
+  // Detect and preserve the file's line ending so the inserted text doesn't end up
+  // with a different terminator than the rest of the file (e.g. bare "\n" spliced
+  // into a CRLF file, leaving mixed line endings behind).
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(/\r\n|\n/);
   if (line > lines.length) {
     throw new Error(`line ${line} is past the end of "${filePath}" (${lines.length} line(s))`);
   }
 
-  lines.splice(line, 0, ...text.split("\n"));
-  await fs.writeFile(filePath, lines.join("\n"), "utf8");
+  lines.splice(line, 0, ...text.split(/\r\n|\n/));
+  await fs.writeFile(filePath, lines.join(eol), "utf8");
 }
 
 export function registerInsertTool(pi: ExtensionAPI) {

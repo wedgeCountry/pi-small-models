@@ -62,9 +62,25 @@ test("truncates at maxResults", async (t) => {
   assert.equal(result.truncated, true);
 });
 
+test("does not report truncated when matchCount exactly equals maxResults", async (t) => {
+  const dir = await makeFixture({ "a.txt": "x\nx\nx\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(dir, "x", { maxResults: 3 });
+  assert.equal(result.matchCount, 3);
+  assert.equal(result.truncated, false);
+});
+
 test("rejects an invalid regex", async (t) => {
   const dir = await makeFixture({ "a.txt": "x" });
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(() => grepFiles(dir, "("));
+});
+
+test("aborts instead of hanging on a catastrophically backtracking pattern", async (t) => {
+  const dir = await makeFixture({ "a.txt": "a".repeat(40) + "!" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => grepFiles(dir, "(a+)+$", { timeoutMs: 300 }), /took longer than/);
 });

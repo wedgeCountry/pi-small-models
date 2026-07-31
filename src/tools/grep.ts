@@ -1,6 +1,5 @@
 import fg from "fast-glob";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
@@ -12,6 +11,8 @@ export interface GrepOptions {
   maxResults?: number;
   contextLines?: number;
   signal?: AbortSignal;
+  /** Hard wall-clock budget for the scan, in ms. Guards against catastrophic regex backtracking. */
+  timeoutMs?: number;
 }
 
 export interface GrepLine {
@@ -28,14 +29,18 @@ export interface GrepResult {
   truncated: boolean;
 }
 
+const DEFAULT_TIMEOUT_MS = 5000;
+const WORKER_URL = new URL("./grepWorker.ts", import.meta.url);
+
 /** Searches file contents under `base` for a regex/plain-text pattern. */
 export async function grepFiles(base: string, pattern: string, opts: GrepOptions = {}): Promise<GrepResult> {
   const max = opts.maxResults ?? 200;
   const context = opts.contextLines ?? 0;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const flags = opts.ignoreCase ? "i" : "";
 
-  let regex: RegExp;
   try {
-    regex = new RegExp(pattern, opts.ignoreCase ? "i" : "");
+    new RegExp(pattern, flags); // validate syntax before spending a worker on it
   } catch (err) {
     throw new Error(`Invalid pattern: ${(err as Error).message}`);
   }
@@ -49,36 +54,69 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
   });
   files.sort();
 
-  const lines: GrepLine[] = [];
-  let matchCount = 0;
-  let filesScanned = 0;
+  return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
+}
 
-  for (const relFile of files) {
-    if (opts.signal?.aborted) throw new Error("Aborted");
-    if (matchCount >= max) break;
+interface ScanInput {
+  base: string;
+  files: string[];
+  pattern: string;
+  flags: string;
+  max: number;
+  context: number;
+}
 
-    let content: string;
-    try {
-      content = await fs.readFile(path.join(base, relFile), "utf8");
-    } catch {
-      continue; // unreadable or not text
-    }
-    if (content.includes("\0")) continue; // skip binary files
+/**
+ * Runs the actual regex matching on a disposable worker thread with a hard
+ * timeout. A pathological pattern (catastrophic backtracking) can only hang
+ * the worker, which we then terminate, instead of freezing the whole process
+ * — the main-thread AbortSignal check alone can't interrupt a single
+ * in-progress synchronous RegExp.test() call.
+ */
+function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal): Promise<GrepResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(WORKER_URL, { workerData: input });
+    let settled = false;
 
-    filesScanned++;
-    const fileLines = content.split("\n");
-    for (let i = 0; i < fileLines.length && matchCount < max; i++) {
-      if (!regex.test(fileLines[i] ?? "")) continue;
-      matchCount++;
-      const from = Math.max(0, i - context);
-      const to = Math.min(fileLines.length - 1, i + context);
-      for (let j = from; j <= to; j++) {
-        lines.push({ file: relFile, line: j + 1, text: fileLines[j] ?? "", isMatch: j === i });
-      }
-    }
-  }
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      fn();
+    };
 
-  return { lines, matchCount, filesScanned, truncated: matchCount >= max };
+    const timer = setTimeout(() => {
+      finish(() => {
+        worker.terminate();
+        reject(
+          new Error(
+            `grep pattern "${input.pattern}" took longer than ${timeoutMs}ms to evaluate — it may be causing catastrophic regex backtracking; try a simpler pattern or narrow "glob"/"path"`
+          )
+        );
+      });
+    }, timeoutMs);
+
+    const onAbort = () => {
+      finish(() => {
+        worker.terminate();
+        reject(new Error("Aborted"));
+      });
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    worker.once("message", (msg: GrepResult | { error: string }) => {
+      finish(() => {
+        worker.terminate();
+        if ("error" in msg) reject(new Error(msg.error));
+        else resolve(msg);
+      });
+    });
+
+    worker.once("error", (err) => {
+      finish(() => reject(err));
+    });
+  });
 }
 
 export function registerGrepTool(pi: ExtensionAPI) {
