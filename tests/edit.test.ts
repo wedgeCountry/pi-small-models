@@ -41,3 +41,19 @@ test("rejects when the file does not exist", async (t) => {
 
   await assert.rejects(() => editFile(path.join(dir, "missing.txt"), "a", "b"));
 });
+
+test("replaces all occurrences when allowMultipleMatches is set", async (t) => {
+  const dir = await makeFixture({ "a.txt": "dup\ndup\ndup\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFile(path.join(dir, "a.txt"), "dup", "x", { allowMultipleMatches: true });
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "x\nx\nx\n");
+});
+
+test("still rejects when oldText is not found and allowMultipleMatches is set", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "missing", "x", { allowMultipleMatches: true }));
+});

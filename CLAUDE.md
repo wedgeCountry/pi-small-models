@@ -26,7 +26,7 @@ Each tool (`find`, `grep`, `list`, `edit`) is split into two files that must sta
 
 `index.ts` is the extension entry point: it registers all four tools, then on `session_start` filters `bash` out of the active tool list. `find`/`grep`/`edit` share their names with Pi's built-in tools, so registering them under the same name replaces the built-ins automatically (per Pi's tool registry); `list` has no built-in name collision (Pi's equivalent is `ls`, which stays active alongside it).
 
-Pi's built-in `edit` tool takes a `path` plus an `edits` array (each `{oldText, newText}`), letting one call make several disjoint changes. This project's `edit` tool intentionally simplifies that to a single `{path, oldText, newText}` per call — `oldText` must match exactly one location in the file, or `editFile` throws. Callers needing multiple changes to one file make multiple `edit` calls.
+Pi's built-in `edit` tool takes a `path` plus an `edits` array (each `{oldText, newText}`), letting one call make several disjoint changes. This project's `edit` tool intentionally simplifies that to a single `{path, oldText, newText}` per call — `oldText` must match exactly one location in the file, or `editFile` throws. Callers needing multiple changes to one file make multiple `edit` calls. Set `allowMultipleMatches: true` to opt out of the uniqueness check and replace every occurrence of `oldText` instead.
 
 Shared infrastructure:
 
