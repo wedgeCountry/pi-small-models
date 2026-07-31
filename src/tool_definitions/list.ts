@@ -7,7 +7,6 @@ export const LIST_TOOL_DEFINITION = {
   promptSnippet: "list: list directory contents (bash is disabled)",
   promptGuidelines: [
     "Use list to see the files and subdirectories inside a directory.",
-    "Use list instead of a bash `ls`/`dir`/`tree` command — bash is disabled in this project.",
   ],
   parameters: Type.Object({
     path: Type.Optional(

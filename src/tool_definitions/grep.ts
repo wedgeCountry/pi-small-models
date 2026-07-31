@@ -7,7 +7,7 @@ export const GREP_TOOL_DEFINITION = {
   promptSnippet: "grep: search file contents by regex/text (bash is disabled)",
   promptGuidelines: [
     "Use grep to search file contents for a regular expression (JS syntax) or plain text.",
-    "Use grep instead of a bash `grep`/`rg`/`findstr` command — bash is disabled in this project.",
+    "If you have identified interesting lines and want to use read, use the offset and limit parameters.",
   ],
   parameters: Type.Object({
     pattern: Type.String({ description: "Regular expression (JS syntax) or plain text to search for." }),
