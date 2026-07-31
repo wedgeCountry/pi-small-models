@@ -1,6 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { DEFAULT_IGNORE_NAMES } from "./ignore.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
+import { resolveSafePath } from "./pathSafety.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -39,4 +42,28 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
 
   await walk(base, "", 0);
   return entries;
+}
+
+export function registerListTool(pi: ExtensionAPI) {
+  pi.registerTool({
+    ...LIST_TOOL_DEFINITION,
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const base = resolveSafePath(ctx.cwd, params.path ?? ".");
+      const entries = await listDir(base, {
+        recursive: params.recursive,
+        maxDepth: params.maxDepth,
+        showHidden: params.showHidden,
+        signal,
+      });
+
+      const text = entries.length
+        ? entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n")
+        : "(empty directory)";
+
+      return {
+        content: [{ type: "text", text }],
+        details: { entries },
+      };
+    },
+  });
 }

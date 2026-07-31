@@ -2,6 +2,9 @@ import fg from "fast-glob";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { DEFAULT_IGNORE_GLOBS } from "./ignore.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
+import { resolveSafePath } from "./pathSafety.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -76,4 +79,30 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
   }
 
   return { lines, matchCount, filesScanned, truncated: matchCount >= max };
+}
+
+export function registerGrepTool(pi: ExtensionAPI) {
+  pi.registerTool({
+    ...GREP_TOOL_DEFINITION,
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const base = resolveSafePath(ctx.cwd, params.path ?? ".");
+      const result = await grepFiles(base, params.pattern, {
+        glob: params.glob,
+        ignoreCase: params.ignoreCase,
+        maxResults: params.maxResults,
+        contextLines: params.contextLines,
+        signal,
+      });
+
+      const text = result.lines.length
+        ? result.lines.map((l) => `${l.file}${l.isMatch ? ":" : "-"}${l.line}${l.isMatch ? ":" : "-"}${l.text}`).join("\n") +
+          (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
+        : "No matches found.";
+
+      return {
+        content: [{ type: "text", text }],
+        details: { matchCount: result.matchCount, filesScanned: result.filesScanned, truncated: result.truncated },
+      };
+    },
+  });
 }

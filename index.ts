@@ -1,7 +1,7 @@
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {registerFindTool} from "./src/find.ts";
-import {registerGrepTool} from "./tool_definitions/grep.ts";
-import {registerListTool} from "./tool_definitions/list.ts";
+import {registerGrepTool} from "./src/grep.ts";
+import {registerListTool} from "./src/list.ts";
 
 // find/grep override Pi's built-in tools of the same name (same-name registration
 // replaces the built-in per Pi's tool registry). "ls" has no name collision with
