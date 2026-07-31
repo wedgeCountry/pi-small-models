@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { grepFiles } from "../src/grep.ts";
+import { grepFiles } from "../src/tools/grep.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds matching lines by regex", async (t) => {

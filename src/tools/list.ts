@@ -1,9 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { DEFAULT_IGNORE_NAMES } from "./ignore.ts";
+import { DEFAULT_IGNORE_NAMES } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
-import { resolveSafePath } from "./pathSafety.ts";
+import { resolveSafePath } from "../pathSafety.ts";
 
 export interface ListOptions {
   recursive?: boolean;

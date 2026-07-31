@@ -11,5 +11,6 @@
     "noUncheckedIndexedAccess": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "src/**/*.ts", "tool_definitions/**/*.ts", "tests/**/*.ts"]
+  "include": ["index.ts", "src/**/*.ts",
+    "src/tool_definitions/**/*.ts", "tests/**/*.ts"]
 }

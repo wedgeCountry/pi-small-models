@@ -1,10 +1,10 @@
 import fg from "fast-glob";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { DEFAULT_IGNORE_GLOBS } from "./ignore.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
-import { resolveSafePath } from "./pathSafety.ts";
+import { resolveSafePath } from "../pathSafety.ts";
 
 export interface GrepOptions {
   glob?: string;

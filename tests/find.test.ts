@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findFiles } from "../src/find.ts";
+import { findFiles } from "../src/tools/find.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds files matching a glob pattern", async (t) => {

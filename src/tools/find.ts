@@ -1,8 +1,8 @@
 import fg from "fast-glob";
-import {DEFAULT_IGNORE_GLOBS} from "./ignore.ts";
+import {DEFAULT_IGNORE_GLOBS} from "../ignore.ts";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
-import {resolveSafePath} from "./pathSafety.ts";
+import {resolveSafePath} from "../pathSafety.ts";
 
 export interface FindOptions {
   maxResults?: number;
