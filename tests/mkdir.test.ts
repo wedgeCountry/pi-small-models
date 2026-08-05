@@ -38,3 +38,13 @@ test("rejects when the path already exists as a file", async (t) => {
 
   await assert.rejects(() => makeDir(path.join(dir, "a.txt")));
 });
+
+test("rejects when the signal is already aborted, without creating the directory", async (t) => {
+  const dir = await makeFixture({});
+  t.after(() => cleanupFixture(dir));
+
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(() => makeDir(path.join(dir, "sub"), { signal: ac.signal }));
+  await assert.rejects(() => fs.stat(path.join(dir, "sub")));
+});

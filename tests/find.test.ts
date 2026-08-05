@@ -48,6 +48,25 @@ test("truncates results at maxResults", async (t) => {
   assert.equal(result.truncated, true);
 });
 
+test("rejects immediately when the signal is already aborted", async (t) => {
+  const dir = await makeFixture({ "a.txt": "" });
+  t.after(() => cleanupFixture(dir));
+
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(() => findFiles(dir, "*.txt", { signal: ac.signal }));
+});
+
+test("aborts an in-flight scan via signal", async (t) => {
+  const dir = await makeFixture({ "a.txt": "", "b.txt": "", "c.txt": "" });
+  t.after(() => cleanupFixture(dir));
+
+  const ac = new AbortController();
+  const promise = findFiles(dir, "**/*", { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(() => promise, /aborted/);
+});
+
 test("omits a symlink that points outside the base directory", async (t) => {
   const dir = await makeFixture({ "real.txt": "" });
   const outside = await makeFixture({ "secret.txt": "top secret" });

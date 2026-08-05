@@ -3,8 +3,19 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import { resolveSafePath } from "../pathSafety.ts";
 
-/** Creates `dirPath`, including any missing parent directories. */
-export async function makeDir(dirPath: string): Promise<void> {
+export interface MakeDirOptions {
+  signal?: AbortSignal;
+}
+
+/**
+ * Creates `dirPath`, including any missing parent directories. `fs.mkdir`
+ * doesn't accept a `signal` option (unlike `fs.readFile`/`writeFile`), so
+ * the best we can do is fail fast if already aborted before starting — a
+ * `mkdir -p` chain is a handful of syscalls, not a long-running scan, so
+ * there's nothing meaningful to interrupt mid-flight.
+ */
+export async function makeDir(dirPath: string, opts: MakeDirOptions = {}): Promise<void> {
+  opts.signal?.throwIfAborted();
   try {
     await fs.mkdir(dirPath, { recursive: true });
   } catch (err) {
@@ -15,9 +26,9 @@ export async function makeDir(dirPath: string): Promise<void> {
 export function registerMkdirTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...MKDIR_TOOL_DEFINITION,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const dirPath = resolveSafePath(ctx.cwd, params.path);
-      await makeDir(dirPath);
+      await makeDir(dirPath, { signal });
 
       return {
         content: [{ type: "text", text: `Created directory ${params.path}.` }],

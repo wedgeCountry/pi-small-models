@@ -12,10 +12,17 @@ Open points from `REVIEW.md` (2026-08-05), ordered by priority.
       no extra cost. Added symlink-escape tests to `find.test.ts`/`grep.test.ts`/`list.test.ts`
       (same fixture pattern as `pathSafety.test.ts`, `t.skip()` on `EPERM`).
 
-- [ ] **No cancellation for most tools (Medium)** — only `grep` (timeout) and `list` (`AbortSignal`
-      check) can be interrupted. `find` never receives a `signal`; `remove`, `edit`, `insert`,
-      `mkdir` never wire the `signal` Pi passes into `execute()` through to the underlying `fs`
-      calls. Wire `signal` through (or add a timeout) at least for `find` and `remove --recursive`.
+- [x] **No cancellation for most tools (Medium)** — Fixed. `find` now scans via fast-glob's
+      `stream()` API instead of the un-cancellable promise API, so `signal` abort actually
+      `.destroy()`s the underlying stream mid-scan. `remove --recursive` no longer delegates to a
+      single `fs.rm({recursive: true})` call — it walks entries itself (`removeRecursively` in
+      `src/tools/remove.ts`), checking `signal` before each one, since `fs.rm`/`fs.mkdir` don't
+      accept a `signal` option at all (verified empirically; only `fs.readFile`/`writeFile` honor
+      it natively). `edit` and `insert` pass `signal` straight through to their `readFile`/
+      `writeFile` calls. `mkdir` and non-recursive `remove` at least `throwIfAborted()` before
+      starting, since there's nothing longer-running to interrupt mid-flight there. Added
+      already-aborted and in-flight-abort tests to `find`/`remove`/`edit`/`insert`/`mkdir` test
+      files.
 
 - [ ] **Empty `oldText` in `edit` corrupts the file (Medium)** — `content.indexOf("")` always
       matches, so empty `oldText` is always "not unique" without `allowMultipleMatches`, and with

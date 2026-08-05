@@ -57,3 +57,14 @@ test("still rejects when oldText is not found and allowMultipleMatches is set", 
 
   await assert.rejects(() => editFile(path.join(dir, "a.txt"), "missing", "x", { allowMultipleMatches: true }));
 });
+
+test("rejects when the signal is already aborted, without modifying the file", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;", { signal: ac.signal }));
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 1;\n");
+});

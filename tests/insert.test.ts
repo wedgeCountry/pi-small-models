@@ -70,3 +70,14 @@ test("rejects when the file does not exist", async (t) => {
 
   await assert.rejects(() => insertText(path.join(dir, "missing.txt"), 0, "x"));
 });
+
+test("rejects when the signal is already aborted, without modifying the file", async (t) => {
+  const dir = await makeFixture({ "a.txt": "line1\nline2" });
+  t.after(() => cleanupFixture(dir));
+
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(() => insertText(path.join(dir, "a.txt"), 1, "inserted", { signal: ac.signal }));
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "line1\nline2");
+});

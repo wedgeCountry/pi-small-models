@@ -6,6 +6,7 @@ import { resolveSafePath } from "../pathSafety.ts";
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
   allowMultipleMatches?: boolean;
+  signal?: AbortSignal;
 }
 
 /**
@@ -25,8 +26,11 @@ export async function editFile(
 
   let content: string;
   try {
-    content = await fs.readFile(filePath, "utf8");
+    // fs.readFile/writeFile natively honor `signal`, unlike fs.rm/fs.mkdir —
+    // no manual abort plumbing needed here.
+    content = await fs.readFile(filePath, { encoding: "utf8", signal: opts.signal });
   } catch (err) {
+    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
     throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
   }
 
@@ -42,16 +46,17 @@ export async function editFile(
   const updated = opts.allowMultipleMatches
     ? content.split(oldText).join(newText)
     : content.slice(0, firstIndex) + newText + content.slice(firstIndex + oldText.length);
-  await fs.writeFile(filePath, updated, "utf8");
+  await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
 }
 
 export function registerEditTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...EDIT_TOOL_DEFINITION,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const filePath = resolveSafePath(ctx.cwd, params.path);
       await editFile(filePath, params.oldText, params.newText, {
         allowMultipleMatches: params.allowMultipleMatches,
+        signal,
       });
 
       return {

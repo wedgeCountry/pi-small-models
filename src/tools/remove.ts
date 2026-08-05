@@ -6,6 +6,29 @@ import { resolveSafePath } from "../pathSafety.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
+  signal?: AbortSignal;
+}
+
+/**
+ * Recursively deletes `targetPath` entry by entry (rather than the single
+ * `fs.rm({recursive: true})` call this used to be), checking `signal`
+ * between each child so a runaway delete over a large directory tree can
+ * actually be interrupted instead of running to completion unstoppably.
+ * Node's `fs.rm`/`fs.mkdir` don't accept a `signal` option themselves, so
+ * that check has to happen at this granularity to do anything useful.
+ */
+async function removeRecursively(targetPath: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  const stat = await fs.lstat(targetPath);
+  if (stat.isDirectory()) {
+    const names = await fs.readdir(targetPath);
+    for (const name of names) {
+      await removeRecursively(path.join(targetPath, name), signal);
+    }
+    await fs.rmdir(targetPath);
+  } else {
+    await fs.unlink(targetPath);
+  }
 }
 
 /** Deletes `targetPath`. Directories require `recursive: true`. */
@@ -21,19 +44,25 @@ export async function removePath(targetPath: string, opts: RemoveOptions = {}): 
     throw new Error(`"${targetPath}" is a directory; set recursive to true to remove it`);
   }
 
-  await fs.rm(targetPath, { recursive: !!opts.recursive });
+  opts.signal?.throwIfAborted();
+
+  if (stat.isDirectory()) {
+    await removeRecursively(targetPath, opts.signal);
+  } else {
+    await fs.unlink(targetPath);
+  }
 }
 
 export function registerRemoveTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...REMOVE_TOOL_DEFINITION,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const targetPath = resolveSafePath(ctx.cwd, params.path);
       if (targetPath === path.resolve(ctx.cwd)) {
         throw new Error("Refusing to remove the project root");
       }
 
-      await removePath(targetPath, { recursive: params.recursive });
+      await removePath(targetPath, { recursive: params.recursive, signal });
 
       return {
         content: [{ type: "text", text: `Removed ${params.path}.` }],
