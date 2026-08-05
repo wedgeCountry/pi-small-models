@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { editFile } from "../src/tools/edit.ts";
+import { editFile, editFileMulti } from "../src/tools/edit.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("replaces a unique block of text", async (t) => {
@@ -67,4 +67,87 @@ test("rejects when the signal is already aborted, without modifying the file", a
   await assert.rejects(() => editFile(path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;", { signal: ac.signal }));
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 1;\n");
+});
+
+test("rejects an empty oldText instead of matching every position", async (t) => {
+  const dir = await makeFixture({ "a.txt": "abc\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "", "X"));
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "abc\n");
+});
+
+test("rejects an empty oldText even with allowMultipleMatches, without splicing between every character", async (t) => {
+  const dir = await makeFixture({ "a.txt": "abc\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "", "X", { allowMultipleMatches: true }));
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "abc\n");
+});
+
+test("editFileMulti applies several edits atomically in one call", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFileMulti(path.join(dir, "a.txt"), [
+    { oldText: "const foo = 1;", newText: "const foo = 10;" },
+    { oldText: "const bar = 2;", newText: "const bar = 20;" },
+  ]);
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 10;\nconst bar = 20;\n");
+});
+
+test("editFileMulti applies later edits against the result of earlier ones", async (t) => {
+  const dir = await makeFixture({ "a.txt": "one\ntwo\nthree\n" });
+  t.after(() => cleanupFixture(dir));
+
+  // The second edit's oldText only exists in the file *after* the first edit runs.
+  await editFileMulti(path.join(dir, "a.txt"), [
+    { oldText: "one\ntwo", newText: "uno\ndos" },
+    { oldText: "uno\ndos\nthree", newText: "uno\ndos\ntres" },
+  ]);
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "uno\ndos\ntres\n");
+});
+
+test("editFileMulti leaves the file untouched if a later edit fails", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() =>
+    editFileMulti(path.join(dir, "a.txt"), [
+      { oldText: "const foo = 1;", newText: "const foo = 10;" },
+      { oldText: "not in the file", newText: "x" },
+    ])
+  );
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 1;\nconst bar = 2;\n");
+});
+
+test("editFileMulti rejects an empty edits array", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => editFileMulti(path.join(dir, "a.txt"), []));
+});
+
+test("editFileMulti rejects when one edit's oldText is not unique", async (t) => {
+  const dir = await makeFixture({ "a.txt": "dup\ndup\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => editFileMulti(path.join(dir, "a.txt"), [{ oldText: "dup", newText: "x" }]));
+});
+
+test("editFileMulti honors per-edit allowMultipleMatches", async (t) => {
+  const dir = await makeFixture({ "a.txt": "dup\ndup\nother\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFileMulti(path.join(dir, "a.txt"), [
+    { oldText: "dup", newText: "x", allowMultipleMatches: true },
+    { oldText: "other", newText: "y" },
+  ]);
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "x\nx\ny\n");
 });

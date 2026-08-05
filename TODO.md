@@ -30,14 +30,14 @@ Open points from `REVIEW.md` (2026-08-05), ordered by priority.
       `minLength: 1` to `oldText` in `src/tool_definitions/edit.ts` (or reject empty `oldText`
       explicitly in `editFile`).
 
-- [ ] **Safety guarantees untested at the `execute()` layer (Medium)** — tests only cover the plain
-      functions, never the `pi.registerTool` wrappers. The project-root delete guard
-      (`src/tools/remove.ts:32-34`) has zero test coverage. Add tests that go through
-      `registerRemoveTool`/`execute()` (or extract the guard into a testable helper).
-
-- [ ] **`.mcp.json` commits machine-local config (Minor)** — WebStorm MCP proxy URL
-      (`http://127.0.0.1:64542/stream`) at repo root; should likely be gitignored alongside `.idea`.
-
-- [ ] **`list`'s `maxDepth` silently ignored when `recursive` is false (Minor)** — no error or note
-      when both are passed together; either document it in the parameter description or reject the
-      combination.
+- [x] **Safety guarantees untested at the `execute()` layer (Medium)** — Fixed. The project-root
+      delete guard used to live only inline in `execute()`, comparing `resolveSafePath(ctx.cwd,
+      params.path)` against `path.resolve(ctx.cwd)` — untestable without mocking `ExtensionAPI`.
+      Moved the check into `removePath` itself via a new `projectRoot` option (`src/tools/
+      remove.ts`): when set, `removePath` throws `"Refusing to remove the project root"` if the
+      resolved target equals the resolved `projectRoot`, before even `lstat`-ing it. `execute()`
+      now just passes `projectRoot: ctx.cwd` through like it already does for `recursive`/`signal`,
+      keeping the guard exercisable via the plain function the same way every other tool's tests
+      work. Added tests to `remove.test.ts` covering: refusal with `recursive: true`, refusal
+      without `recursive` set, refusal on an unnormalized (trailing-slash) path, and that removal
+      inside the root still succeeds when `projectRoot` is set.

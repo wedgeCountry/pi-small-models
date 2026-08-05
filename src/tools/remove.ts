@@ -7,6 +7,14 @@ import { resolveSafePath } from "../pathSafety.ts";
 export interface RemoveOptions {
   recursive?: boolean;
   signal?: AbortSignal;
+  /**
+   * Absolute path to the project root. When set, `removePath` refuses to
+   * delete a target that resolves to exactly this path — this is the guard
+   * against an LLM call deleting the whole project, and living here (rather
+   * than only in `execute()`) makes it exercisable by the plain-function
+   * tests like every other safety check in this codebase.
+   */
+  projectRoot?: string;
 }
 
 /**
@@ -33,6 +41,10 @@ async function removeRecursively(targetPath: string, signal?: AbortSignal): Prom
 
 /** Deletes `targetPath`. Directories require `recursive: true`. */
 export async function removePath(targetPath: string, opts: RemoveOptions = {}): Promise<void> {
+  if (opts.projectRoot !== undefined && path.resolve(targetPath) === path.resolve(opts.projectRoot)) {
+    throw new Error("Refusing to remove the project root");
+  }
+
   let stat;
   try {
     stat = await fs.lstat(targetPath);
@@ -58,11 +70,8 @@ export function registerRemoveTool(pi: ExtensionAPI) {
     ...REMOVE_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const targetPath = resolveSafePath(ctx.cwd, params.path);
-      if (targetPath === path.resolve(ctx.cwd)) {
-        throw new Error("Refusing to remove the project root");
-      }
 
-      await removePath(targetPath, { recursive: params.recursive, signal });
+      await removePath(targetPath, { recursive: params.recursive, signal, projectRoot: ctx.cwd });
 
       return {
         content: [{ type: "text", text: `Removed ${params.path}.` }],

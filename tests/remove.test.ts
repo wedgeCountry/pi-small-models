@@ -59,3 +59,49 @@ test("aborts a recursive removal in flight via signal, leaving it intact", async
   const stat = await fs.stat(path.join(dir, "sub"));
   assert.ok(stat.isDirectory());
 });
+
+test("refuses to remove the project root when the target matches projectRoot", async (t) => {
+  const dir = await makeFixture({ "a.txt": "" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(dir, { recursive: true, projectRoot: dir }),
+    /Refusing to remove the project root/
+  );
+  const stat = await fs.stat(dir);
+  assert.ok(stat.isDirectory());
+  const child = await fs.stat(path.join(dir, "a.txt"));
+  assert.ok(child.isFile());
+});
+
+test("refuses to remove the project root even without recursive set", async (t) => {
+  const dir = await makeFixture({});
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(dir, { projectRoot: dir }),
+    /Refusing to remove the project root/
+  );
+  const stat = await fs.stat(dir);
+  assert.ok(stat.isDirectory());
+});
+
+test("refuses to remove the project root given an unnormalized (trailing-slash) path", async (t) => {
+  const dir = await makeFixture({});
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(dir + path.sep, { recursive: true, projectRoot: dir }),
+    /Refusing to remove the project root/
+  );
+  const stat = await fs.stat(dir);
+  assert.ok(stat.isDirectory());
+});
+
+test("still allows removing a path inside the project root when projectRoot is set", async (t) => {
+  const dir = await makeFixture({ "a.txt": "" });
+  t.after(() => cleanupFixture(dir));
+
+  await removePath(path.join(dir, "a.txt"), { projectRoot: dir });
+  await assert.rejects(() => fs.stat(path.join(dir, "a.txt")));
+});
