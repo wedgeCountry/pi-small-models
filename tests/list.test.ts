@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { listDir } from "../src/tools/list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
@@ -84,4 +86,21 @@ test("does not report truncated when entry count exactly equals maxResults", asy
   const result = await listDir(dir, { maxResults: 2 });
   assert.equal(result.entries.length, 2);
   assert.equal(result.truncated, false);
+});
+
+test("omits a symlink that points outside the base directory", async (t) => {
+  const dir = await makeFixture({ "real.txt": "" });
+  const outside = await makeFixture({ "secret.txt": "" });
+  t.after(() => Promise.all([cleanupFixture(dir), cleanupFixture(outside)]));
+
+  const link = path.join(dir, "link.txt");
+  try {
+    await fs.symlink(path.join(outside, "secret.txt"), link, "file");
+  } catch (err) {
+    t.skip(`cannot create symlinks in this environment: ${(err as Error).message}`);
+    return;
+  }
+
+  const result = await listDir(dir);
+  assert.deepEqual(result.entries.map((e) => e.path), ["real.txt"]);
 });

@@ -2,7 +2,7 @@ import fg from "fast-glob";
 import {DEFAULT_IGNORE_GLOBS} from "../ignore.ts";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
-import {resolveSafePath} from "../pathSafety.ts";
+import {resolveSafePath, isEntryWithinBase} from "../pathSafety.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -17,14 +17,21 @@ export interface FindResult {
 /** Finds files/directories under `base` matching a glob pattern. */
 export async function findFiles(base: string, pattern: string, opts: FindOptions = {}): Promise<FindResult> {
   const max = opts.maxResults ?? 200;
-  const matches = await fg(pattern, {
+  const entries = await fg(pattern, {
     cwd: base,
     ignore: DEFAULT_IGNORE_GLOBS,
     onlyFiles: false,
     dot: false,
     followSymbolicLinks: false,
+    objectMode: true,
   });
-  matches.sort();
+  // followSymbolicLinks: false only stops fast-glob from descending into a
+  // symlinked directory — a symlinked entry itself still comes back in the
+  // list, so re-check any of those against base before disclosing them.
+  const matches = entries
+    .filter((e) => !e.dirent.isSymbolicLink() || isEntryWithinBase(base, e.path))
+    .map((e) => e.path)
+    .sort();
   const truncated = matches.length > max;
   return { matches: matches.slice(0, max), total: matches.length, truncated };
 }

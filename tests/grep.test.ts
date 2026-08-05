@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { grepFiles } from "../src/tools/grep.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
@@ -83,4 +85,22 @@ test("aborts instead of hanging on a catastrophically backtracking pattern", asy
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(() => grepFiles(dir, "(a+)+$", { timeoutMs: 300 }), /took longer than/);
+});
+
+test("does not read through a symlink that points outside the base directory", async (t) => {
+  const dir = await makeFixture({ "real.txt": "needle" });
+  const outside = await makeFixture({ "secret.txt": "needle (secret)" });
+  t.after(() => Promise.all([cleanupFixture(dir), cleanupFixture(outside)]));
+
+  const link = path.join(dir, "link.txt");
+  try {
+    await fs.symlink(path.join(outside, "secret.txt"), link, "file");
+  } catch (err) {
+    t.skip(`cannot create symlinks in this environment: ${(err as Error).message}`);
+    return;
+  }
+
+  const result = await grepFiles(dir, "needle");
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.lines.filter((l) => l.isMatch)[0]?.file, "real.txt");
 });

@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSafePath, isEntryWithinBase } from "../pathSafety.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -45,14 +45,21 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
     throw new Error(`Invalid pattern: ${(err as Error).message}`);
   }
 
-  const files = await fg(opts.glob ?? "**/*", {
+  const entries = await fg(opts.glob ?? "**/*", {
     cwd: base,
     ignore: DEFAULT_IGNORE_GLOBS,
     onlyFiles: true,
     dot: false,
     followSymbolicLinks: false,
+    objectMode: true,
   });
-  files.sort();
+  // followSymbolicLinks: false only stops fast-glob from descending into a
+  // symlinked directory — a symlinked file itself still comes back in the
+  // list, so re-check any of those against base before the worker reads it.
+  const files = entries
+    .filter((e) => !e.dirent.isSymbolicLink() || isEntryWithinBase(base, e.path))
+    .map((e) => e.path)
+    .sort();
 
   return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
 }

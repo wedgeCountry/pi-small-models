@@ -47,3 +47,25 @@ export function resolveSafePath(root: string, target: string): string {
 
   return resolved;
 }
+
+/**
+ * True if `entryPath` (resolved relative to `base`, or absolute) stays inside
+ * `base`'s real path once symlinks are followed. `base` having already
+ * passed `resolveSafePath` doesn't mean every entry discovered beneath it by
+ * a directory walk/glob does too — a symlink living inside `base` can still
+ * point outside it. Callers should use this to re-check individual entries
+ * (typically only ones flagged as symlinks by the walk itself, to avoid a
+ * realpath syscall per entry) before disclosing their path or reading their
+ * contents.
+ */
+export function isEntryWithinBase(base: string, entryPath: string): boolean {
+  const full = path.isAbsolute(entryPath) ? entryPath : path.join(base, entryPath);
+  try {
+    const realBase = fs.realpathSync(base);
+    const realEntry = fs.realpathSync(full);
+    const relative = path.relative(realBase, realEntry);
+    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  } catch {
+    return false; // broken symlink, permission error, etc. — exclude rather than risk it
+  }
+}

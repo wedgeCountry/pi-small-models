@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { DEFAULT_IGNORE_NAMES } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSafePath, isEntryWithinBase } from "../pathSafety.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -40,6 +40,9 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
 
     for (const dirent of filtered) {
       const relPath = relPrefix ? `${relPrefix}/${dirent.name}` : dirent.name;
+      // A symlink inside base can point outside it even though base itself
+      // is safe — skip (don't even disclose the name of) any that escape.
+      if (dirent.isSymbolicLink() && !isEntryWithinBase(base, relPath)) continue;
       const isDirectory = dirent.isDirectory();
       entries.push({ path: relPath, isDirectory });
       if (isDirectory && depth < maxDepth) {
