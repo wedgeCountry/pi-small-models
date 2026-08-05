@@ -26,18 +26,10 @@ registry); `bash` is disabled outright on `session_start`.
 Every tool resolves its `path` argument through `resolveSafePath` (`src/pathSafety.ts`) first, so the model
 can't read or write outside the project root even without `bash`.
 
-## Try it without installing
-
-```bash
-pi -e ./index.ts
-```
-
 ## Install in a project
 
-```json
-{
-  "extensions": ["/path/to/pi-small-models/index.ts"]
-}
+```bash
+pi install git:github.com/wedgeCountry/pi-small-models
 ```
 
 ## Development
