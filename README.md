@@ -8,15 +8,16 @@ The solution I found was to give them very basic tools instead of bash and simpl
 
 ## Tools
 
-Registered by `index.ts` via `pi.registerTool`. `find`, `grep`, and `edit` share a name with one of Pi's
-built-in tools, so registering them here replaces the built-in (same-name registration wins per Pi's tool
-registry); `bash` is disabled outright on `session_start`.
+Registered by `index.ts` via `pi.registerTool`. `find`, `grep`, `edit`, and `write` share a name with one of
+Pi's built-in tools, so registering them here replaces the built-in (same-name registration wins per Pi's
+tool registry); `bash` is disabled outright on `session_start`.
 
 | Tool     | Replaces built-in? | What it does |
 |----------|---------------------|--------------|
 | `find`   | yes                 | glob-based file search |
 | `grep`   | yes                 | pattern search across files, with a timeout so a catastrophic regex can't hang the session |
 | `edit`   | yes                 | single `{path, oldText, newText}` replacement per call, instead of a batched edit list |
+| `write`  | yes                 | create/overwrite a file's full contents, sandboxed the same as the rest of these tools |
 | `list`   | no                  | directory listing |
 | `mkdir`  | no                  | `mkdir -p`-style directory creation |
 | `remove` | no                  | delete a file or directory (`recursive: true` required for directories) |

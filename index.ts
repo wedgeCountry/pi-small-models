@@ -7,8 +7,9 @@ import {registerListTool} from "./src/tools/list.ts";
 import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
+import {registerWriteTool} from "./src/tools/write.ts";
 
-// find/grep/edit override Pi's built-in tools of the same name (same-name registration
+// find/grep/edit/write override Pi's built-in tools of the same name (same-name registration
 // replaces the built-in per Pi's tool registry).
 const DISABLED_TOOLS = new Set(["bash"]);
 
@@ -21,6 +22,7 @@ export default function (pi: ExtensionAPI) {
   registerLstatTool(pi);
   registerMkdirTool(pi);
   registerRemoveTool(pi);
+  registerWriteTool(pi);
 
   pi.on("session_start", () => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
