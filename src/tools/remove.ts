@@ -3,6 +3,7 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
 import { resolveSafePath } from "../pathSafety.ts";
+import { withFileMutationQueue } from "../mutationQueue.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
@@ -39,30 +40,41 @@ async function removeRecursively(targetPath: string, signal?: AbortSignal): Prom
   }
 }
 
-/** Deletes `targetPath`. Directories require `recursive: true`. */
+/**
+ * Deletes `targetPath`. Directories require `recursive: true`.
+ *
+ * The lstat-then-delete runs under `withFileMutationQueue` (keyed by `targetPath` itself, before
+ * any children a recursive delete walks into) so a concurrent edit/write/insert/remove targeting
+ * this exact path can't interleave with it — e.g. write to a file this call is about to delete,
+ * only to have the write silently lost. This only locks the literal target path, not the whole
+ * subtree underneath it, so a concurrent call targeting a path nested inside a directory being
+ * recursively removed isn't blocked by this lock.
+ */
 export async function removePath(targetPath: string, opts: RemoveOptions = {}): Promise<void> {
   if (opts.projectRoot !== undefined && path.resolve(targetPath) === path.resolve(opts.projectRoot)) {
     throw new Error("Refusing to remove the project root");
   }
 
-  let stat;
-  try {
-    stat = await fs.lstat(targetPath);
-  } catch (err) {
-    throw new Error(`Could not remove "${targetPath}": ${(err as Error).message}`);
-  }
+  await withFileMutationQueue(targetPath, async () => {
+    let stat;
+    try {
+      stat = await fs.lstat(targetPath);
+    } catch (err) {
+      throw new Error(`Could not remove "${targetPath}": ${(err as Error).message}`);
+    }
 
-  if (stat.isDirectory() && !opts.recursive) {
-    throw new Error(`"${targetPath}" is a directory; set recursive to true to remove it`);
-  }
+    if (stat.isDirectory() && !opts.recursive) {
+      throw new Error(`"${targetPath}" is a directory; set recursive to true to remove it`);
+    }
 
-  opts.signal?.throwIfAborted();
+    opts.signal?.throwIfAborted();
 
-  if (stat.isDirectory()) {
-    await removeRecursively(targetPath, opts.signal);
-  } else {
-    await fs.unlink(targetPath);
-  }
+    if (stat.isDirectory()) {
+      await removeRecursively(targetPath, opts.signal);
+    } else {
+      await fs.unlink(targetPath);
+    }
+  });
 }
 
 export function registerRemoveTool(pi: ExtensionAPI) {

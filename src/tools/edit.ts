@@ -1,7 +1,8 @@
 import * as fs from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { EDIT_TOOL_DEFINITION } from "../tool_definitions/edit.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
+import {resolveSafePath} from "../pathSafety.ts";
+import {withFileMutationQueue} from "../mutationQueue.ts";
 
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
@@ -60,6 +61,10 @@ async function readForEdit(filePath: string, signal?: AbortSignal): Promise<stri
  * Replaces `oldText` with `newText` in `filePath`. By default `oldText` must match exactly
  * one location, or an error is thrown; pass `allowMultipleMatches: true` to replace all
  * occurrences instead.
+ *
+ * The read-modify-write runs under `withFileMutationQueue` so a concurrent edit/write/insert/
+ * remove on the same path can't interleave with it — e.g. read a stale copy of the file after
+ * another call has already changed it, then overwrite that call's change.
  */
 export async function editFile(
   filePath: string,
@@ -67,13 +72,15 @@ export async function editFile(
   newText: string,
   opts: EditOptions = {}
 ): Promise<void> {
-  const content = await readForEdit(filePath, opts.signal);
-  const updated = applyOneEdit(
-    content,
-    { oldText, newText, allowMultipleMatches: opts.allowMultipleMatches },
-    `oldText in "${filePath}"`
-  );
-  await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
+  await withFileMutationQueue(filePath, async () => {
+    const content = await readForEdit(filePath, opts.signal);
+    const updated = applyOneEdit(
+      content,
+      { oldText, newText, allowMultipleMatches: opts.allowMultipleMatches },
+      `oldText in "${filePath}"`
+    );
+    await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
+  });
 }
 
 /**
@@ -82,6 +89,8 @@ export async function editFile(
  * and the file is only written once every edit has succeeded — if any edit fails, the file is
  * left untouched. This is what lets a caller make several disjoint changes to the same file
  * without the second edit's `oldText` going stale the moment the first edit lands.
+ *
+ * Also runs under `withFileMutationQueue`, for the same reason as `editFile`.
  */
 export async function editFileMulti(
   filePath: string,
@@ -92,16 +101,17 @@ export async function editFileMulti(
     throw new Error("edits must contain at least one edit");
   }
 
-  const content = await readForEdit(filePath, opts.signal);
-  let updated = content;
-  edits.forEach((edit, i) => {
-    const context =
-      edits.length > 1
-        ? `edit ${i + 1} of ${edits.length} in "${filePath}" (an earlier edit in this call may have already changed this text)`
-        : `oldText in "${filePath}"`;
-    updated = applyOneEdit(updated, edit, context);
+  await withFileMutationQueue(filePath, async () => {
+    let updated = await readForEdit(filePath, opts.signal);
+    edits.forEach((edit, i) => {
+      const context =
+        edits.length > 1
+          ? `edit ${i + 1} of ${edits.length} in "${filePath}" (an earlier edit in this call may have already changed this text)`
+          : `oldText in "${filePath}"`;
+      updated = applyOneEdit(updated, edit, context);
+    });
+    await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
   });
-  await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
 }
 
 export function registerEditTool(pi: ExtensionAPI) {

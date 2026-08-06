@@ -81,3 +81,18 @@ test("rejects when the signal is already aborted, without modifying the file", a
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "line1\nline2");
 });
+
+test("serializes concurrent inserts so none of them are lost", async (t) => {
+  const dir = await makeFixture({ "a.txt": "base" });
+  t.after(() => cleanupFixture(dir));
+  const file = path.join(dir, "a.txt");
+
+  // Without serialization, all three calls would read the original "base" before any of them
+  // writes, and only the last write to land would survive.
+  await Promise.all([insertText(file, 0, "one"), insertText(file, 0, "two"), insertText(file, 0, "three")]);
+
+  const content = await fs.readFile(file, "utf8");
+  const lines = content.split("\n");
+  assert.equal(lines.length, 4);
+  assert.deepEqual(new Set(lines), new Set(["one", "two", "three", "base"]));
+});

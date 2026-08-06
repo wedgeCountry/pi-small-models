@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { removePath } from "../src/tools/remove.ts";
+import { editFile } from "../src/tools/edit.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("removes a file", async (t) => {
@@ -104,4 +105,19 @@ test("still allows removing a path inside the project root when projectRoot is s
 
   await removePath(path.join(dir, "a.txt"), { projectRoot: dir });
   await assert.rejects(() => fs.stat(path.join(dir, "a.txt")));
+});
+
+test("serializes a remove against a concurrent edit on the same file, without resurrecting a deleted file", async (t) => {
+  const dir = await makeFixture({ "a.txt": "content\n" });
+  t.after(() => cleanupFixture(dir));
+  const file = path.join(dir, "a.txt");
+
+  // Two valid outcomes depending on which call goes first: remove-then-edit leaves the edit
+  // rejecting (nothing to read), edit-then-remove leaves the edit's result deleted right after.
+  // Either way the file must not exist afterward. Without serialization, edit could read the
+  // file before remove deletes it and then write its result back *after* the delete, resurrecting
+  // a file remove was supposed to have removed for good.
+  await Promise.allSettled([removePath(file), editFile(file, "content", "changed")]);
+
+  await assert.rejects(() => fs.stat(file));
 });

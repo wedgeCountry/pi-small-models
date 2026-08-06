@@ -151,3 +151,16 @@ test("editFileMulti honors per-edit allowMultipleMatches", async (t) => {
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "x\nx\ny\n");
 });
+
+test("serializes concurrent edits to different parts of the same file so neither is lost", async (t) => {
+  const dir = await makeFixture({ "a.txt": "foo\nbar\n" });
+  t.after(() => cleanupFixture(dir));
+  const file = path.join(dir, "a.txt");
+
+  // Without serialization, both calls would read the original "foo\nbar\n" before either
+  // writes, and whichever write lands last would silently discard the other call's change.
+  await Promise.all([editFile(file, "foo", "FOO"), editFile(file, "bar", "BAR")]);
+
+  const content = await fs.readFile(file, "utf8");
+  assert.equal(content, "FOO\nBAR\n");
+});
