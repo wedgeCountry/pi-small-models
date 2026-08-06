@@ -73,6 +73,23 @@ test("does not report truncated when matchCount exactly equals maxResults", asyn
   assert.equal(result.truncated, false);
 });
 
+test("rejects a path that names a file instead of a directory", async (t) => {
+  const dir = await makeFixture({ "main.py": "print((1))\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => grepFiles(path.join(dir, "main.py"), "\\)\\)"),
+    /is a file, not a directory/
+  );
+});
+
+test("rejects a path that does not exist", async (t) => {
+  const dir = await makeFixture({});
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => grepFiles(path.join(dir, "nope"), "x"), /does not exist/);
+});
+
 test("rejects an invalid regex", async (t) => {
   const dir = await makeFixture({ "a.txt": "x" });
   t.after(() => cleanupFixture(dir));

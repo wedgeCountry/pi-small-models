@@ -1,4 +1,5 @@
 import fg from "fast-glob";
+import * as fs from "node:fs/promises";
 import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -43,6 +44,25 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
     new RegExp(pattern, flags); // validate syntax before spending a worker on it
   } catch (err) {
     throw new Error(`Invalid pattern: ${(err as Error).message}`);
+  }
+
+  // `base` is meant to be a directory that fast-glob walks with `cwd`, not the
+  // file being searched — that's what `glob` is for. Passing a file path here
+  // used to surface as a raw `ENOTDIR: not a directory, scandir '<path>'` from
+  // fast-glob/Node once it tried to readdir a non-directory; catch it earlier
+  // with a message that says what went wrong and how to fix it.
+  let baseStat;
+  try {
+    baseStat = await fs.stat(base);
+  } catch {
+    throw new Error(`grep path "${base}" does not exist.`);
+  }
+  if (!baseStat.isDirectory()) {
+    throw new Error(
+      `grep path "${base}" is a file, not a directory. "path" must name a directory to search within; ` +
+        `to search a single file, keep "path" pointed at its containing directory and pass the filename via "glob" instead, ` +
+        `e.g. { path: ".", glob: "main.py" }.`
+    );
   }
 
   const entries = await fg(opts.glob ?? "**/*", {
