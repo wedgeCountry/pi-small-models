@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { makeDir } from "../src/tools/mkdir.ts";
+import { makeDir } from "../tools/mkdir.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("creates a directory", async (t) => {

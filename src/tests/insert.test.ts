@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { insertText } from "../src/tools/insert.ts";
+import { insertText } from "../tools/insert.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("inserts text after the given line", async (t) => {

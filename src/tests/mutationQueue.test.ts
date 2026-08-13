@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { withFileMutationQueue } from "../src/mutationQueue.ts";
+import { withFileMutationQueue } from "../mutationQueue.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 function delay(ms: number): Promise<void> {

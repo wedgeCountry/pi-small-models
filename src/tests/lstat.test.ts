@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { lstatPath } from "../src/tools/lstat.ts";
+import { lstatPath } from "../tools/lstat.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("reports metadata for a file", async (t) => {

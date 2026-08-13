@@ -8,7 +8,7 @@
     "extensions": ["./index.ts"]
   },
   "scripts": {
-    "test": "node --test tests/**/*.test.ts"
+    "test": "node --test src/tests/**/*.test.ts"
   },
   "dependencies": {
     "fast-glob": "^3.3.3"

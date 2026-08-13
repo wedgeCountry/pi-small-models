@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { removePath } from "../src/tools/remove.ts";
-import { editFile } from "../src/tools/edit.ts";
+import { removePath } from "../tools/remove.ts";
+import { editFile } from "../tools/edit.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("removes a file", async (t) => {

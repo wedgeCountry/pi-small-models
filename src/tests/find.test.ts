@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { findFiles } from "../src/tools/find.ts";
+import { findFiles } from "../tools/find.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds files matching a glob pattern", async (t) => {

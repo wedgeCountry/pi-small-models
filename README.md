@@ -43,4 +43,4 @@ npx tsc --noEmit   # type-check only, no build step
 ```
 
 See `CLAUDE.md` for the full architecture writeup, and the per-directory `README.md` files under `src/` and
-`tests/` for the shape of individual tools.
+`src/tests/` for the shape of individual tools.

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { listDir } from "../src/tools/list.ts";
+import { listDir } from "../tools/list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("lists top-level entries non-recursively", async (t) => {
