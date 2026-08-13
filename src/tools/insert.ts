@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
@@ -48,6 +49,10 @@ export async function insertText(filePath: string, line: number, text: string, o
 export function registerInsertTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...INSERT_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      const text = `${callName(theme, "insert")} ${theme.fg("accent", args.path ?? "")}`;
+      return oneLine(text + theme.fg("toolOutput", ` after line ${args.line}`));
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await insertText(filePath, params.line, params.text, { signal });

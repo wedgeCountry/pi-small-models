@@ -4,6 +4,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
@@ -45,6 +46,11 @@ export async function writeFile(filePath: string, content: string, opts: WriteOp
 export function registerWriteTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...WRITE_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      const text = `${callName(theme, "write")} ${theme.fg("accent", args.path ?? "")}`;
+      const size = args.content?.length;
+      return oneLine(text + (size !== undefined ? theme.fg("toolOutput", ` (${size} bytes)`) : ""));
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await writeFile(filePath, params.content, { signal });

@@ -5,6 +5,7 @@ import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import { resolveSandboxPath, isEntrySandboxSafe, getSandboxState, type SandboxState } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -179,6 +180,14 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
 export function registerGrepTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GREP_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.pattern ?? ""}/`)}`;
+      text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
+      if (args.glob) text += theme.fg("toolOutput", ` (${args.glob})`);
+      if (args.ignoreCase) text += theme.fg("toolOutput", " -i");
+      if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` limit ${args.maxResults}`);
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const result = await grepFiles(base, params.pattern, {

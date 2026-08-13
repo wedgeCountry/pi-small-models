@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -86,6 +87,15 @@ export async function readFile(filePath: string, opts: ReadOptions = {}): Promis
 export function registerReadTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...READ_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
+      if (args.offset !== undefined || args.limit !== undefined) {
+        const start = args.offset ?? 1;
+        const end = args.limit !== undefined ? start + args.limit - 1 : undefined;
+        text += theme.fg("toolOutput", `:${start}${end !== undefined ? `-${end}` : "+"}`);
+      }
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const filePath = resolveSandboxPath(ctx.cwd, params.path, "read");
       const result = await readFile(filePath, { offset: params.offset, limit: params.limit, signal });

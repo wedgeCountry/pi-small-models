@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
@@ -26,6 +27,9 @@ export async function makeDir(dirPath: string, opts: MakeDirOptions = {}): Promi
 export function registerMkdirTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...MKDIR_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      return oneLine(`${callName(theme, "mkdir")} ${theme.fg("accent", args.path ?? "")}`);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const dirPath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await makeDir(dirPath, { signal });

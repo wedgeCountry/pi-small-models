@@ -4,6 +4,7 @@ import { DEFAULT_IGNORE_NAMES } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -61,6 +62,11 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
 export function registerListTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...LIST_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
+      if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const result = await listDir(base, {

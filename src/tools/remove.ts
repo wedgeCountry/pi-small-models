@@ -4,6 +4,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
@@ -80,6 +81,11 @@ export async function removePath(targetPath: string, opts: RemoveOptions = {}): 
 export function registerRemoveTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...REMOVE_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "remove")} ${theme.fg("accent", args.path ?? "")}`;
+      if (args.recursive) text += theme.fg("toolOutput", " (recursive)");
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const targetPath = resolveSandboxPath(ctx.cwd, params.path, "edit");
 

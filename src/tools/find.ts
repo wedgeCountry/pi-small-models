@@ -4,6 +4,7 @@ import {DEFAULT_IGNORE_GLOBS} from "../ignore.ts";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import {resolveSandboxPath, isEntrySandboxSafe} from "../sandbox.ts";
+import {oneLine, callName} from "../renderCall.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -91,6 +92,12 @@ function streamGlob(base: string, pattern: string, signal?: AbortSignal): Promis
 export function registerFindTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...FIND_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "find")} ${theme.fg("accent", args.pattern ?? "")}`;
+      text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
+      if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` (limit ${args.maxResults})`);
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const result = await findFiles(base, params.pattern, {maxResults: params.maxResults, signal});

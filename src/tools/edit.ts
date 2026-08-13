@@ -3,6 +3,7 @@ import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
 import {resolveSandboxPath} from "../sandbox.ts";
 import {withFileMutationQueue} from "../mutationQueue.ts";
+import {oneLine, callName} from "../renderCall.ts";
 
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
@@ -159,6 +160,11 @@ export async function editFileMulti(
 export function registerEditTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...EDIT_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      let text = `${callName(theme, "edit")} ${theme.fg("accent", args.path ?? "")}`;
+      text += theme.fg("toolOutput", args.edits ? ` (${args.edits.length} edits)` : "");
+      return oneLine(text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       const hasSingle = params.oldText !== undefined || params.newText !== undefined;

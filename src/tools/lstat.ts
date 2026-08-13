@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LSTAT_TOOL_DEFINITION } from "../tool_definitions/lstat.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 export interface LstatResult {
   isFile: boolean;
@@ -32,6 +33,9 @@ export async function lstatPath(targetPath: string): Promise<LstatResult> {
 export function registerLstatTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...LSTAT_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      return oneLine(`${callName(theme, "lstat")} ${theme.fg("accent", args.path ?? "")}`);
+    },
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const targetPath = resolveSandboxPath(ctx.cwd, params.path, "read");
       const result = await lstatPath(targetPath);
