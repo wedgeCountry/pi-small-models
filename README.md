@@ -10,24 +10,29 @@ Implemented using the staggering Claude with Claude [claude.ai](https://claude.a
 
 ## Tools
 
-Registered by `index.ts` via `pi.registerTool`. `find`, `grep`, `edit`, and `write` share a name with one of
-Pi's built-in tools, so registering them here replaces the built-in (same-name registration wins per Pi's
-tool registry); `bash` is disabled outright on `session_start`.
+Registered by `index.ts` via `pi.registerTool`. `find`, `grep`, `edit`, `read`, and `write` share a name with
+one of Pi's built-in tools, so registering them here replaces the built-in (same-name registration wins per
+Pi's tool registry); `bash` is disabled outright on `session_start`.
 
-| Tool     | Replaces built-in? | What it does |
-|----------|---------------------|--------------|
-| `find`   | yes                 | glob-based file search |
-| `grep`   | yes                 | pattern search across files, with a timeout so a catastrophic regex can't hang the session |
-| `edit`   | yes                 | single `{path, oldText, newText}` replacement per call, instead of a batched edit list |
-| `write`  | yes                 | create/overwrite a file's full contents, sandboxed the same as the rest of these tools |
-| `list`   | no                  | directory listing |
-| `mkdir`  | no                  | `mkdir -p`-style directory creation |
-| `remove` | no                  | delete a file or directory (`recursive: true` required for directories) |
-| `lstat`  | no                  | file/symlink metadata, never follows symlinks |
-| `insert` | no                  | insert text after a given line without touching the rest of the file |
+| Tool         | Replaces built-in? | What it does |
+|--------------|---------------------|--------------|
+| `find`       | yes                 | glob-based file search |
+| `grep`       | yes                 | pattern search across files; the scan itself runs on a worker thread with a wall-clock timeout, so a catastrophically-backtracking regex can't hang the session |
+| `edit`       | yes                 | single `{path, oldText, newText}` replacement per call, instead of a batched edit list |
+| `read`       | yes                 | line-numbered file contents, capped at 2000 lines/50KB per call |
+| `write`      | yes                 | create/overwrite a file's full contents, sandboxed the same as the rest of these tools |
+| `list`       | no                  | directory listing |
+| `mkdir`      | no                  | `mkdir -p`-style directory creation |
+| `remove`     | no                  | delete a file or directory (`recursive: true` required for directories; refuses to delete the project root) |
+| `lstat`      | no                  | file/symlink metadata, never follows symlinks |
+| `insert`     | no                  | insert text after a given line without touching the rest of the file |
+| `git_status` | no                  | `git status`, parsed into `{branch, ahead, behind, entries}` |
+| `git_diff`   | no                  | unstaged `git diff`, optionally scoped to a path, with the same line/byte truncation cap as `read` |
 
 Every tool resolves its `path` argument through `resolveSandboxPath` (`src/sandbox.ts`) first, so the model
-can't read or write outside the project root even without `bash`.
+can't read or write outside the project root even without `bash`. `git_status`/`git_diff` additionally filter
+their parsed output against the same restricted-path list even on their default, unscoped (whole-repository)
+call, so a tracked `.env` with an uncommitted change can't leak its path or diff content that way either.
 
 ## Sandboxing
 
@@ -71,9 +76,10 @@ pi install git:github.com/wedgeCountry/pi-small-models
 ## Development
 
 ```bash
-npm test          # node --test tests/**/*.test.ts
+npm test           # node --test src/tests/**/*.test.ts
 npx tsc --noEmit   # type-check only, no build step
 ```
 
-See `CLAUDE.md` for the full architecture writeup, and the per-directory `README.md` files under `src/` and
+See `doc/architecture.md` for a short human-facing overview, `CLAUDE.md` for the full architecture writeup,
+and the per-directory `README.md` files under `src/`, `src/tools/`, `src/tool_definitions/`, and
 `src/tests/` for the shape of individual tools.

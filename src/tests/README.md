@@ -1,6 +1,6 @@
 # tests
 
-Run with `npm test` (or a single file: `node --test tests/find.test.ts`). No build step — Node 24 runs the
+Run with `npm test` (or a single file: `node --test src/tests/find.test.ts`). No build step — Node 24 runs the
 `.ts` files directly.
 
 Each tool test builds a temp fixture with `fixtures.ts` (`makeFixture`/`cleanupFixture`), calls the tool's
