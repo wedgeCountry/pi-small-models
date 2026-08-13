@@ -17,14 +17,21 @@ import { resolveSafePath, isEntryWithinBase, realpathWithMissingSuffix } from ".
 export type SandboxMode = "read" | "edit";
 
 /**
- * - `"on"` — full enforcement: `pathSafety.ts`'s root-containment check runs,
- *   and so does the mode-specific restricted-glob check below.
- * - `"off"` — root-containment still runs (a call still can't escape the
- *   project root), but the restricted-glob check is skipped.
- * - `"yolo"` — nothing is enforced, including root-containment. Fully
- *   unsandboxed, same as running the built-in `bash` tool would be.
+ * - `"on"` — full local enforcement: `pathSafety.ts`'s root-containment check
+ *   runs, and so does the mode-specific restricted-glob check below. On top
+ *   of that, `permissionAuthorizer.ts` registers an authorizer with
+ *   `@gotgenes/pi-permission-system` (if installed) that auto-allows
+ *   anything inside the project root, so a cooperating permission-system
+ *   extension doesn't ask the user a second time for something this sandbox
+ *   already fully enforces.
+ * - `"off"` — nothing is enforced locally, including root-containment. Fully
+ *   unsandboxed, same as running the built-in `bash` tool would be. The
+ *   authorizer above declines every request while state is `"off"`, so
+ *   enforcement is entirely delegated to `@gotgenes/pi-permission-system`'s
+ *   own policy (asks and all) if it's installed — or to nothing at all if
+ *   it isn't. See `permissionAuthorizer.ts`.
  */
-export type SandboxState = "on" | "off" | "yolo";
+export type SandboxState = "on" | "off";
 
 /**
  * Restricted-path glob patterns, matched (case-sensitively on Linux,
@@ -94,9 +101,6 @@ export function setSandboxState(state: SandboxState): void {
   sandboxState = state;
 }
 
-// "yolo" is deliberately excluded from the blind no-argument cycle — it drops root-containment
-// entirely (not just the restricted-glob layer), so reaching it requires explicitly typing
-// `/toggle-sandbox yolo` rather than being reachable by repeatedly pressing the same command.
 const STATE_CYCLE: readonly SandboxState[] = ["on", "off"];
 
 /** Advances to the next state in `STATE_CYCLE` (wrapping around) and returns it. */
@@ -138,20 +142,21 @@ function matchesRestrictedGlob(anchor: string, resolved: string, mode: SandboxMo
  * instead. Throws on any violation, with a message identifying which layer
  * rejected it.
  *
- * - `"yolo"`: skips `resolveSafePath` entirely and just lexically resolves
- *   the path, so a target outside the project root is allowed through.
- * - `"off"`: still calls `resolveSafePath` (root-containment stays
- *   enforced), but skips the restricted-glob check.
- * - `"on"`: both checks run.
+ * - `"off"`: skips `resolveSafePath` entirely and just lexically resolves
+ *   the path, so a target outside the project root is allowed through —
+ *   enforcement is delegated to `@gotgenes/pi-permission-system` (or to
+ *   nothing, if it isn't installed). See the `SandboxState` doc comment.
+ * - `"on"`: both `resolveSafePath`'s root-containment and the mode-specific
+ *   restricted-glob check run.
  */
 export function resolveSandboxPath(root: string, target: string, mode: SandboxMode): string {
-  if (sandboxState === "yolo") {
+  if (sandboxState === "off") {
     return path.resolve(root, target || ".");
   }
 
   const resolved = resolveSafePath(root, target);
 
-  if (sandboxState === "on" && matchesRestrictedGlob(path.resolve(root), resolved, mode)) {
+  if (matchesRestrictedGlob(path.resolve(root), resolved, mode)) {
     throw new Error(`Path "${target}" is restricted in ${mode} mode by the sandbox (see src/sandbox.ts)`);
   }
 
@@ -187,12 +192,10 @@ export function isEntrySandboxSafe(
   stateOverride?: SandboxState
 ): boolean {
   const state = stateOverride ?? sandboxState;
-  if (state === "yolo") return true;
+  if (state === "off") return true;
 
-  if (state === "on") {
-    const full = path.isAbsolute(entryPath) ? entryPath : path.join(base, entryPath);
-    if (matchesRestrictedGlob(path.resolve(base), full, mode)) return false;
-  }
+  const full = path.isAbsolute(entryPath) ? entryPath : path.join(base, entryPath);
+  if (matchesRestrictedGlob(path.resolve(base), full, mode)) return false;
 
   if (isSymlink && !isEntryWithinBase(base, entryPath)) return false;
 

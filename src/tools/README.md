@@ -16,7 +16,7 @@ pi.registerTool({
 `resolveSandboxPath` (from `../sandbox.ts`) replaces `pathSafety.ts`'s `resolveSafePath` as the call every tool
 makes — no tool file imports `pathSafety.ts` directly. It takes a `mode` (`"read"` or `"edit"`) so it can apply
 mode-specific restricted-path rules (e.g. `.ssh` in read mode, `.git` in edit mode) on top of the underlying
-root-containment check, and respects the `/toggle-sandbox` state (`on`/`off`/`yolo`). `find`/`grep`/`list`,
+root-containment check, and respects the `/toggle-sandbox` state (`on`/`off`). `find`/`grep`/`list`,
 which walk a directory tree rather than resolving a single path, additionally filter each discovered entry
 through `isEntrySandboxSafe(base, entryPath, mode, isSymlink)`.
 

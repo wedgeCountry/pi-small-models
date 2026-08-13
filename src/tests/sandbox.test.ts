@@ -129,42 +129,25 @@ test("state 'on' enforces both containment and restricted globs (the default)", 
   assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
 });
 
-test("state 'off' keeps root containment but skips restricted-glob checks", (t) => {
+test("state 'off' bypasses everything, including root containment", (t) => {
   t.after(() => setSandboxState("on"));
   setSandboxState("off");
 
   assert.equal(getSandboxState(), "off");
-  // Containment still enforced.
-  assert.equal(fileIsSafe(root, "../outside", "edit"), false);
-  assert.throws(() => resolveSandboxPath(root, "../outside", "edit"));
-  // Restricted globs no longer enforced.
+  assert.equal(fileIsSafe(root, "../outside", "edit"), true);
   assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
   assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), true);
+  assert.doesNotThrow(() => resolveSandboxPath(root, "../outside", "edit"));
   assert.equal(resolveSandboxPath(root, ".git/config", "edit"), path.resolve(root, ".git/config"));
 });
 
-test("state 'yolo' bypasses everything, including root containment", (t) => {
-  t.after(() => setSandboxState("on"));
-  setSandboxState("yolo");
-
-  assert.equal(getSandboxState(), "yolo");
-  assert.equal(fileIsSafe(root, "../outside", "edit"), true);
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
-  assert.doesNotThrow(() => resolveSandboxPath(root, "../outside", "edit"));
-});
-
-test("cycleSandboxState only ever toggles on <-> off — yolo is never reachable by cycling", (t) => {
+test("cycleSandboxState toggles on <-> off", (t) => {
   t.after(() => setSandboxState("on"));
   setSandboxState("on");
 
   assert.equal(cycleSandboxState(), "off");
   assert.equal(cycleSandboxState(), "on");
   assert.equal(cycleSandboxState(), "off");
-
-  // Even starting from yolo (e.g. set explicitly by name), cycling steps to "on", never lingers on
-  // or returns to "yolo" — the blind cycle can only ever land on on/off.
-  setSandboxState("yolo");
-  assert.equal(cycleSandboxState(), "on");
 });
 
 test("isEntrySandboxSafe filters restricted entries during a directory walk, symlink or not", () => {
@@ -180,21 +163,18 @@ test("isEntrySandboxSafe respects sandbox state the same way resolveSandboxPath 
 
   setSandboxState("off");
   assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
-
-  setSandboxState("yolo");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
 });
 
 test("isEntrySandboxSafe's stateOverride wins over this module's own sandboxState", (t) => {
   t.after(() => setSandboxState("on"));
 
-  // Module state says "on" (restricted), but an explicit "yolo" override — as grepWorker.ts must
+  // Module state says "on" (restricted), but an explicit "off" override — as grepWorker.ts must
   // pass, since its own import of this module starts from a separate, independent "on" — bypasses
   // everything, and vice versa.
   setSandboxState("on");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "yolo"), true);
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "off"), true);
 
-  setSandboxState("yolo");
+  setSandboxState("off");
   assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "on"), false);
 
   // No override falls back to this module's own current state, as before.

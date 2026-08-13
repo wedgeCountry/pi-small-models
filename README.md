@@ -26,8 +26,41 @@ tool registry); `bash` is disabled outright on `session_start`.
 | `lstat`  | no                  | file/symlink metadata, never follows symlinks |
 | `insert` | no                  | insert text after a given line without touching the rest of the file |
 
-Every tool resolves its `path` argument through `resolveSafePath` (`src/pathSafety.ts`) first, so the model
+Every tool resolves its `path` argument through `resolveSandboxPath` (`src/sandbox.ts`) first, so the model
 can't read or write outside the project root even without `bash`.
+
+## Sandboxing
+
+`src/sandbox.ts` gates every tool call behind a two-state `/toggle-sandbox` toggle:
+
+- **`on`** (default) — full local enforcement: the model can't escape the project root, and a built-in
+  credential/`.git` glob list blocks reads or edits of things like `.env`, `.ssh/`, and `.git/`.
+- **`off`** — nothing is enforced locally, not even root containment. This is deliberately as open as
+  running the built-in `bash` tool would be; see below for what's meant to fill that gap.
+
+### Optional integration with `@gotgenes/pi-permission-system`
+
+This project can cooperate with [`@gotgenes/pi-permission-system`](https://pi.dev/packages/@gotgenes/pi-permission-system),
+a separate Pi extension that adds its own, user-configurable `allow`/`deny`/`ask` policy across tool, bash,
+path, and MCP/skill access. It is **not a dependency** of this project — `src/permissionAuthorizer.ts`
+resolves it dynamically at runtime and no-ops cleanly if it isn't installed, so nothing here requires it.
+
+When it *is* installed, the two sandbox states line up with it like this:
+
+- **`on`** — this project's own sandbox already fully covers anything it would let through inside the
+  project root, so a second "may I touch this path?" prompt from permission-system for the same territory
+  would just be redundant. `permissionAuthorizer.ts` registers an authorizer (named
+  `pi-small-models-sandbox`) that auto-allows a path-shaped request only when this sandbox's own
+  containment-*and*-restricted-glob check would already allow it — a credential path like `.ssh/id_rsa` is
+  still left to permission-system's own `ask`/`deny`, even though it's inside the project root, since this
+  sandbox blocks it too.
+- **`off`** — the authorizer declines every request, so enforcement is fully delegated to
+  permission-system's own configured policy (including any `ask` rules) instead.
+
+The authorizer only takes effect once it's *also* named in permission-system's own config — registering it
+here is opt-in on their side by design (see their docs on `registerAuthorizer`/authorizer chains). Add
+`pi-small-models-sandbox` to that config's authorizer list per `@gotgenes/pi-permission-system`'s own
+configuration docs to enable it.
 
 ## Install in a project
 

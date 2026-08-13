@@ -12,8 +12,9 @@ import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
+import {registerSandboxAuthorizer, teardownSandboxAuthorizer} from "./src/permissionAuthorizer.ts";
 
-const SANDBOX_STATES = new Set<SandboxState>(["on", "off", "yolo"]);
+const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 
 // find/grep/edit/read/write override Pi's built-in tools of the same name (same-name registration
 // replaces the built-in per Pi's tool registry).
@@ -34,9 +35,10 @@ export default function (pi: ExtensionAPI) {
   registerWriteTool(pi);
 
   pi.registerCommand("toggle-sandbox", {
-    description: "Set src/sandbox.ts's state: on (fully enforced), off (restricted-glob checks skipped, " +
-      "root containment still enforced), or yolo (fully unsandboxed). No argument toggles on <-> off; " +
-      "yolo is reachable only by passing it explicitly (/toggle-sandbox yolo), never via the blind cycle.",
+    description: "Set src/sandbox.ts's state: on (fully enforced locally, and permission-system prompts are " +
+      "auto-suppressed inside the project root if that extension is installed) or off (nothing enforced " +
+      "locally — fully delegated to permission-system's own policy, or fully unsandboxed if it isn't " +
+      "installed). No argument toggles on <-> off.",
     getArgumentCompletions: (prefix) =>
       [...SANDBOX_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
     handler: async (args, ctx) => {
@@ -48,7 +50,7 @@ export default function (pi: ExtensionAPI) {
         state = requested as SandboxState;
         setSandboxState(state);
       } else {
-        ctx.ui.notify(`Unknown sandbox state "${requested}" — expected on, off, or yolo`, "error");
+        ctx.ui.notify(`Unknown sandbox state "${requested}" — expected on or off`, "error");
         return;
       }
 
@@ -56,13 +58,21 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.on("session_start", () => {
+  pi.on("session_start", (_event, ctx) => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
     // sandboxState (src/sandbox.ts) is a module-level, process-lifetime variable, not a
     // per-session one — if the extension module is ever shared across concurrent sessions in one
-    // process, a previous session's `/toggle-sandbox off`/`yolo` would otherwise leak into a new
-    // session that never asked for it. Reset it explicitly so every session starts fully enforced
+    // process, a previous session's `/toggle-sandbox off` would otherwise leak into a new session
+    // that never asked for it. Reset it explicitly so every session starts fully enforced
     // regardless of what any other session left it at.
     setSandboxState("on");
+    // Re-register (not cache) on every session_start, including /reload — see
+    // permissionAuthorizer.ts's doc comment for why, and note it's a no-op (never throws) when
+    // @gotgenes/pi-permission-system isn't installed.
+    void registerSandboxAuthorizer(ctx.cwd);
+  });
+
+  pi.on("session_shutdown", () => {
+    teardownSandboxAuthorizer();
   });
 }
