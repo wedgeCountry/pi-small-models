@@ -18,18 +18,13 @@ export type SandboxMode = "read" | "edit";
 
 /**
  * - `"on"` — full local enforcement: `pathSafety.ts`'s root-containment check
- *   runs, and so does the mode-specific restricted-glob check below. On top
- *   of that, `permissionAuthorizer.ts` registers an authorizer with
- *   `@gotgenes/pi-permission-system` (if installed) that auto-allows
- *   anything inside the project root, so a cooperating permission-system
- *   extension doesn't ask the user a second time for something this sandbox
- *   already fully enforces.
- * - `"off"` — nothing is enforced locally, including root-containment. Fully
- *   unsandboxed, same as running the built-in `bash` tool would be. The
- *   authorizer above declines every request while state is `"off"`, so
- *   enforcement is entirely delegated to `@gotgenes/pi-permission-system`'s
- *   own policy (asks and all) if it's installed — or to nothing at all if
- *   it isn't. See `permissionAuthorizer.ts`.
+ *   runs, and so does the mode-specific restricted-glob check below. No
+ *   confirmation prompts — "yolo inside the project dir".
+ * - `"off"` — nothing is enforced locally, including root-containment. In
+ *   exchange, every call to one of this project's own tools is instead
+ *   routed through `permissionGate.ts`'s `tool_call` handler, which requires
+ *   an explicit `ctx.ui.confirm()` approval before the call is allowed to
+ *   run. See `permissionGate.ts`.
  */
 export type SandboxState = "on" | "off";
 
@@ -144,8 +139,8 @@ function matchesRestrictedGlob(anchor: string, resolved: string, mode: SandboxMo
  *
  * - `"off"`: skips `resolveSafePath` entirely and just lexically resolves
  *   the path, so a target outside the project root is allowed through —
- *   enforcement is delegated to `@gotgenes/pi-permission-system` (or to
- *   nothing, if it isn't installed). See the `SandboxState` doc comment.
+ *   `permissionGate.ts` requires an explicit per-call approval instead. See
+ *   the `SandboxState` doc comment.
  * - `"on"`: both `resolveSafePath`'s root-containment and the mode-specific
  *   restricted-glob check run.
  */

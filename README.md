@@ -40,32 +40,28 @@ call, so a tracked `.env` with an uncommitted change can't leak its path or diff
 
 - **`on`** (default) — full local enforcement: the model can't escape the project root, and a built-in
   credential/`.git` glob list blocks reads or edits of things like `.env`, `.ssh/`, and `.git/`.
-- **`off`** — nothing is enforced locally, not even root containment. This is deliberately as open as
-  running the built-in `bash` tool would be; see below for what's meant to fill that gap.
+- **`off`** — nothing is enforced locally, not even root containment. In exchange, every call to one of
+  this project's tools goes through an explicit approval dialog instead — see below.
 
-### Optional integration with `@gotgenes/pi-permission-system`
+### `src/permissionGate.ts`: this project's own approval gate
 
-This project can cooperate with [`@gotgenes/pi-permission-system`](https://pi.dev/packages/@gotgenes/pi-permission-system),
-a separate Pi extension that adds its own, user-configurable `allow`/`deny`/`ask` policy across tool, bash,
-path, and MCP/skill access. It is **not a dependency** of this project — `src/permissionAuthorizer.ts`
-resolves it dynamically at runtime and no-ops cleanly if it isn't installed, so nothing here requires it.
+Rather than depend on a separate permission-managing extension being installed *and* configured, this
+project builds its own decision system directly on Pi's `ExtensionAPI`: `pi.on("tool_call", ...)` fires
+before any tool executes and can block it, and `ctx.ui.confirm(...)` shows a real yes/no dialog. No other
+extension is required.
 
-When it *is* installed, the two sandbox states line up with it like this:
+- **`on`** — the gate does nothing; `sandbox.ts` already fully enforces containment locally, so there's
+  nothing left to ask about.
+- **`off`** — every call to one of this project's 12 tools is intercepted before it runs and requires an
+  explicit approval (one-shot — declining or approving a call isn't remembered for next time). Declining
+  blocks the call with a reason the model sees. In a non-interactive context with no dialog available, the
+  call is blocked automatically rather than silently let through.
 
-- **`on`** — this project's own sandbox already fully covers anything it would let through inside the
-  project root, so a second "may I touch this path?" prompt from permission-system for the same territory
-  would just be redundant. `permissionAuthorizer.ts` registers an authorizer (named
-  `pi-small-models-sandbox`) that auto-allows a path-shaped request only when this sandbox's own
-  containment-*and*-restricted-glob check would already allow it — a credential path like `.ssh/id_rsa` is
-  still left to permission-system's own `ask`/`deny`, even though it's inside the project root, since this
-  sandbox blocks it too.
-- **`off`** — the authorizer declines every request, so enforcement is fully delegated to
-  permission-system's own configured policy (including any `ask` rules) instead.
-
-The authorizer only takes effect once it's *also* named in permission-system's own config — registering it
-here is opt-in on their side by design (see their docs on `registerAuthorizer`/authorizer chains). Add
-`pi-small-models-sandbox` to that config's authorizer list per `@gotgenes/pi-permission-system`'s own
-configuration docs to enable it.
+An earlier version of this file tried to cooperate with the separate
+[`@gotgenes/pi-permission-system`](https://pi.dev/packages/@gotgenes/pi-permission-system) extension so
+that `"on"` could auto-suppress a second prompt from it. That relied on a `registerAuthorizer` hook that
+doesn't exist on the package's actual public API, so the integration silently never worked — this file
+replaces it with something that does.
 
 ## Install in a project
 
