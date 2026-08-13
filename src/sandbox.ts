@@ -34,16 +34,47 @@ export type SandboxState = "on" | "off" | "yolo";
  * Every pattern is `**`-anchored so it fires regardless of nesting depth
  * (`.env` at the project root and `packages/api/.env` both match `**\/.env*`).
  *
+ * Covers the credential/config stores a project directory can plausibly
+ * contain: SSH keys (both inside `.ssh/` and loose, hence the bare
+ * `id_rsa`-style filenames), cloud CLI credential dirs (`.aws`, `.config/
+ * gcloud`), container/orchestration config that can smuggle a registry or
+ * cluster redirect (`.docker`, `.kube`), package-manager auth tokens
+ * (`.npmrc`), GPG keyrings (`.gnupg`), and the generic `.env*`/`.netrc`/
+ * `.pgpass` credential-file conventions.
+ */
+const CREDENTIAL_GLOBS: readonly string[] = [
+  "**/.ssh/**",
+  "**/.aws/**",
+  "**/.env*",
+  "**/.netrc",
+  "**/.npmrc",
+  "**/.pgpass",
+  "**/.docker/**",
+  "**/.kube/**",
+  "**/.gnupg/**",
+  "**/.config/gcloud/**",
+  "**/id_rsa",
+  "**/id_dsa",
+  "**/id_ecdsa",
+  "**/id_ed25519",
+];
+
+/**
  * Read mode protects credential material that would leak secrets if
  * disclosed to the model.
  */
-export const READ_RESTRICTED_GLOBS: readonly string[] = ["**/.ssh/**", "**/.aws/**", "**/.env*", "**/.netrc"];
+export const READ_RESTRICTED_GLOBS: readonly string[] = CREDENTIAL_GLOBS;
 
 /**
  * Edit mode protects repository-internal state that would corrupt version
- * control (or leak secrets) if mutated.
+ * control, or enable a config-redirect/persistence attack (a poisoned
+ * `.ssh/config` `ProxyCommand`, a hijacked `.npmrc`/`.docker` registry, a
+ * swapped `.kube/config` cluster), if mutated. A superset of
+ * `READ_RESTRICTED_GLOBS` — nothing the model can't even read should be
+ * blindly overwritable either — plus `.git/**`, which isn't secret but is
+ * repository-internal state edit mode alone needs to protect.
  */
-export const EDIT_RESTRICTED_GLOBS: readonly string[] = ["**/.git/**", "**/.env*"];
+export const EDIT_RESTRICTED_GLOBS: readonly string[] = [...CREDENTIAL_GLOBS, "**/.git/**"];
 
 // Windows, and macOS's default APFS/HFS+ configuration, are case-insensitive
 // (but case-preserving) filesystems — ".SSH" and ".ssh" name the same
@@ -63,7 +94,10 @@ export function setSandboxState(state: SandboxState): void {
   sandboxState = state;
 }
 
-const STATE_CYCLE: readonly SandboxState[] = ["on", "off", "yolo"];
+// "yolo" is deliberately excluded from the blind no-argument cycle — it drops root-containment
+// entirely (not just the restricted-glob layer), so reaching it requires explicitly typing
+// `/toggle-sandbox yolo` rather than being reachable by repeatedly pressing the same command.
+const STATE_CYCLE: readonly SandboxState[] = ["on", "off"];
 
 /** Advances to the next state in `STATE_CYCLE` (wrapping around) and returns it. */
 export function cycleSandboxState(): SandboxState {
@@ -137,11 +171,25 @@ export function resolveSandboxPath(root: string, target: string, mode: SandboxMo
  * produce). `isSymlink` lets the (comparatively expensive) real-path
  * containment check stay skipped for the overwhelming majority of entries
  * that aren't symlinks, same as the perf note in `pathSafety.ts`.
+ *
+ * `stateOverride`, when passed, is consulted instead of this module's own
+ * `sandboxState` — needed by `grepWorker.ts`, which runs in a separate
+ * worker thread with its own independent copy of this module's state
+ * (module state doesn't cross the `worker_threads` boundary), so it has to
+ * be told the main thread's actual current state explicitly rather than
+ * silently falling back to its own copy's default of `"on"`.
  */
-export function isEntrySandboxSafe(base: string, entryPath: string, mode: SandboxMode, isSymlink: boolean): boolean {
-  if (sandboxState === "yolo") return true;
+export function isEntrySandboxSafe(
+  base: string,
+  entryPath: string,
+  mode: SandboxMode,
+  isSymlink: boolean,
+  stateOverride?: SandboxState
+): boolean {
+  const state = stateOverride ?? sandboxState;
+  if (state === "yolo") return true;
 
-  if (sandboxState === "on") {
+  if (state === "on") {
     const full = path.isAbsolute(entryPath) ? entryPath : path.join(base, entryPath);
     if (matchesRestrictedGlob(path.resolve(base), full, mode)) return false;
   }

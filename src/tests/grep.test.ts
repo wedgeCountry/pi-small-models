@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { grepFiles } from "../tools/grep.ts";
+import { setSandboxState } from "../sandbox.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds matching lines by regex", async (t) => {
@@ -120,4 +121,36 @@ test("does not read through a symlink that points outside the base directory", a
   const result = await grepFiles(dir, "needle");
   assert.equal(result.matchCount, 1);
   assert.equal(result.lines.filter((l) => l.isMatch)[0]?.file, "real.txt");
+});
+
+test("excludes a sandbox-restricted file even when explicitly globbed for", async (t) => {
+  // fast-glob's default dot:false already hides ".env" from a wildcard "**/*" scan, so glob for it
+  // explicitly (a literal path segment, unaffected by dot:false) to exercise the sandbox's own
+  // restricted-glob filter specifically, not just the upstream dotfile suppression.
+  const dir = await makeFixture({ ".env": "SECRET=needle", "a.txt": "needle" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(dir, "needle", { glob: ".env" });
+  assert.equal(result.matchCount, 0);
+  assert.equal(result.filesScanned, 0);
+});
+
+test("propagates the current sandbox state to the worker thread end-to-end", async (t) => {
+  // A regression test for the worker/main-thread state-sync itself: grepWorker.ts imports
+  // sandbox.ts in its own worker_threads isolate, which starts with its own independent
+  // module-level state (always "on") — if the current state weren't explicitly passed across that
+  // boundary, toggling sandboxState to "off" here would unlock the file in the main thread's
+  // pre-filter but the worker would still reject it against its own stale "on" default.
+  const dir = await makeFixture({ ".env": "SECRET=needle" });
+  t.after(async () => {
+    await cleanupFixture(dir);
+    setSandboxState("on");
+  });
+
+  const restricted = await grepFiles(dir, "needle", { glob: ".env" });
+  assert.equal(restricted.matchCount, 0);
+
+  setSandboxState("off");
+  const unlocked = await grepFiles(dir, "needle", { glob: ".env" });
+  assert.equal(unlocked.matchCount, 1);
 });

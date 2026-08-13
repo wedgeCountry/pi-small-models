@@ -4,7 +4,7 @@ import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
-import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import { resolveSandboxPath, isEntrySandboxSafe, getSandboxState, type SandboxState } from "../sandbox.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -76,22 +76,44 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
   // followSymbolicLinks: false only stops fast-glob from descending into a
   // symlinked directory — a symlinked file itself still comes back in the
   // list, so re-check every entry against the sandbox (restricted globs
-  // apply regardless of symlink status) before the worker reads it.
-  const files = entries
+  // apply regardless of symlink status) before the worker reads it. The
+  // `isSymlink` flag rides along to `files` (rather than being dropped once
+  // filtered) so `grepWorker.ts` can run this same check again independently
+  // instead of just trusting this pre-filter — see the comment on
+  // `scanInWorker`/`ScanInput` for why that re-check matters.
+  const files: ScanFile[] = entries
     .filter((e) => isEntrySandboxSafe(base, e.path, "read", e.dirent.isSymbolicLink()))
-    .map((e) => e.path)
-    .sort();
+    .map((e) => ({ path: e.path, isSymlink: e.dirent.isSymbolicLink() }))
+    .sort((a, b) => a.path.localeCompare(b.path));
 
-  return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
+  return scanInWorker(
+    { base, files, pattern, flags, max, context, sandboxState: getSandboxState() },
+    timeoutMs,
+    opts.signal
+  );
+}
+
+export interface ScanFile {
+  path: string;
+  isSymlink: boolean;
 }
 
 interface ScanInput {
   base: string;
-  files: string[];
+  files: ScanFile[];
   pattern: string;
   flags: string;
   max: number;
   context: number;
+  /**
+   * The main thread's sandbox state at the moment this scan was kicked off,
+   * handed to the worker explicitly because `grepWorker.ts` runs in a
+   * separate `worker_threads` isolate — importing `sandbox.ts` there gets an
+   * independent copy of its module-level state (starting from `"on"`, not
+   * whatever this process's state actually is), so without this the worker's
+   * own re-verification would silently diverge from the main thread's.
+   */
+  sandboxState: SandboxState;
 }
 
 /**
@@ -100,6 +122,13 @@ interface ScanInput {
  * the worker, which we then terminate, instead of freezing the whole process
  * — the main-thread AbortSignal check alone can't interrupt a single
  * in-progress synchronous RegExp.test() call.
+ *
+ * `input.files` was already sandbox-filtered on the main thread above, but
+ * `grepWorker.ts` re-checks each file against the sandbox itself before
+ * reading it rather than trusting that filter blindly — so a bug in (or
+ * future change to) the main-thread pre-filter, or a `/toggle-sandbox` state
+ * change racing this call, doesn't turn into the worker reading a restricted
+ * file just because it was handed the path.
  */
 function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal): Promise<GrepResult> {
   return new Promise((resolve, reject) => {

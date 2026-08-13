@@ -41,10 +41,10 @@ test("rejects absolute paths outside the root", () => {
   assert.equal(fileIsSafe(root, outside, "edit"), false);
 });
 
-test("edit mode restricts .git but not .ssh", () => {
+test("edit mode restricts .git and .ssh", () => {
   assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
   assert.equal(directoryIsSafe(root, ".git", "edit"), false);
-  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "edit"), true);
+  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "edit"), false);
 });
 
 test("read mode restricts .ssh but not .git", () => {
@@ -65,6 +65,21 @@ test("read mode also restricts .aws and .netrc", () => {
   assert.equal(fileIsSafe(root, ".netrc", "read"), false);
 });
 
+test("both modes restrict the broader credential-store additions", () => {
+  for (const mode of ["read", "edit"] as const) {
+    assert.equal(fileIsSafe(root, ".npmrc", mode), false);
+    assert.equal(fileIsSafe(root, ".pgpass", mode), false);
+    assert.equal(fileIsSafe(root, ".docker/config.json", mode), false);
+    assert.equal(fileIsSafe(root, ".kube/config", mode), false);
+    assert.equal(fileIsSafe(root, ".gnupg/private-keys-v1.d/foo", mode), false);
+    assert.equal(fileIsSafe(root, ".config/gcloud/credentials.db", mode), false);
+    assert.equal(fileIsSafe(root, "id_rsa", mode), false);
+    assert.equal(fileIsSafe(root, "deploy/id_ed25519", mode), false);
+  }
+  // Public keys aren't secret and aren't covered by the bare-filename patterns.
+  assert.equal(fileIsSafe(root, "id_rsa.pub", "read"), true);
+});
+
 test("restricted globs apply regardless of nesting depth", () => {
   assert.equal(fileIsSafe(root, "packages/api/.git/config", "edit"), false);
   assert.equal(fileIsSafe(root, "packages/api/.env", "read"), false);
@@ -72,8 +87,26 @@ test("restricted globs apply regardless of nesting depth", () => {
 });
 
 test("restricted glob lists are exactly what each mode advertises", () => {
-  assert.deepEqual([...EDIT_RESTRICTED_GLOBS], ["**/.git/**", "**/.env*"]);
-  assert.deepEqual([...READ_RESTRICTED_GLOBS], ["**/.ssh/**", "**/.aws/**", "**/.env*", "**/.netrc"]);
+  const credentialGlobs = [
+    "**/.ssh/**",
+    "**/.aws/**",
+    "**/.env*",
+    "**/.netrc",
+    "**/.npmrc",
+    "**/.pgpass",
+    "**/.docker/**",
+    "**/.kube/**",
+    "**/.gnupg/**",
+    "**/.config/gcloud/**",
+    "**/id_rsa",
+    "**/id_dsa",
+    "**/id_ecdsa",
+    "**/id_ed25519",
+  ];
+  assert.deepEqual([...READ_RESTRICTED_GLOBS], credentialGlobs);
+  // Edit mode is a superset of read mode's credential globs, plus .git/** (repo-state protection,
+  // not a credential/disclosure concern, so it isn't in READ_RESTRICTED_GLOBS).
+  assert.deepEqual([...EDIT_RESTRICTED_GLOBS], [...credentialGlobs, "**/.git/**"]);
 });
 
 test("case sensitivity of restricted globs matches the current platform", () => {
@@ -120,12 +153,17 @@ test("state 'yolo' bypasses everything, including root containment", (t) => {
   assert.doesNotThrow(() => resolveSandboxPath(root, "../outside", "edit"));
 });
 
-test("cycleSandboxState advances on -> off -> yolo -> on", (t) => {
+test("cycleSandboxState only ever toggles on <-> off — yolo is never reachable by cycling", (t) => {
   t.after(() => setSandboxState("on"));
   setSandboxState("on");
 
   assert.equal(cycleSandboxState(), "off");
-  assert.equal(cycleSandboxState(), "yolo");
+  assert.equal(cycleSandboxState(), "on");
+  assert.equal(cycleSandboxState(), "off");
+
+  // Even starting from yolo (e.g. set explicitly by name), cycling steps to "on", never lingers on
+  // or returns to "yolo" — the blind cycle can only ever land on on/off.
+  setSandboxState("yolo");
   assert.equal(cycleSandboxState(), "on");
 });
 
@@ -147,6 +185,23 @@ test("isEntrySandboxSafe respects sandbox state the same way resolveSandboxPath 
   assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
 });
 
+test("isEntrySandboxSafe's stateOverride wins over this module's own sandboxState", (t) => {
+  t.after(() => setSandboxState("on"));
+
+  // Module state says "on" (restricted), but an explicit "yolo" override — as grepWorker.ts must
+  // pass, since its own import of this module starts from a separate, independent "on" — bypasses
+  // everything, and vice versa.
+  setSandboxState("on");
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "yolo"), true);
+
+  setSandboxState("yolo");
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "on"), false);
+
+  // No override falls back to this module's own current state, as before.
+  setSandboxState("on");
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), false);
+});
+
 test("works against a real fixture tree", async (t) => {
   const dir = await makeFixture({
     "src/index.ts": "export {};",
@@ -160,7 +215,7 @@ test("works against a real fixture tree", async (t) => {
   assert.equal(fileIsSafe(dir, ".git/config", "edit"), false);
   assert.equal(fileIsSafe(dir, ".git/config", "read"), true);
   assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "read"), false);
-  assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "edit"), true);
+  assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "edit"), false);
   assert.equal(fileIsSafe(dir, ".env", "read"), false);
   assert.equal(fileIsSafe(dir, ".env", "edit"), false);
 

@@ -35,7 +35,8 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("toggle-sandbox", {
     description: "Set src/sandbox.ts's state: on (fully enforced), off (restricted-glob checks skipped, " +
-      "root containment still enforced), or yolo (fully unsandboxed). No argument cycles on -> off -> yolo -> on.",
+      "root containment still enforced), or yolo (fully unsandboxed). No argument toggles on <-> off; " +
+      "yolo is reachable only by passing it explicitly (/toggle-sandbox yolo), never via the blind cycle.",
     getArgumentCompletions: (prefix) =>
       [...SANDBOX_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
     handler: async (args, ctx) => {
@@ -57,5 +58,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", () => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
+    // sandboxState (src/sandbox.ts) is a module-level, process-lifetime variable, not a
+    // per-session one — if the extension module is ever shared across concurrent sessions in one
+    // process, a previous session's `/toggle-sandbox off`/`yolo` would otherwise leak into a new
+    // session that never asked for it. Reset it explicitly so every session starts fully enforced
+    // regardless of what any other session left it at.
+    setSandboxState("on");
   });
 }
