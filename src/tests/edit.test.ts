@@ -99,6 +99,15 @@ test("editFileMulti applies several edits atomically in one call", async (t) => 
   assert.equal(content, "const foo = 10;\nconst bar = 20;\n");
 });
 
+test("editFileMulti accepts a single-item edits array", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFileMulti(path.join(dir, "a.txt"), [{ oldText: "const foo = 1;", newText: "const foo = 10;" }]);
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 10;\nconst bar = 2;\n");
+});
+
 test("editFileMulti applies later edits against the result of earlier ones", async (t) => {
   const dir = await makeFixture({ "a.txt": "one\ntwo\nthree\n" });
   t.after(() => cleanupFixture(dir));

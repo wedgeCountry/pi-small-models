@@ -8,7 +8,7 @@ export const EDIT_TOOL_DEFINITION = {
   promptGuidelines: [
       "For a single change, pass oldText/newText directly: oldText must match exactly one location in the file's current contents.",
       "Do not use several separate edit calls on the same file, since a later oldText planned against the original file may no longer match once an earlier edit has changed the text.",
-      "Instead, for multiple changes to the SAME file (minimum 2), pass an `edits` array instead of oldText/newText. " +
+      "Instead, for multiple changes to the SAME file, pass an `edits` array instead of oldText/newText. " +
       "Keep each oldText as small as possible while still being unique in the file — do not pad it with large unchanged regions.",
       "Never pass both oldText/newText and edits in the same call."
   ],
@@ -45,8 +45,8 @@ export const EDIT_TOOL_DEFINITION = {
           ),
         }),
         {
-          minItems: 2,
-          description: "Apply several edits to the same file in one call, in order, atomically — the file is only written if all edits succeed. Use instead of oldText/newText when a file needs more than one change.",
+          minItems: 1,
+          description: "Apply one or more edits to the same file in one call, in order, atomically — the file is only written if all edits succeed. Use instead of oldText/newText, e.g. when a file needs more than one change.",
         }
       )
     ),
