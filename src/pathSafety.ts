@@ -6,8 +6,12 @@ import * as path from "node:path";
  * (symlink-resolved) path joined back with the trailing segments that don't
  * exist yet. Falls back to `target` itself if no ancestor exists (e.g. in
  * tests that use a made-up root that was never created on disk).
+ *
+ * Exported so `sandbox.ts` can build the same lexical-then-real-path
+ * containment check `resolveSafePath` uses below, without duplicating the
+ * symlink-resolution logic.
  */
-function realpathWithMissingSuffix(target: string): string {
+export function realpathWithMissingSuffix(target: string): string {
   const suffixParts: string[] = [];
   let current = target;
   while (true) {
