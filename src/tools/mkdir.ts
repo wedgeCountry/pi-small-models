@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
@@ -27,7 +27,7 @@ export function registerMkdirTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...MKDIR_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const dirPath = resolveSafePath(ctx.cwd, params.path);
+      const dirPath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await makeDir(dirPath, { signal });
 
       return {

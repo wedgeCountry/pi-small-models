@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 
 export interface InsertOptions {
@@ -49,7 +49,7 @@ export function registerInsertTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...INSERT_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSafePath(ctx.cwd, params.path);
+      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await insertText(filePath, params.line, params.text, { signal });
 
       return {

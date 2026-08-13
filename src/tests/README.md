@@ -7,6 +7,8 @@ Each tool test builds a temp fixture with `fixtures.ts` (`makeFixture`/`cleanupF
 plain async function (e.g. `findFiles`, not the `pi.registerTool` wrapper), and asserts on the returned
 result object rather than the rendered text.
 
-`pathSafety.test.ts` covers `resolveSafePath`, including symlink-escape attempts. Those cases create real
-symlinks via `fs.symlink` and `t.skip()` when that fails with `EPERM` — expected on Windows without Developer
-Mode or admin privileges.
+`pathSafety.test.ts` covers `resolveSafePath`, the underlying containment primitive, including symlink-escape
+attempts. `sandbox.test.ts` covers `resolveSandboxPath`/`isEntrySandboxSafe` — the mode-aware, toggleable layer
+every tool actually calls — including its own symlink-escape and restricted-glob cases. Both files' symlink
+cases create real symlinks via `fs.symlink` and `t.skip()` when that fails with `EPERM` — expected on Windows
+without Developer Mode or admin privileges.

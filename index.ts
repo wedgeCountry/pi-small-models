@@ -11,7 +11,9 @@ import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
-import {toggleSandbox} from "./src/sandbox.ts";
+import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
+
+const SANDBOX_STATES = new Set<SandboxState>(["on", "off", "yolo"]);
 
 // find/grep/edit/read/write override Pi's built-in tools of the same name (same-name registration
 // replaces the built-in per Pi's tool registry).
@@ -32,10 +34,24 @@ export default function (pi: ExtensionAPI) {
   registerWriteTool(pi);
 
   pi.registerCommand("toggle-sandbox", {
-    description: "Toggle src/sandbox.ts's read/edit restricted-path checks on or off",
-    handler: async (_args, ctx) => {
-      const enabled = toggleSandbox();
-      ctx.ui.notify(`Sandbox ${enabled ? "enabled" : "disabled"}`, enabled ? "info" : "warning");
+    description: "Set src/sandbox.ts's state: on (fully enforced), off (restricted-glob checks skipped, " +
+      "root containment still enforced), or yolo (fully unsandboxed). No argument cycles on -> off -> yolo -> on.",
+    getArgumentCompletions: (prefix) =>
+      [...SANDBOX_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
+    handler: async (args, ctx) => {
+      const requested = args.trim().toLowerCase();
+      let state: SandboxState;
+      if (requested === "") {
+        state = cycleSandboxState();
+      } else if (SANDBOX_STATES.has(requested as SandboxState)) {
+        state = requested as SandboxState;
+        setSandboxState(state);
+      } else {
+        ctx.ui.notify(`Unknown sandbox state "${requested}" — expected on, off, or yolo`, "error");
+        return;
+      }
+
+      ctx.ui.notify(`Sandbox: ${state}`, state === "on" ? "info" : "warning");
     },
   });
 

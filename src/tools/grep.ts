@@ -4,7 +4,7 @@ import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
-import { resolveSafePath, isEntryWithinBase } from "../pathSafety.ts";
+import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -75,9 +75,10 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
   });
   // followSymbolicLinks: false only stops fast-glob from descending into a
   // symlinked directory — a symlinked file itself still comes back in the
-  // list, so re-check any of those against base before the worker reads it.
+  // list, so re-check every entry against the sandbox (restricted globs
+  // apply regardless of symlink status) before the worker reads it.
   const files = entries
-    .filter((e) => !e.dirent.isSymbolicLink() || isEntryWithinBase(base, e.path))
+    .filter((e) => isEntrySandboxSafe(base, e.path, "read", e.dirent.isSymbolicLink()))
     .map((e) => e.path)
     .sort();
 
@@ -150,7 +151,7 @@ export function registerGrepTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GREP_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSafePath(ctx.cwd, params.path ?? ".");
+      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const result = await grepFiles(base, params.pattern, {
         glob: params.glob,
         ignoreCase: params.ignoreCase,

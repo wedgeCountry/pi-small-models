@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -87,7 +87,7 @@ export function registerReadTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...READ_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSafePath(ctx.cwd, params.path);
+      const filePath = resolveSandboxPath(ctx.cwd, params.path, "read");
       const result = await readFile(filePath, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");

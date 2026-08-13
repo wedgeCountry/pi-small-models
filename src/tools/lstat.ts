@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LSTAT_TOOL_DEFINITION } from "../tool_definitions/lstat.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 
 export interface LstatResult {
   isFile: boolean;
@@ -33,7 +33,7 @@ export function registerLstatTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...LSTAT_TOOL_DEFINITION,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const targetPath = resolveSafePath(ctx.cwd, params.path);
+      const targetPath = resolveSandboxPath(ctx.cwd, params.path, "read");
       const result = await lstatPath(targetPath);
 
       const type = result.isSymbolicLink ? "symlink" : result.isDirectory ? "directory" : result.isFile ? "file" : "other";

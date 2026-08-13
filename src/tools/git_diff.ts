@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -70,7 +70,7 @@ export function registerGitDiffTool(pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       let relPath: string | undefined;
       if (params.path) {
-        const resolved = resolveSafePath(ctx.cwd, params.path);
+        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
         const rel = path.relative(ctx.cwd, resolved);
         relPath = rel === "" ? undefined : rel;
       }

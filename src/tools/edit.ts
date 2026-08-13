@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
-import {resolveSafePath} from "../pathSafety.ts";
+import {resolveSandboxPath} from "../sandbox.ts";
 import {withFileMutationQueue} from "../mutationQueue.ts";
 
 export interface EditOptions {
@@ -160,7 +160,7 @@ export function registerEditTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...EDIT_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSafePath(ctx.cwd, params.path);
+      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       const hasSingle = params.oldText !== undefined || params.newText !== undefined;
       const hasBatch = params.edits !== undefined;
 

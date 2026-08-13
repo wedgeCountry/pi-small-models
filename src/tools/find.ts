@@ -3,7 +3,7 @@ import type {Readable} from "node:stream";
 import {DEFAULT_IGNORE_GLOBS} from "../ignore.ts";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
-import {resolveSafePath, isEntryWithinBase} from "../pathSafety.ts";
+import {resolveSandboxPath, isEntrySandboxSafe} from "../sandbox.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -24,9 +24,11 @@ export async function findFiles(base: string, pattern: string, opts: FindOptions
   const entries = await streamGlob(base, pattern, opts.signal);
   // followSymbolicLinks: false only stops fast-glob from descending into a
   // symlinked directory — a symlinked entry itself still comes back in the
-  // list, so re-check any of those against base before disclosing them.
+  // list, so re-check every entry against the sandbox (restricted globs
+  // apply regardless of symlink status; the symlink-escape check only needs
+  // to run for entries actually flagged as symlinks) before disclosing them.
   const matches = entries
-    .filter((e) => !e.dirent.isSymbolicLink() || isEntryWithinBase(base, e.path))
+    .filter((e) => isEntrySandboxSafe(base, e.path, "read", e.dirent.isSymbolicLink()))
     .map((e) => e.path)
     .sort();
   const truncated = matches.length > max;
@@ -90,7 +92,7 @@ export function registerFindTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...FIND_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSafePath(ctx.cwd, params.path ?? ".");
+      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const result = await findFiles(base, params.pattern, {maxResults: params.maxResults, signal});
 
       const text = result.matches.length

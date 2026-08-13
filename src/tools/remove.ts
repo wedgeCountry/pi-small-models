@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 
 export interface RemoveOptions {
@@ -81,7 +81,7 @@ export function registerRemoveTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...REMOVE_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const targetPath = resolveSafePath(ctx.cwd, params.path);
+      const targetPath = resolveSandboxPath(ctx.cwd, params.path, "edit");
 
       await removePath(targetPath, { recursive: params.recursive, signal, projectRoot: ctx.cwd });
 

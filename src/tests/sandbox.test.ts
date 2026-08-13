@@ -6,9 +6,11 @@ import * as path from "node:path";
 import {
   directoryIsSafe,
   fileIsSafe,
-  isSandboxEnabled,
-  setSandboxEnabled,
-  toggleSandbox,
+  resolveSandboxPath,
+  isEntrySandboxSafe,
+  getSandboxState,
+  setSandboxState,
+  cycleSandboxState,
   READ_RESTRICTED_GLOBS,
   EDIT_RESTRICTED_GLOBS,
 } from "../sandbox.ts";
@@ -79,31 +81,70 @@ test("case sensitivity of restricted globs matches the current platform", () => 
   assert.equal(fileIsSafe(root, ".SSH/id_rsa", "read"), !caseInsensitive);
 });
 
-test("toggling the sandbox off bypasses both containment and restricted-glob checks", (t) => {
-  t.after(() => setSandboxEnabled(true));
-
-  assert.equal(isSandboxEnabled(), true);
-  assert.equal(toggleSandbox(), false);
-  assert.equal(isSandboxEnabled(), false);
-
-  assert.equal(directoryIsSafe(root, "../outside", "edit"), true);
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
-  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), true);
-
-  assert.equal(toggleSandbox(), true);
-  assert.equal(isSandboxEnabled(), true);
+test("resolveSandboxPath returns the resolved path on success and throws on violation", () => {
+  assert.equal(resolveSandboxPath(root, "src/index.ts", "read"), path.resolve(root, "src/index.ts"));
+  assert.throws(() => resolveSandboxPath(root, "../outside", "edit"), /outside the project root/);
+  assert.throws(() => resolveSandboxPath(root, ".git/config", "edit"), /restricted in edit mode/);
 });
 
-test("setSandboxEnabled sets the flag directly", (t) => {
-  t.after(() => setSandboxEnabled(true));
+test("state 'on' enforces both containment and restricted globs (the default)", (t) => {
+  t.after(() => setSandboxState("on"));
+  setSandboxState("on");
 
-  setSandboxEnabled(false);
-  assert.equal(isSandboxEnabled(), false);
-  assert.equal(fileIsSafe(root, "../outside", "read"), true);
+  assert.equal(getSandboxState(), "on");
+  assert.equal(fileIsSafe(root, "../outside", "edit"), false);
+  assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
+});
 
-  setSandboxEnabled(true);
-  assert.equal(isSandboxEnabled(), true);
-  assert.equal(fileIsSafe(root, "../outside", "read"), false);
+test("state 'off' keeps root containment but skips restricted-glob checks", (t) => {
+  t.after(() => setSandboxState("on"));
+  setSandboxState("off");
+
+  assert.equal(getSandboxState(), "off");
+  // Containment still enforced.
+  assert.equal(fileIsSafe(root, "../outside", "edit"), false);
+  assert.throws(() => resolveSandboxPath(root, "../outside", "edit"));
+  // Restricted globs no longer enforced.
+  assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
+  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), true);
+  assert.equal(resolveSandboxPath(root, ".git/config", "edit"), path.resolve(root, ".git/config"));
+});
+
+test("state 'yolo' bypasses everything, including root containment", (t) => {
+  t.after(() => setSandboxState("on"));
+  setSandboxState("yolo");
+
+  assert.equal(getSandboxState(), "yolo");
+  assert.equal(fileIsSafe(root, "../outside", "edit"), true);
+  assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
+  assert.doesNotThrow(() => resolveSandboxPath(root, "../outside", "edit"));
+});
+
+test("cycleSandboxState advances on -> off -> yolo -> on", (t) => {
+  t.after(() => setSandboxState("on"));
+  setSandboxState("on");
+
+  assert.equal(cycleSandboxState(), "off");
+  assert.equal(cycleSandboxState(), "yolo");
+  assert.equal(cycleSandboxState(), "on");
+});
+
+test("isEntrySandboxSafe filters restricted entries during a directory walk, symlink or not", () => {
+  assert.equal(isEntrySandboxSafe(root, ".ssh", "read", false), false);
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), false);
+  assert.equal(isEntrySandboxSafe(root, "src/index.ts", "read", false), true);
+  assert.equal(isEntrySandboxSafe(root, ".git/config", "edit", false), false);
+  assert.equal(isEntrySandboxSafe(root, ".git/config", "read", false), true);
+});
+
+test("isEntrySandboxSafe respects sandbox state the same way resolveSandboxPath does", (t) => {
+  t.after(() => setSandboxState("on"));
+
+  setSandboxState("off");
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
+
+  setSandboxState("yolo");
+  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
 });
 
 test("works against a real fixture tree", async (t) => {
@@ -122,6 +163,12 @@ test("works against a real fixture tree", async (t) => {
   assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "edit"), true);
   assert.equal(fileIsSafe(dir, ".env", "read"), false);
   assert.equal(fileIsSafe(dir, ".env", "edit"), false);
+
+  // isEntrySandboxSafe against entries as find/grep/list's walks would produce them
+  // (paths relative to the fixture root, exactly as fast-glob/readdir report them).
+  assert.equal(isEntrySandboxSafe(dir, "src/index.ts", "read", false), true);
+  assert.equal(isEntrySandboxSafe(dir, ".ssh/id_rsa", "read", false), false);
+  assert.equal(isEntrySandboxSafe(dir, ".git/config", "edit", false), false);
 });
 
 test("rejects a symlink inside root that points outside it, regardless of mode", async (t) => {
@@ -143,6 +190,7 @@ test("rejects a symlink inside root that points outside it, regardless of mode",
 
   assert.equal(fileIsSafe(realRoot, "link/secret.txt", "read"), false);
   assert.equal(fileIsSafe(realRoot, "link/secret.txt", "edit"), false);
+  assert.equal(isEntrySandboxSafe(realRoot, "link/secret.txt", "read", true), false);
 });
 
 test("catches a symlink that points at a restricted directory under a disguised name", async (t) => {
@@ -163,6 +211,7 @@ test("catches a symlink that points at a restricted directory under a disguised 
   // The lexical name ("totally-not-git") wouldn't match "**/.git/**" on its own —
   // only resolving the symlink's real target catches it.
   assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "edit"), false);
+  assert.equal(isEntrySandboxSafe(realRoot, "totally-not-git/config", "edit", true), false);
   // .git isn't restricted in read mode, so the same symlink is fine there.
   assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "read"), true);
 });
@@ -182,6 +231,7 @@ test("still allows a symlink inside root that points to an unrestricted target i
 
   assert.equal(fileIsSafe(realRoot, "link/file.txt", "read"), true);
   assert.equal(directoryIsSafe(realRoot, "link", "edit"), true);
+  assert.equal(isEntrySandboxSafe(realRoot, "link/file.txt", "read", true), true);
 });
 
 test("still resolves normally when root does not exist on disk (e.g. in unit tests)", () => {

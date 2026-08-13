@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
-import { resolveSafePath } from "../pathSafety.ts";
+import { resolveSandboxPath } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 
 export interface WriteOptions {
@@ -46,7 +46,7 @@ export function registerWriteTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...WRITE_TOOL_DEFINITION,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSafePath(ctx.cwd, params.path);
+      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
       await writeFile(filePath, params.content, { signal });
 
       return {
