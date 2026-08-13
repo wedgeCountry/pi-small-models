@@ -19,8 +19,6 @@ const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
 export interface GitDiffOptions {
   /** Path (relative to `cwd`) to scope the diff to. Omit for the whole repository. */
   path?: string;
-  /** Show staged changes (`git diff --cached`) instead of unstaged changes. */
-  staged?: boolean;
   signal?: AbortSignal;
 }
 
@@ -72,13 +70,12 @@ function filterRestrictedDiffChunks(cwd: string, diffText: string): string {
 }
 
 /**
- * Runs `git diff` (or `git diff --cached` when `staged`) in `cwd` and returns the unified diff
- * text, capped at DEFAULT_MAX_LINES lines / DEFAULT_MAX_BYTES bytes (whichever is hit first) — the
- * same shape of cap `readFile` applies to file contents.
+ * Runs `git diff` (unstaged changes only) in `cwd` and returns the unified diff text, capped at
+ * DEFAULT_MAX_LINES lines / DEFAULT_MAX_BYTES bytes (whichever is hit first) — the same shape of
+ * cap `readFile` applies to file contents.
  */
 export async function gitDiff(cwd: string, opts: GitDiffOptions = {}): Promise<GitDiffResult> {
   const args = ["diff"];
-  if (opts.staged) args.push("--cached");
   if (opts.path) args.push("--", opts.path);
 
   let stdout: string;
@@ -120,7 +117,7 @@ export function registerGitDiffTool(pi: ExtensionAPI) {
         relPath = rel === "" ? undefined : rel;
       }
 
-      const result = await gitDiff(ctx.cwd, { path: relPath, staged: params.staged, signal });
+      const result = await gitDiff(ctx.cwd, { path: relPath, signal });
 
       let text = result.text || "No changes.";
       if (result.truncated) {

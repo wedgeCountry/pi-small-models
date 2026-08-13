@@ -31,7 +31,7 @@ test("shows unstaged changes", async (t) => {
   assert.match(result.text, /\+goodbye/);
 });
 
-test("only shows staged changes when staged is set", async (t) => {
+test("does not show a change that's already staged (git_diff is unstaged-only)", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
@@ -39,11 +39,8 @@ test("only shows staged changes when staged is set", async (t) => {
   await fs.writeFile(path.join(dir, "a.txt"), "goodbye\n", "utf8");
   await execFile("git", ["add", "a.txt"], { cwd: dir });
 
-  const unstaged = await gitDiff(dir);
-  assert.equal(unstaged.text, "");
-
-  const staged = await gitDiff(dir, { staged: true });
-  assert.match(staged.text, /\+goodbye/);
+  const result = await gitDiff(dir);
+  assert.equal(result.text, "");
 });
 
 test("scopes the diff to a path", async (t) => {
