@@ -1,6 +1,8 @@
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
+import {registerGitDiffTool} from "./src/tools/git_diff.ts";
+import {registerGitStatusTool} from "./src/tools/git_status.ts";
 import {registerGrepTool} from "./src/tools/grep.ts";
 import {registerInsertTool} from "./src/tools/insert.ts";
 import {registerListTool} from "./src/tools/list.ts";
@@ -17,6 +19,8 @@ const DISABLED_TOOLS = new Set(["bash"]);
 export default function (pi: ExtensionAPI) {
   registerEditTool(pi);
   registerFindTool(pi);
+  registerGitDiffTool(pi);
+  registerGitStatusTool(pi);
   registerGrepTool(pi);
   registerInsertTool(pi);
   registerListTool(pi);

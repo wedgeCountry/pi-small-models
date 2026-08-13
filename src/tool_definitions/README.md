@@ -1,7 +1,7 @@
 # tool_definitions
 
-One file per tool (`find`, `grep`, `edit`, `mkdir`, `remove`, `lstat`, `insert`, `list`, `read`, `write`), each exporting a plain
-`*_TOOL_DEFINITION` object:
+One file per tool (`find`, `grep`, `edit`, `mkdir`, `remove`, `lstat`, `insert`, `list`, `read`, `write`,
+`git_status`, `git_diff`), each exporting a plain `*_TOOL_DEFINITION` object:
 
 ```typescript
 export const MY_TOOL_DEFINITION = {
