@@ -4,6 +4,7 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import { oneLine, callName } from "../renderCall.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -109,6 +110,10 @@ function describeError(err: unknown): string {
 export function registerGitDiffTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GIT_DIFF_TOOL_DEFINITION,
+    renderCall(args, theme) {
+      const text = callName(theme, "git_diff");
+      return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);
+    },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       let relPath: string | undefined;
       if (params.path) {
