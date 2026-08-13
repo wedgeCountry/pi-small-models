@@ -152,6 +152,36 @@ test("editFileMulti honors per-edit allowMultipleMatches", async (t) => {
   assert.equal(content, "x\nx\ny\n");
 });
 
+test("matches oldText with bare LF against a CRLF file, and keeps the file CRLF", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\r\nconst bar = 2;\r\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFile(path.join(dir, "a.txt"), "const foo = 1;\nconst bar = 2;", "const foo = 10;\nconst bar = 20;");
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 10;\r\nconst bar = 20;\r\n");
+});
+
+test("matches oldText with CRLF against a file that's actually LF, and keeps the file LF", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFile(path.join(dir, "a.txt"), "const foo = 1;\r\nconst bar = 2;", "const foo = 10;\r\nconst bar = 20;");
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 10;\nconst bar = 20;\n");
+});
+
+test("editFileMulti matches bare-LF oldText against a CRLF file across several edits", async (t) => {
+  const dir = await makeFixture({ "a.txt": "const foo = 1;\r\nconst bar = 2;\r\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await editFileMulti(path.join(dir, "a.txt"), [
+    { oldText: "const foo = 1;", newText: "const foo = 10;" },
+    { oldText: "const bar = 2;", newText: "const bar = 20;" },
+  ]);
+  const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
+  assert.equal(content, "const foo = 10;\r\nconst bar = 20;\r\n");
+});
+
 test("serializes concurrent edits to different parts of the same file so neither is lost", async (t) => {
   const dir = await makeFixture({ "a.txt": "foo\nbar\n" });
   t.after(() => cleanupFixture(dir));

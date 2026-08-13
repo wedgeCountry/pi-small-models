@@ -1,6 +1,6 @@
 # tool_definitions
 
-One file per tool (`find`, `grep`, `edit`, `mkdir`, `remove`, `lstat`, `insert`, `list`), each exporting a plain
+One file per tool (`find`, `grep`, `edit`, `mkdir`, `remove`, `lstat`, `insert`, `list`, `read`, `write`), each exporting a plain
 `*_TOOL_DEFINITION` object:
 
 ```typescript

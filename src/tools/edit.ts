@@ -20,7 +20,32 @@ export interface EditMultiOptions {
   signal?: AbortSignal;
 }
 
-/** Applies a single {oldText -> newText} replacement to `content`, returning the updated string. */
+/**
+ * Detects a file's dominant line-ending style from its content, the same heuristic `insertText`
+ * uses: any `\r\n` anywhere means treat the whole file as CRLF.
+ */
+function detectLineEnding(content: string): "\r\n" | "\n" {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+/** Collapses all line endings to bare `\n`, so matching doesn't care whether a string uses CRLF, LF, or bare CR. */
+function normalizeToLF(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/** Reintroduces `\r\n` line endings into LF-normalized text, if `ending` calls for it. */
+function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
+  return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
+}
+
+/**
+ * Applies a single {oldText -> newText} replacement to `content`, returning the updated string.
+ *
+ * `content`, `oldText`, and `newText` must already be LF-normalized (see `normalizeToLF`) — callers
+ * match against a normalized copy of the file so an `oldText` written with bare `\n` line breaks
+ * (the overwhelming majority of what models produce) still matches a file that's actually saved
+ * with `\r\n`, and restore the file's real line-ending style afterwards.
+ */
 function applyOneEdit(content: string, edit: EditSpec, context: string): string {
   const { oldText, newText, allowMultipleMatches } = edit;
   if (oldText.length === 0) {
@@ -38,7 +63,7 @@ function applyOneEdit(content: string, edit: EditSpec, context: string): string 
   }
   const secondIndex = content.indexOf(oldText, firstIndex + oldText.length);
   if (secondIndex !== -1 && !allowMultipleMatches) {
-    throw new Error(`${context}: oldText is not unique; it matches multiple locations`);
+    throw new Error(`${context}: oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`);
   }
 
   return allowMultipleMatches
@@ -62,6 +87,13 @@ async function readForEdit(filePath: string, signal?: AbortSignal): Promise<stri
  * one location, or an error is thrown; pass `allowMultipleMatches: true` to replace all
  * occurrences instead.
  *
+ * Matching happens against an LF-normalized copy of the file's content (and of `oldText`/
+ * `newText`), so the file's actual line-ending style — CRLF, LF, or a mix — never causes a
+ * spurious "oldText not found" when the caller's `oldText` uses plain `\n` breaks, which is the
+ * common case for model-generated text. The file's original line-ending style (detected once, up
+ * front) is restored across the whole updated content before writing, so a CRLF file stays CRLF
+ * even though the edit itself was applied against an LF-normalized view of it.
+ *
  * The read-modify-write runs under `withFileMutationQueue` so a concurrent edit/write/insert/
  * remove on the same path can't interleave with it — e.g. read a stale copy of the file after
  * another call has already changed it, then overwrite that call's change.
@@ -74,12 +106,13 @@ export async function editFile(
 ): Promise<void> {
   await withFileMutationQueue(filePath, async () => {
     const content = await readForEdit(filePath, opts.signal);
+    const eol = detectLineEnding(content);
     const updated = applyOneEdit(
-      content,
-      { oldText, newText, allowMultipleMatches: opts.allowMultipleMatches },
+      normalizeToLF(content),
+      { oldText: normalizeToLF(oldText), newText: normalizeToLF(newText), allowMultipleMatches: opts.allowMultipleMatches },
       `oldText in "${filePath}"`
     );
-    await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
+    await fs.writeFile(filePath, restoreLineEndings(updated, eol), { encoding: "utf8", signal: opts.signal });
   });
 }
 
@@ -89,6 +122,9 @@ export async function editFile(
  * and the file is only written once every edit has succeeded — if any edit fails, the file is
  * left untouched. This is what lets a caller make several disjoint changes to the same file
  * without the second edit's `oldText` going stale the moment the first edit lands.
+ *
+ * Same LF-normalize-then-restore handling as `editFile`, applied once up front and once at the
+ * end rather than per edit, so intermediate edits in the chain also see a normalized view.
  *
  * Also runs under `withFileMutationQueue`, for the same reason as `editFile`.
  */
@@ -102,15 +138,21 @@ export async function editFileMulti(
   }
 
   await withFileMutationQueue(filePath, async () => {
-    let updated = await readForEdit(filePath, opts.signal);
+    const content = await readForEdit(filePath, opts.signal);
+    const eol = detectLineEnding(content);
+    let updated = normalizeToLF(content);
     edits.forEach((edit, i) => {
       const context =
         edits.length > 1
           ? `edit ${i + 1} of ${edits.length} in "${filePath}" (an earlier edit in this call may have already changed this text)`
           : `oldText in "${filePath}"`;
-      updated = applyOneEdit(updated, edit, context);
+      updated = applyOneEdit(
+        updated,
+        { oldText: normalizeToLF(edit.oldText), newText: normalizeToLF(edit.newText), allowMultipleMatches: edit.allowMultipleMatches },
+        context
+      );
     });
-    await fs.writeFile(filePath, updated, { encoding: "utf8", signal: opts.signal });
+    await fs.writeFile(filePath, restoreLineEndings(updated, eol), { encoding: "utf8", signal: opts.signal });
   });
 }
 
