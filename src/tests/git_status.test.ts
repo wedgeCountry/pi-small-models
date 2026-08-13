@@ -73,6 +73,36 @@ test("rejects when the directory is not a git repository", async (t) => {
   await assert.rejects(() => gitStatus(dir), /git status failed/);
 });
 
+test("omits a sandbox-restricted file from status, even though git itself reports it", async (t) => {
+  // A .env tracked in git (accidentally committed, or committed with placeholder values and later
+  // edited in place) with an uncommitted change is exactly the case that previously leaked: `git
+  // status` doesn't walk the filesystem through isEntrySandboxSafe the way find/grep/list do, so
+  // nothing filtered it out.
+  const dir = await makeFixture({ "a.txt": "hello\n", ".env": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
+  await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
+
+  const result = await gitStatus(dir);
+  assert.deepEqual(
+    result.entries.map((e) => e.path),
+    ["a.txt"]
+  );
+});
+
+test("omits a restricted rename's source path too", async (t) => {
+  const dir = await makeFixture({ ".env": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await execFile("git", ["mv", ".env", "renamed.env"], { cwd: dir });
+
+  const result = await gitStatus(dir);
+  assert.deepEqual(result.entries, []);
+});
+
 test("rejects when the signal is already aborted", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   await initGitRepo(dir);

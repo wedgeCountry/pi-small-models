@@ -79,6 +79,52 @@ test("rejects when the directory is not a git repository", async (t) => {
   await assert.rejects(() => gitDiff(dir), /git diff failed/);
 });
 
+test("omits a sandbox-restricted file's diff, even though git itself reports it", async (t) => {
+  // The exact scenario that previously leaked: a .env tracked in git (with placeholder content)
+  // gets a real secret written into it, and an ordinary unscoped git_diff call — the tool's
+  // documented default — used to show the full +/- content unfiltered.
+  const dir = await makeFixture({ "a.txt": "hello\n", ".env": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "goodbye\n", "utf8");
+  await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
+
+  const result = await gitDiff(dir);
+  assert.match(result.text, /a\.txt/);
+  assert.match(result.text, /-hello/);
+  assert.match(result.text, /\+goodbye/);
+  assert.doesNotMatch(result.text, /\.env/);
+  assert.doesNotMatch(result.text, /placeholder/);
+  assert.doesNotMatch(result.text, /sk-live-secret/);
+});
+
+test("omits a restricted file's diff even when explicitly scoped to it by path", async (t) => {
+  const dir = await makeFixture({ ".env": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
+
+  const result = await gitDiff(dir, { path: ".env" });
+  assert.equal(result.text, "");
+});
+
+test("still shows an unrestricted file's diff normally when a restricted one is also changed", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n", "b.txt": "hello\n", ".env": "SECRET=1\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed-a\n", "utf8");
+  await fs.writeFile(path.join(dir, "b.txt"), "changed-b\n", "utf8");
+  await fs.writeFile(path.join(dir, ".env"), "SECRET=2\n", "utf8");
+
+  const result = await gitDiff(dir);
+  assert.match(result.text, /changed-a/);
+  assert.match(result.text, /changed-b/);
+  assert.doesNotMatch(result.text, /SECRET/);
+});
+
 test("rejects when the signal is already aborted", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   await initGitRepo(dir);

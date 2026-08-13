@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -85,7 +85,22 @@ export async function gitStatus(cwd: string, opts: GitStatusOptions = {}): Promi
     entries.push({ path: rest, indexStatus, worktreeStatus, renamedFrom });
   }
 
-  return { branch, ahead, behind, entries };
+  // `git status` reports every changed path in the repo regardless of `opts.path` scoping (and
+  // even when unscoped entirely, the tool's default) — unlike `find`/`grep`/`list`, which only ever
+  // walk filesystem entries that already passed `isEntrySandboxSafe`, nothing here has filtered a
+  // credential-shaped path (`.env`, `.ssh/**`, ...) out yet. Do that now, the same way those tools
+  // do, rather than disclosing that such a file exists (or was renamed/staged) just because git
+  // already knows about it. `isSymlink: false` throughout: git only ever reports a path relative to
+  // the repo's own working tree, never one resolved through a symlink to somewhere else, so the
+  // symlink-escape half of `isEntrySandboxSafe` doesn't apply here — only the restricted-glob check
+  // does.
+  const visibleEntries = entries.filter(
+    (e) =>
+      isEntrySandboxSafe(cwd, e.path, "read", false) &&
+      (e.renamedFrom === undefined || isEntrySandboxSafe(cwd, e.renamedFrom, "read", false))
+  );
+
+  return { branch, ahead, behind, entries: visibleEntries };
 }
 
 function describeError(err: unknown): string {
