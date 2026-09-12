@@ -62,21 +62,32 @@ const CREDENTIAL_GLOBS: readonly string[] = [
 ];
 
 /**
+ * `.git/**` is restricted in both modes, alongside the credential globs above: `.git/config`
+ * routinely embeds credentials in remote URLs (`https://user:token@...`, `insteadOf` rewrites),
+ * and `.git/objects`/`packed-refs` can retain secrets that were deleted from the working tree but
+ * never scrubbed from history — both are disclosure risks, not just a mutation risk. `find`/
+ * `grep`/`list`'s default ignore globs already keep `.git` out of an *unscoped* walk, but that's
+ * an ignore-list convenience, not a security boundary — it does nothing once a model points
+ * `path` (or `git_status`/`git_diff`'s `path`) straight at `.git`, which is why this needs to be
+ * enforced here too.
+ */
+const GIT_INTERNALS_GLOBS: readonly string[] = ["**/.git/**"];
+
+/**
  * Read mode protects credential material that would leak secrets if
  * disclosed to the model.
  */
-export const READ_RESTRICTED_GLOBS: readonly string[] = CREDENTIAL_GLOBS;
+export const READ_RESTRICTED_GLOBS: readonly string[] = [...CREDENTIAL_GLOBS, ...GIT_INTERNALS_GLOBS];
 
 /**
- * Edit mode protects repository-internal state that would corrupt version
- * control, or enable a config-redirect/persistence attack (a poisoned
- * `.ssh/config` `ProxyCommand`, a hijacked `.npmrc`/`.docker` registry, a
- * swapped `.kube/config` cluster), if mutated. A superset of
- * `READ_RESTRICTED_GLOBS` — nothing the model can't even read should be
- * blindly overwritable either — plus `.git/**`, which isn't secret but is
- * repository-internal state edit mode alone needs to protect.
+ * Edit mode protects everything read mode does — nothing the model can't even read should be
+ * blindly overwritable either — plus repository-internal state that would corrupt version
+ * control, or enable a config-redirect/persistence attack (a poisoned `.ssh/config`
+ * `ProxyCommand`, a hijacked `.npmrc`/`.docker` registry, a swapped `.kube/config` cluster), if
+ * mutated. `.git/**` is already covered by `READ_RESTRICTED_GLOBS` above (it's a disclosure risk
+ * too now, not just a mutation risk), so this mode currently has no restrictions beyond that.
  */
-export const EDIT_RESTRICTED_GLOBS: readonly string[] = [...CREDENTIAL_GLOBS, "**/.git/**"];
+export const EDIT_RESTRICTED_GLOBS: readonly string[] = READ_RESTRICTED_GLOBS;
 
 // Windows, and macOS's default APFS/HFS+ configuration, are case-insensitive
 // (but case-preserving) filesystems — ".SSH" and ".ssh" name the same

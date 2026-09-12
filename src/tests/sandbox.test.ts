@@ -47,10 +47,10 @@ test("edit mode restricts .git and .ssh", () => {
   assert.equal(fileIsSafe(root, ".ssh/id_rsa", "edit"), false);
 });
 
-test("read mode restricts .ssh but not .git", () => {
+test("read mode restricts .ssh and .git", () => {
   assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), false);
   assert.equal(directoryIsSafe(root, ".ssh", "read"), false);
-  assert.equal(fileIsSafe(root, ".git/config", "read"), true);
+  assert.equal(fileIsSafe(root, ".git/config", "read"), false);
 });
 
 test("both modes restrict .env files", () => {
@@ -103,10 +103,11 @@ test("restricted glob lists are exactly what each mode advertises", () => {
     "**/id_ecdsa",
     "**/id_ed25519",
   ];
-  assert.deepEqual([...READ_RESTRICTED_GLOBS], credentialGlobs);
-  // Edit mode is a superset of read mode's credential globs, plus .git/** (repo-state protection,
-  // not a credential/disclosure concern, so it isn't in READ_RESTRICTED_GLOBS).
-  assert.deepEqual([...EDIT_RESTRICTED_GLOBS], [...credentialGlobs, "**/.git/**"]);
+  const restrictedGlobs = [...credentialGlobs, "**/.git/**"];
+  // .git/** is a disclosure risk (embedded credentials, historical secrets in objects/packed-refs)
+  // as well as a mutation risk, so both modes restrict it identically.
+  assert.deepEqual([...READ_RESTRICTED_GLOBS], restrictedGlobs);
+  assert.deepEqual([...EDIT_RESTRICTED_GLOBS], restrictedGlobs);
 });
 
 test("case sensitivity of restricted globs matches the current platform", () => {
@@ -155,7 +156,7 @@ test("isEntrySandboxSafe filters restricted entries during a directory walk, sym
   assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), false);
   assert.equal(isEntrySandboxSafe(root, "src/index.ts", "read", false), true);
   assert.equal(isEntrySandboxSafe(root, ".git/config", "edit", false), false);
-  assert.equal(isEntrySandboxSafe(root, ".git/config", "read", false), true);
+  assert.equal(isEntrySandboxSafe(root, ".git/config", "read", false), false);
 });
 
 test("isEntrySandboxSafe respects sandbox state the same way resolveSandboxPath does", (t) => {
@@ -193,7 +194,7 @@ test("works against a real fixture tree", async (t) => {
 
   assert.equal(fileIsSafe(dir, "src/index.ts", "read"), true);
   assert.equal(fileIsSafe(dir, ".git/config", "edit"), false);
-  assert.equal(fileIsSafe(dir, ".git/config", "read"), true);
+  assert.equal(fileIsSafe(dir, ".git/config", "read"), false);
   assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "read"), false);
   assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "edit"), false);
   assert.equal(fileIsSafe(dir, ".env", "read"), false);
@@ -247,8 +248,8 @@ test("catches a symlink that points at a restricted directory under a disguised 
   // only resolving the symlink's real target catches it.
   assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "edit"), false);
   assert.equal(isEntrySandboxSafe(realRoot, "totally-not-git/config", "edit", true), false);
-  // .git isn't restricted in read mode, so the same symlink is fine there.
-  assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "read"), true);
+  // .git is restricted in read mode too, so the same symlink is caught there as well.
+  assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "read"), false);
 });
 
 test("still allows a symlink inside root that points to an unrestricted target inside it", async (t) => {
