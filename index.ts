@@ -1,4 +1,4 @@
-import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
 import {registerGitDiffTool} from "./src/tools/git_diff.ts";
@@ -13,6 +13,12 @@ import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
 import {gateToolCall} from "./src/permissionGate.ts";
+import {
+  appendGlobalIgnorePattern,
+  getGlobalIgnorePath,
+  getLocalIgnorePath,
+  readIgnoreFile,
+} from "./src/ignore.ts";
 
 const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 
@@ -55,6 +61,44 @@ export default function (pi: ExtensionAPI) {
       }
 
       ctx.ui.notify(`Sandbox: ${state}`, state === "on" ? "info" : "warning");
+    },
+  });
+
+  pi.registerCommand("ignore", {
+    description:
+      "No argument: show the patterns in the global and local ignore files, which find/grep/list apply on " +
+      "top of their built-in defaults (see src/ignore.ts). With a glob-pattern argument: append it to the " +
+      "global ignore file, shared across every project (edit the local .piignore file at the project root " +
+      "directly for project-specific patterns instead).",
+    handler: async (args, ctx) => {
+      const pattern = args.trim();
+      const agentDir = getAgentDir();
+      const globalPath = getGlobalIgnorePath(agentDir);
+      const localPath = getLocalIgnorePath(ctx.cwd);
+
+      if (pattern === "") {
+        const [globalPatterns, localPatterns] = await Promise.all([
+          readIgnoreFile(globalPath),
+          readIgnoreFile(localPath),
+        ]);
+        const renderSection = (label: string, filePath: string, patterns: string[]) =>
+          `${label} (${filePath}):\n` + (patterns.length ? patterns.map((p) => `  ${p}`).join("\n") : "  (empty)");
+
+        ctx.ui.notify(
+          `${renderSection("Global ignore", globalPath, globalPatterns)}\n\n` +
+            renderSection("Local ignore", localPath, localPatterns),
+          "info"
+        );
+        return;
+      }
+
+      const {added} = await appendGlobalIgnorePattern(agentDir, pattern);
+      ctx.ui.notify(
+        added
+          ? `Added "${pattern}" to the global ignore file (${globalPath}).`
+          : `"${pattern}" is already in the global ignore file (${globalPath}).`,
+        "info"
+      );
     },
   });
 

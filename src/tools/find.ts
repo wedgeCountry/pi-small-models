@@ -1,7 +1,7 @@
 import fg from "fast-glob";
 import type {Readable} from "node:stream";
-import {DEFAULT_IGNORE_GLOBS} from "../ignore.ts";
-import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs} from "../ignore.ts";
+import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import {resolveSandboxPath, isEntrySandboxSafe} from "../sandbox.ts";
 import {oneLine, callName} from "../renderCall.ts";
@@ -9,6 +9,8 @@ import {oneLine, callName} from "../renderCall.ts";
 export interface FindOptions {
   maxResults?: number;
   signal?: AbortSignal;
+  /** Ignore globs to apply on top of the sandbox's entry-level checks. Defaults to `DEFAULT_IGNORE_GLOBS` — pass `getEffectiveIgnoreGlobs()`'s result to also honor `/ignore`'s global and local ignore files. */
+  ignoreGlobs?: string[];
 }
 
 export interface FindResult {
@@ -22,7 +24,7 @@ export async function findFiles(base: string, pattern: string, opts: FindOptions
   const max = opts.maxResults ?? 200;
   opts.signal?.throwIfAborted();
 
-  const entries = await streamGlob(base, pattern, opts.signal);
+  const entries = await streamGlob(base, pattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
   // followSymbolicLinks: false only stops fast-glob from descending into a
   // symlinked directory — a symlinked entry itself still comes back in the
   // list, so re-check every entry against the sandbox (restricted globs
@@ -43,14 +45,14 @@ export async function findFiles(base: string, pattern: string, opts: FindOptions
  * from scheduling further directory reads, something the promise API (a
  * single un-cancellable await) has no way to do.
  */
-function streamGlob(base: string, pattern: string, signal?: AbortSignal): Promise<fg.Entry[]> {
+function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal?: AbortSignal): Promise<fg.Entry[]> {
   return new Promise((resolve, reject) => {
     // fast-glob types `stream()` as the generic `NodeJS.ReadableStream`
     // (no `.destroy()`), but the object it actually returns is a real
     // `stream.Readable` — cast so aborting can call `.destroy()` on it.
     const stream = fg.stream(pattern, {
       cwd: base,
-      ignore: DEFAULT_IGNORE_GLOBS,
+      ignore: ignoreGlobs,
       onlyFiles: false,
       dot: false,
       followSymbolicLinks: false,
@@ -100,7 +102,8 @@ export function registerFindTool(pi: ExtensionAPI) {
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
-      const result = await findFiles(base, params.pattern, {maxResults: params.maxResults, signal});
+      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
+      const result = await findFiles(base, params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
 
       const text = result.matches.length
           ? result.matches.join("\n") +

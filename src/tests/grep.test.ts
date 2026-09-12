@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { grepFiles } from "../tools/grep.ts";
 import { setSandboxState } from "../sandbox.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds matching lines by regex", async (t) => {
@@ -72,6 +73,20 @@ test("does not report truncated when matchCount exactly equals maxResults", asyn
   const result = await grepFiles(dir, "x", { maxResults: 3 });
   assert.equal(result.matchCount, 3);
   assert.equal(result.truncated, false);
+});
+
+test("honors custom ignoreGlobs (e.g. from /ignore) on top of the hardcoded defaults", async (t) => {
+  const dir = await makeFixture({
+    "src/a.ts": "needle",
+    "temp/b.ts": "needle",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(dir, "needle", {
+    ignoreGlobs: [...DEFAULT_IGNORE_GLOBS, "**/temp/**"],
+  });
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.lines[0]?.file, "src/a.ts");
 });
 
 test("rejects a path that names a file instead of a directory", async (t) => {

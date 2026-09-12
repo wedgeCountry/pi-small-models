@@ -1,8 +1,8 @@
 import fg from "fast-glob";
 import * as fs from "node:fs/promises";
 import { Worker } from "node:worker_threads";
-import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
+import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import { resolveSandboxPath, isEntrySandboxSafe, getSandboxState, type SandboxState } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
@@ -15,6 +15,8 @@ export interface GrepOptions {
   signal?: AbortSignal;
   /** Hard wall-clock budget for the scan, in ms. Guards against catastrophic regex backtracking. */
   timeoutMs?: number;
+  /** Ignore globs to apply. Defaults to `DEFAULT_IGNORE_GLOBS` — pass `getEffectiveIgnoreGlobs()`'s result to also honor `/ignore`'s global and local ignore files. */
+  ignoreGlobs?: string[];
 }
 
 export interface GrepLine {
@@ -68,7 +70,7 @@ export async function grepFiles(base: string, pattern: string, opts: GrepOptions
 
   const entries = await fg(opts.glob ?? "**/*", {
     cwd: base,
-    ignore: DEFAULT_IGNORE_GLOBS,
+    ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
     onlyFiles: true,
     dot: false,
     followSymbolicLinks: false,
@@ -190,12 +192,14 @@ export function registerGrepTool(pi: ExtensionAPI) {
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
+      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
       const result = await grepFiles(base, params.pattern, {
         glob: params.glob,
         ignoreCase: params.ignoreCase,
         maxResults: params.maxResults,
         contextLines: params.contextLines,
         signal,
+        ignoreGlobs,
       });
 
       const text = result.lines.length

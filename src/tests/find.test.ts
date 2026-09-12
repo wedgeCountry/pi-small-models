@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { findFiles } from "../tools/find.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds files matching a glob pattern", async (t) => {
@@ -65,6 +66,34 @@ test("aborts an in-flight scan via signal", async (t) => {
   const promise = findFiles(dir, "**/*", { signal: ac.signal });
   ac.abort();
   await assert.rejects(() => promise, /aborted/);
+});
+
+test("honors custom ignoreGlobs (e.g. from /ignore) on top of the hardcoded defaults", async (t) => {
+  const dir = await makeFixture({
+    "src/index.ts": "",
+    "node_modules/dep/index.ts": "",
+    "temp/scratch.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(dir, "**/*.ts", {
+    ignoreGlobs: [...DEFAULT_IGNORE_GLOBS, "**/temp/**"],
+  });
+  assert.deepEqual(result.matches, ["src/index.ts"]);
+});
+
+test("passing ignoreGlobs replaces DEFAULT_IGNORE_GLOBS rather than adding to it", async (t) => {
+  // findFiles falls back to DEFAULT_IGNORE_GLOBS only when ignoreGlobs is omitted entirely — a
+  // caller that passes its own list (like getEffectiveIgnoreGlobs()'s result) is expected to
+  // include the defaults itself, same as the tool's execute() does.
+  const dir = await makeFixture({
+    "src/index.ts": "",
+    "node_modules/dep/index.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(dir, "**/*.ts", { ignoreGlobs: ["**/temp/**"] });
+  assert.deepEqual(result.matches.sort(), ["node_modules/dep/index.ts", "src/index.ts"]);
 });
 
 test("omits a symlink that points outside the base directory", async (t) => {

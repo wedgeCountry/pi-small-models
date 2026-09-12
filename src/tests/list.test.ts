@@ -61,6 +61,20 @@ test("skips default-ignored directories like node_modules", async (t) => {
   assert.ok(!result.entries.some((e) => e.path.includes("node_modules")));
 });
 
+test("honors custom ignoreGlobs (e.g. from /ignore), excluding a trailing-/** match's directory too", async (t) => {
+  const dir = await makeFixture({
+    "src/index.ts": "",
+    "temp/scratch.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await listDir(dir, { recursive: true, maxDepth: 5, ignoreGlobs: ["temp/**"] });
+  assert.deepEqual(
+    result.entries.map((e) => e.path).sort(),
+    ["src", "src/index.ts"]
+  );
+});
+
 test("truncates at maxResults", async (t) => {
   const dir = await makeFixture({
     "a.txt": "",
