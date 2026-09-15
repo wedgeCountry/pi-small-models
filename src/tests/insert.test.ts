@@ -96,3 +96,23 @@ test("serializes concurrent inserts so none of them are lost", async (t) => {
   assert.equal(lines.length, 4);
   assert.deepEqual(new Set(lines), new Set(["one", "two", "three", "base"]));
 });
+
+test("refuses to insert into a file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => insertText(path.join(dir, ".git", "HEAD"), 0, "new line", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to insert into a nested .git file", async (t) => {
+  const dir = await makeFixture({ "packages/api/.git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => insertText(path.join(dir, "packages", "api", ".git", "HEAD"), 0, "new line", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});

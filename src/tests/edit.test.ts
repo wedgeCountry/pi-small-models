@@ -203,3 +203,33 @@ test("serializes concurrent edits to different parts of the same file so neither
   const content = await fs.readFile(file, "utf8");
   assert.equal(content, "FOO\nBAR\n");
 });
+
+test("refuses to edit a file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main", ".git/config": "[core]" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => editFile(path.join(dir, ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to edit a nested .git file", async (t) => {
+  const dir = await makeFixture({ "packages/api/.git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => editFile(path.join(dir, "packages", "api", ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to use editFileMulti on a file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main", ".git/config": "[core]" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => editFileMulti(path.join(dir, ".git", "config"), [{ oldText: "[core]", newText: "[core]\\nfoo" }], { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});

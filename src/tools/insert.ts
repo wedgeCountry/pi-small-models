@@ -1,12 +1,21 @@
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `insertText` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -19,6 +28,12 @@ export interface InsertOptions {
 export async function insertText(filePath: string, line: number, text: string, opts: InsertOptions = {}): Promise<void> {
   if (!Number.isInteger(line) || line < 0) {
     throw new Error(`line must be a non-negative integer, got ${line}`);
+  }
+
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
   }
 
   await withFileMutationQueue(filePath, async () => {

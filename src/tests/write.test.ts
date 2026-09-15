@@ -58,3 +58,33 @@ test("serializes against a concurrent edit on the same file so the write's conte
   const content = await fs.readFile(file, "utf8");
   assert.equal(content, "replaced\n");
 });
+
+test("refuses to write to a file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => writeFile(path.join(dir, ".git", "config"), "[core]", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to write to a new file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => writeFile(path.join(dir, ".git", "newfile"), "content", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to write to a nested .git directory", async (t) => {
+  const dir = await makeFixture({ "packages/api/.git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => writeFile(path.join(dir, "packages", "api", ".git", "config"), "[core]", { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});

@@ -163,6 +163,7 @@ export function resolveSandboxPath(root: string, target: string, mode: SandboxMo
   const resolved = resolveSafePath(root, target);
 
   if (matchesRestrictedGlob(path.resolve(root), resolved, mode)) {
+    // TODO Better error message with information about what is allowed in the sandbox mode!
     throw new Error(`Path "${target}" is restricted in ${mode} mode by the sandbox (see src/sandbox.ts)`);
   }
 

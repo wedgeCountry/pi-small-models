@@ -48,3 +48,23 @@ test("rejects when the signal is already aborted, without creating the directory
   await assert.rejects(() => makeDir(path.join(dir, "sub"), { signal: ac.signal }));
   await assert.rejects(() => fs.stat(path.join(dir, "sub")));
 });
+
+test("refuses to create a directory inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => makeDir(path.join(dir, ".git", "objects"), { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});
+
+test("refuses to create a nested .git directory", async (t) => {
+  const dir = await makeFixture({ "packages/api/.git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => makeDir(path.join(dir, "packages", "api", ".git", "objects"), { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+});

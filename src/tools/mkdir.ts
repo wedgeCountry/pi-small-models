@@ -1,11 +1,20 @@
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `makeDir` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -17,6 +26,13 @@ export interface MakeDirOptions {
  */
 export async function makeDir(dirPath: string, opts: MakeDirOptions = {}): Promise<void> {
   opts.signal?.throwIfAborted();
+
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, dirPath), opts.sandboxMode);
+  }
+
   try {
     await fs.mkdir(dirPath, { recursive: true });
   } catch (err) {

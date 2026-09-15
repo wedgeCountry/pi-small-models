@@ -2,12 +2,20 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `writeFile` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -21,6 +29,12 @@ export interface WriteOptions {
  * path can't interleave with it.
  */
 export async function writeFile(filePath: string, content: string, opts: WriteOptions = {}): Promise<void> {
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
+  }
+
   await withFileMutationQueue(filePath, async () => {
     opts.signal?.throwIfAborted();
 

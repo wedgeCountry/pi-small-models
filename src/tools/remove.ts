@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
@@ -17,6 +17,14 @@ export interface RemoveOptions {
    * tests like every other safety check in this codebase.
    */
   projectRoot?: string;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `removePath` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -54,6 +62,12 @@ async function removeRecursively(targetPath: string, signal?: AbortSignal): Prom
 export async function removePath(targetPath: string, opts: RemoveOptions = {}): Promise<void> {
   if (opts.projectRoot !== undefined && path.resolve(targetPath) === path.resolve(opts.projectRoot)) {
     throw new Error("Refusing to remove the project root");
+  }
+
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, targetPath), opts.sandboxMode);
   }
 
   await withFileMutationQueue(targetPath, async () => {

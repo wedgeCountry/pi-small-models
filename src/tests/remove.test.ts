@@ -121,3 +121,55 @@ test("serializes a remove against a concurrent edit on the same file, without re
 
   await assert.rejects(() => fs.stat(file));
 });
+
+test("refuses to remove the .git directory", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main", ".git/config": "[core]" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(path.join(dir, ".git"), { recursive: true, sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+  const stat = await fs.stat(path.join(dir, ".git"));
+  assert.ok(stat.isDirectory());
+});
+
+test("refuses to remove a file inside .git", async (t) => {
+  const dir = await makeFixture({ ".git/HEAD": "ref: refs/heads/main", ".git/config": "[core]" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(path.join(dir, ".git", "HEAD"), { sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+  const stat = await fs.stat(path.join(dir, ".git", "HEAD"));
+  assert.ok(stat.isFile());
+});
+
+test("refuses to remove a nested .git directory", async (t) => {
+  const dir = await makeFixture({ "packages/api/.git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    () => removePath(path.join(dir, "packages", "api", ".git"), { recursive: true, sandboxRoot: dir, sandboxMode: "edit" }),
+    /restricted in edit mode/
+  );
+  const stat = await fs.stat(path.join(dir, "packages", "api", ".git"));
+  assert.ok(stat.isDirectory());
+});
+
+test("refuses to remove the entire project directory when it contains .git", async (t) => {
+  const dir = await makeFixture({ "a.txt": "", ".git/HEAD": "ref: refs/heads/main" });
+  t.after(() => cleanupFixture(dir));
+
+  // Even with recursive:true, removing the project root itself is refused
+  await assert.rejects(
+    () => removePath(dir, { recursive: true, projectRoot: dir }),
+    /Refusing to remove the project root/
+  );
+  const stat = await fs.stat(dir);
+  assert.ok(stat.isDirectory());
+  // .git should still exist
+  const gitStat = await fs.stat(path.join(dir, ".git"));
+  assert.ok(gitStat.isDirectory());
+});

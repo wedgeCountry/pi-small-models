@@ -1,7 +1,8 @@
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
-import {resolveSandboxPath} from "../sandbox.ts";
+import {resolveSandboxPath, type SandboxMode} from "../sandbox.ts";
 import {withFileMutationQueue} from "../mutationQueue.ts";
 import {oneLine, callName} from "../renderCall.ts";
 
@@ -9,6 +10,14 @@ export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
   allowMultipleMatches?: boolean;
   signal?: AbortSignal;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `editFile` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 export interface EditSpec {
@@ -19,6 +28,14 @@ export interface EditSpec {
 
 export interface EditMultiOptions {
   signal?: AbortSignal;
+  /**
+   * Sandbox root directory for path validation. When set along with
+   * `sandboxMode`, `editFileMulti` will reject paths that are restricted by
+   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
+   * sandbox check exercisable by plain-function tests.
+   */
+  sandboxRoot?: string;
+  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -105,6 +122,12 @@ export async function editFile(
   newText: string,
   opts: EditOptions = {}
 ): Promise<void> {
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
+  }
+
   await withFileMutationQueue(filePath, async () => {
     const content = await readForEdit(filePath, opts.signal);
     const eol = detectLineEnding(content);
@@ -136,6 +159,12 @@ export async function editFileMulti(
 ): Promise<void> {
   if (edits.length === 0) {
     throw new Error("edits must contain at least one edit");
+  }
+
+  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
+  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
+  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
+    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
   }
 
   await withFileMutationQueue(filePath, async () => {
