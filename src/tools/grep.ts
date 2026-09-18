@@ -135,7 +135,10 @@ interface ScanInput {
  */
 function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal): Promise<GrepResult> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(WORKER_URL, { workerData: input });
+    const worker = new Worker(WORKER_URL, {
+      workerData: input,
+      execArgv: ["--experimental-strip-types"],
+    });
     let settled = false;
 
     const finish = (fn: () => void) => {
