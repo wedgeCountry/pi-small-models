@@ -1,4 +1,5 @@
 import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {registerDotnetBuildTool} from "./src/tools/dotnet_build.ts";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
 import {registerGitDiffTool} from "./src/tools/git_diff.ts";
@@ -10,6 +11,7 @@ import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
+import {registerSearchTool} from "./src/tools/search.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
 import {gateToolCall} from "./src/permissionGate.ts";
@@ -27,6 +29,7 @@ const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 const DISABLED_TOOLS = new Set(["bash"]);
 
 export default function (pi: ExtensionAPI) {
+  registerDotnetBuildTool(pi);
   registerEditTool(pi);
   registerFindTool(pi);
   registerGitDiffTool(pi);
@@ -38,6 +41,7 @@ export default function (pi: ExtensionAPI) {
   registerMkdirTool(pi);
   registerReadTool(pi);
   registerRemoveTool(pi);
+  registerSearchTool(pi);
   registerWriteTool(pi);
 
   pi.registerCommand("toggle-sandbox", {
