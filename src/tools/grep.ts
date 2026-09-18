@@ -1,5 +1,6 @@
 import fg from "fast-glob";
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
