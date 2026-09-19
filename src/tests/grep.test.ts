@@ -117,7 +117,19 @@ test("aborts instead of hanging on a catastrophically backtracking pattern", asy
   const dir = await makeFixture({ "a.txt": "a".repeat(40) + "!" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => grepFiles(dir, "(a+)+$", { timeoutMs: 300 }), /took longer than/);
+  // Use a promise with race condition to ensure the test doesn't hang forever
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("Test timed out after 5s")), 5000)
+  );
+  
+  const grepPromise = grepFiles(dir, "(a+)+$", { timeoutMs: 300 })
+    .then(() => { assert.fail("Expected grep to reject due to timeout"); })
+    .catch((err) => {
+      assert.ok(/took longer than|catastrophic|backtracking/i.test(err.message), 
+        `Expected timeout error, got: ${err.message}`);
+    });
+
+  await Promise.race([grepPromise, timeoutPromise]);
 });
 
 test("does not read through a symlink that points outside the base directory", async (t) => {

@@ -35,7 +35,7 @@ export interface GrepResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000;
-const WORKER_URL = new URL("./grepWorker.ts", import.meta.url);
+const WORKER_URL = new URL("./grepWorker.mjs", import.meta.url);
 
 /** Searches file contents under `base` for a regex/plain-text pattern. */
 export async function grepFiles(base: string, pattern: string, opts: GrepOptions = {}): Promise<GrepResult> {
@@ -136,22 +136,22 @@ interface ScanInput {
  */
 function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal): Promise<GrepResult> {
   return new Promise((resolve, reject) => {
-    // Node.js 22.17.0+ and 23+ may support --experimental-strip-types natively, but it's a
-    // build-time option. Try with the flag; if the worker fails to start, fall back to
-    // running the scan on the main thread (without catastrophic-regex protection).
-    const execArgv = ["--experimental-strip-types"];
+    // Plain .mjs worker - no special execArgv needed
     let worker: Worker | null = null;
     let settled = false;
+    let timedOut = false;
 
     const finish = (fn: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(startupTimeout);
       signal?.removeEventListener("abort", onAbort);
       fn();
     };
 
     const timer = setTimeout(() => {
+      timedOut = true;
       finish(() => {
         if (worker) worker.terminate();
         reject(
@@ -161,6 +161,16 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
         );
       });
     }, timeoutMs);
+
+    // Startup timeout: if worker doesn't send anything in 1 second, something is wrong
+    const startupTimeout = setTimeout(() => {
+      if (!settled) {
+        finish(() => {
+          if (worker) worker.terminate();
+          reject(new Error("Worker failed to initialize within 1 second"));
+        });
+      }
+    }, 1000);
 
     const onAbort = () => {
       finish(() => {
@@ -173,7 +183,6 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
     try {
       worker = new Worker(WORKER_URL, {
         workerData: input,
-        execArgv,
       });
 
       worker.once("message", (msg: GrepResult | { error: string }) => {
@@ -185,72 +194,15 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
       });
 
       worker.once("error", (err) => {
-        // If the error is about TypeScript support, fall back to main-thread execution
-        const errStr = (err as Error).message;
-        if (errStr.includes("TypeScript") || errStr.includes("strip-types")) {
-          clearTimeout(timer);
-          signal?.removeEventListener("abort", onAbort);
-          scanInMain(input, signal).then((result) => resolve(result)).catch((fallbackErr) => reject(fallbackErr));
-        } else {
-          finish(() => reject(err));
-        }
+        finish(() => reject(err));
       });
     } catch (err) {
-      // Worker creation failed (e.g., no TS support) — fall back to main thread
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-      scanInMain(input, signal).then((result) => resolve(result)).catch((fallbackErr) => reject(fallbackErr));
+      finish(() => reject(err));
     }
   });
 }
 
-/**
- * Fallback: run the scan on the main thread. No catastrophic-regex protection,
- * but works on Node builds without --experimental-strip-types support.
- */
-async function scanInMain(input: ScanInput, signal?: AbortSignal): Promise<GrepResult> {
-  const { base, files, pattern, flags, max, context, sandboxState } = input;
-  const regex = new RegExp(pattern, flags);
 
-  const lines: GrepLine[] = [];
-  let matchCount = 0;
-  let filesScanned = 0;
-  let truncated = false;
-
-  const { isEntrySandboxSafe } = await import("../sandbox.ts");
-
-  outer: for (const file of files) {
-    if (signal?.aborted) throw new Error("Aborted");
-    if (!isEntrySandboxSafe(base, file.path, "read", file.isSymlink, sandboxState)) continue;
-
-    let content: string;
-    try {
-      content = await fs.readFile(path.join(base, file.path), "utf8");
-    } catch {
-      continue;
-    }
-    if (content.includes("\0")) continue;
-
-    filesScanned++;
-    const fileLines = content.split("\n");
-    for (let i = 0; i < fileLines.length; i++) {
-      if (signal?.aborted) throw new Error("Aborted");
-      if (!regex.test(fileLines[i] ?? "")) continue;
-      if (matchCount >= max) {
-        truncated = true;
-        break outer;
-      }
-      matchCount++;
-      const from = Math.max(0, i - context);
-      const to = Math.min(fileLines.length - 1, i + context);
-      for (let j = from; j <= to; j++) {
-        lines.push({ file: file.path, line: j + 1, text: fileLines[j] ?? "", isMatch: j === i });
-      }
-    }
-  }
-
-  return { lines, matchCount, filesScanned, truncated };
-}
 
 export function registerGrepTool(pi: ExtensionAPI) {
   pi.registerTool({
