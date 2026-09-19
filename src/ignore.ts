@@ -10,6 +10,8 @@ export const DEFAULT_IGNORE_GLOBS = [
   "**/dist/**",
   "**/build/**",
   "**/.pi/**",
+  "**/bin/**",
+  "**/obj/**",
 ];
 
 export const DEFAULT_IGNORE_NAMES = new Set([
