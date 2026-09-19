@@ -1,8 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { SEARCH_TOOL_DEFINITION } from "../tool_definitions/search.ts";
 import { findFiles } from "./find.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
-import { getEffectiveIgnoreGlobs, getAgentDir } from "../ignore.ts";
+import { getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
 export interface SearchOptions {
