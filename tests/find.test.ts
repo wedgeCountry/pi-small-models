@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { findFiles } from "../tools/find.ts";
-import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
+import { findFiles } from "../src/tools/find.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../src/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds files matching a glob pattern", async (t) => {

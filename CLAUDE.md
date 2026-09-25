@@ -22,7 +22,7 @@ There is no lint or build script.
 Each tool (`find`, `grep`, `list`, `edit`, `mkdir`, `remove`, `lstat`, `insert`, `read`, `write`, `git_status`, `git_diff`, `git_log`) is split into two files that must stay in sync:
 
 - `src/tool_definitions/<tool>.ts` — the static `*_TOOL_DEFINITION`: name, description, `promptSnippet`/`promptGuidelines` shown to the model, and the typebox `parameters` schema.
-- `src/tools/<tool>.ts` — spreads the definition into `pi.registerTool({...})` and implements `execute()`. Each file also exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`, `removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`, `gitLog`) that does the real work independent of `ExtensionAPI` — this is what `src/tests/` calls directly. `grep` also has `src/tools/grepWorker.ts` (see below).
+- `src/tools/<tool>.ts` — spreads the definition into `pi.registerTool({...})` and implements `execute()`. Each file also exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`, `removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`, `gitLog`) that does the real work independent of `ExtensionAPI` — this is what `tests` calls directly. `grep` also has `src/tools/grepWorker.ts` (see below).
 
 `index.ts` registers all thirteen tools, then on `session_start` filters `bash` out of the active tool list. `find`/`grep`/`edit`/`read`/`write` share names with Pi's built-ins and replace them automatically (same-name registration wins per Pi's tool registry); `list`/`mkdir`/`remove`/`lstat`/`insert`/`git_status`/`git_diff` have no built-in collision. `index.ts` also registers `/toggle-sandbox` (see below) and resets sandbox state to `"on"` on every `session_start`, since it's a process-lifetime variable, not a per-session one.
 
@@ -58,4 +58,4 @@ Each tool (`find`, `grep`, `list`, `edit`, `mkdir`, `remove`, `lstat`, `insert`,
 
 ## Testing
 
-`src/tests/fixtures.ts` provides `makeFixture`/`cleanupFixture` for temp directories with a given file tree; every tool test builds a fixture, calls the tool's plain async function, and asserts on the returned result object rather than rendered text. `src/tests/pathSafety.test.ts` and `src/tests/sandbox.test.ts`'s symlink-escape tests create real symlinks via `fs.symlink` and `t.skip()` on `EPERM` — expected on Windows without Developer Mode or admin privileges.
+`tests` provides `makeFixture`/`cleanupFixture` for temp directories with a given file tree; every tool test builds a fixture, calls the tool's plain async function, and asserts on the returned result object rather than rendered text. `tests` and `tests`'s symlink-escape tests create real symlinks via `fs.symlink` and `t.skip()` on `EPERM` — expected on Windows without Developer Mode or admin privileges.

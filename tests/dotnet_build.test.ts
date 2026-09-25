@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dotnetBuild } from "../tools/dotnet_build.ts";
+import { dotnetBuild } from "../src/tools/dotnet_build.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("handles missing dotnet project gracefully", async (t) => {

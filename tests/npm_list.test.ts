@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { npmList } from "../tools/npm_list.ts";
+import { npmList } from "../src/tools/npm_list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("lists top-level packages with depth 0", async (t) => {

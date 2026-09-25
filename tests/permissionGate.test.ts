@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { describeToolCall, gateToolCall } from "../permissionGate.ts";
-import { setSandboxState } from "../sandbox.ts";
+import { describeToolCall, gateToolCall } from "../src/permissionGate.ts";
+import { setSandboxState } from "../src/sandbox.ts";
 
 function makeEvent(toolName: string, input: Record<string, unknown>): ToolCallEvent {
   return { type: "tool_call", toolCallId: "test-call", toolName, input } as ToolCallEvent;

@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { grepFiles } from "../tools/grep.ts";
-import { setSandboxState } from "../sandbox.ts";
-import { DEFAULT_IGNORE_GLOBS } from "../ignore.ts";
+import { grepFiles } from "../src/tools/grep.ts";
+import { setSandboxState } from "../src/sandbox.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../src/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("finds matching lines by regex", async (t) => {

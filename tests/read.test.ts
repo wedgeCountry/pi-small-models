@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { readFile } from "../tools/read.ts";
+import { readFile } from "../src/tools/read.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("reads a whole file as 1-indexed lines", async (t) => {

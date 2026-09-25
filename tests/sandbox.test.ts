@@ -13,7 +13,7 @@ import {
   cycleSandboxState,
   READ_RESTRICTED_GLOBS,
   EDIT_RESTRICTED_GLOBS,
-} from "../sandbox.ts";
+} from "../src/sandbox.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 const root = path.resolve("/project");

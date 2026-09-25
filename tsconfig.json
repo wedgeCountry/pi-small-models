@@ -13,6 +13,6 @@
   },
   "include": ["index.ts", "src/**/*.ts",
     "src/tool_definitions/**/*.ts",
-    "src/tests/**/*.ts"
+    "tests/**/*.ts"
   ]
 }

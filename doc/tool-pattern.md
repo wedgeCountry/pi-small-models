@@ -16,7 +16,7 @@ Each tool is two files that must stay in sync:
 **2. `src/tools/<tool>.ts`** — two exports:
 - A **plain async function** (`makeDir`, `readFile`, `editFile`, ...) that does the real work: plain
   arguments (paths, strings, an `{signal}` options bag), no `ExtensionAPI` involved. This is what
-  `src/tests/*.test.ts` calls directly — no mock harness needed.
+  `../tests` calls directly — no mock harness needed.
 - A **`registerXTool(pi)`** function that spreads the `*_TOOL_DEFINITION` into `pi.registerTool({...})`,
   adds a `renderCall` (how the call renders in the UI), and an `execute()` that:
   1. resolves/sandboxes the path via `resolveSandboxPath(ctx.cwd, params.path, mode)`
@@ -103,8 +103,8 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-Test (`src/tests/touch.test.ts`) calls `touchFile()` directly against a fixture dir from
-`src/tests/fixtures.ts`, bypassing `pi.registerTool` entirely.
+Test (`../tests`) calls `touchFile()` directly against a fixture dir from
+`../tests`, bypassing `pi.registerTool` entirely.
 
 ## Checklist for a new tool
 
@@ -113,6 +113,6 @@ Test (`src/tests/touch.test.ts`) calls `touchFile()` directly against a fixture 
   (`src/mutationQueue.ts`).
 - If it can run long (globbing, recursive walk, big regex), thread `AbortSignal` through and honor it —
   see the Cancellation section of `CLAUDE.md` for the pattern per syscall type.
-- Add the plain function's unit test under `src/tests/`.
+- Add the plain function's unit test under `../tests`.
 - Don't collide with a Pi built-in tool name unless you intend to replace it (`find`/`grep`/`edit`/`read`/
   `write` do this deliberately).

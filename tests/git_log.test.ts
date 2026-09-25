@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { gitLog, formatGitLog } from "../tools/git_log.ts";
+import { gitLog, formatGitLog } from "../src/tools/git_log.ts";
 import { makeFixture, cleanupFixture, initGitRepo } from "./fixtures.ts";
 
 const execFile = promisify(execFileCb);

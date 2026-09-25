@@ -22,7 +22,7 @@ through `isEntrySandboxSafe(base, entryPath, mode, isSymlink)`.
 
 Every file also exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`,
 `removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`) that does the real
-work independent of `ExtensionAPI` — the tests in `../tests/` call these directly instead of going through
+work independent of `ExtensionAPI` — the tests in `../../tests` call these directly instead of going through
 the tool wrapper.
 
 `grep.ts` is the exception: its actual scanning loop runs off the main thread in `grepWorker.ts`, since a

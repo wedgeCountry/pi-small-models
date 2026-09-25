@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { gitDiff } from "../tools/git_diff.ts";
+import { gitDiff } from "../src/tools/git_diff.ts";
 import { makeFixture, cleanupFixture, initGitRepo } from "./fixtures.ts";
 
 const execFile = promisify(execFileCb);

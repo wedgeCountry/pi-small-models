@@ -10,8 +10,8 @@
     ]
   },
   "scripts": {
-    "test": "tsx --test src/tests/**/*.test.ts",
-    "test:grep": "tsx --test src/tests/grep.test.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:grep": "tsx --test tests/grep.test.ts",
     "start": "tsx index.ts"
   },
   "dependencies": {
