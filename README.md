@@ -28,6 +28,7 @@ Pi's tool registry); `bash` is disabled outright on `session_start`.
 | `insert`     | no                  | insert text after a given line without touching the rest of the file |
 | `git_status` | no                  | `git status`, parsed into `{branch, ahead, behind, entries}` |
 | `git_diff`   | no                  | unstaged `git diff`, optionally scoped to a path, with the same line/byte truncation cap as `read` |
+| `git_log`    | no                  | recent commits (default 10, max 50) with author, date, subject, and changed files; optional `path` scope |
 
 Every tool resolves its `path` argument through `resolveSandboxPath` (`src/sandbox.ts`) first, so the model
 can't read or write outside the project root even without `bash`. `git_status`/`git_diff` additionally filter

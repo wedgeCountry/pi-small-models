@@ -4,6 +4,7 @@ import {registerDotnetListTool} from "./src/tools/dotnet_list.ts";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
 import {registerGitDiffTool} from "./src/tools/git_diff.ts";
+import {registerGitLogTool} from "./src/tools/git_log.ts";
 import {registerGitStatusTool} from "./src/tools/git_status.ts";
 import {registerGrepTool} from "./src/tools/grep.ts";
 import {registerInsertTool} from "./src/tools/insert.ts";
@@ -37,6 +38,7 @@ export default function (pi: ExtensionAPI) {
   registerEditTool(pi);
   registerFindTool(pi);
   registerGitDiffTool(pi);
+  registerGitLogTool(pi);
   registerGitStatusTool(pi);
   registerGrepTool(pi);
   registerInsertTool(pi);

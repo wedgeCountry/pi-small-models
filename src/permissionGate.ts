@@ -45,6 +45,7 @@ const GATED_TOOL_NAMES = new Set([
   "insert",
   "git_status",
   "git_diff",
+  "git_log",
 ]);
 
 function str(input: Record<string, unknown>, key: string): string | undefined {
@@ -87,6 +88,10 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
     case "git_diff": {
       const scope = str(input, "path");
       return scope ? `${toolName} (${scope})` : toolName;
+    }
+    case "git_log": {
+      const scope = str(input, "path");
+      return scope ? `git_log (${scope})` : "git_log";
     }
     default:
       return toolName;
