@@ -9,7 +9,7 @@ import { oneLine, callName } from "../renderCall.ts";
 const execFile = promisify(execFileCb);
 
 const MAX_BUFFER = 20 * 1024 * 1024; // 20MB
-const DEFAULT_MAX_COUNT = 10;
+const DEFAULT_MAX_COUNT = 1;
 const MAX_COUNT_CEILING = 50;
 
 export interface GitLogOptions {

@@ -5,7 +5,7 @@ export const GIT_LOG_TOOL_DEFINITION = {
   label: "Git Log",
   description:
     "Show recent commits (newest first): hash, author, date, subject, and the files each commit changed. " +
-    "Defaults to the last 10 commits; use maxCount: 1 for just the latest commit.",
+    "Defaults to the last 1 commits; use maxCount: 1 for just the latest commit.",
   promptSnippet: "git_log: show recent commits and the files they changed (bash is disabled)",
   promptGuidelines: [
     "Use git_log to find out what the last commit(s) were, who made them, and which files they touched.",
@@ -17,7 +17,7 @@ export const GIT_LOG_TOOL_DEFINITION = {
       Type.Integer({
         minimum: 1,
         maximum: 50,
-        description: "Maximum number of commits to return. Defaults to 10, capped at 50.",
+        description: "Maximum number of commits to return. Defaults to 1, capped at 50.",
       })
     ),
     path: Type.Optional(
