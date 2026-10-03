@@ -34,6 +34,7 @@ import { getSandboxState } from "./sandbox.ts";
  * this project doesn't touch, other extensions' tools) is left alone. */
 const GATED_TOOL_NAMES = new Set([
   "find",
+  "find_usages",
   "grep",
   "edit",
   "read",
@@ -83,6 +84,12 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
       const pattern = str(input, "pattern") ?? "?";
       const scope = str(input, "path");
       return `${toolName} "${pattern}"${scope ? ` in ${scope}` : ""}`;
+    }
+    case "find_usages": {
+      const symbol = str(input, "symbol") ?? "?";
+      const language = str(input, "language") ?? "?";
+      const scope = str(input, "path");
+      return `find_usages "${symbol}" (${language})${scope ? ` in ${scope}` : ""}`;
     }
     case "git_status":
     case "git_diff": {

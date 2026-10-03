@@ -3,6 +3,7 @@ import {registerDotnetBuildTool} from "./src/tools/dotnet_build.ts";
 import {registerDotnetListTool} from "./src/tools/dotnet_list.ts";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
+import {registerFindUsagesTool} from "./src/tools/find_usages.ts";
 import {registerGitDiffTool} from "./src/tools/git_diff.ts";
 import {registerGitLogTool} from "./src/tools/git_log.ts";
 import {registerGitStatusTool} from "./src/tools/git_status.ts";
@@ -37,6 +38,7 @@ export default function (pi: ExtensionAPI) {
   registerDotnetListTool(pi);
   registerEditTool(pi);
   registerFindTool(pi);
+  registerFindUsagesTool(pi);
   registerGitDiffTool(pi);
   registerGitLogTool(pi);
   registerGitStatusTool(pi);
