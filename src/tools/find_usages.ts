@@ -33,17 +33,62 @@ export interface FindUsagesOptions {
 }
 
 /**
+ * Detects which language's rule table applies to `base`, from project markers: a .sln or .csproj
+ * file anywhere under it means csharp, a top-level .venv folder means python, a top-level
+ * node_modules folder means typescript. Throws if zero or more than one marker is found, since
+ * there's no language rule to fall back on in that case.
+ */
+async function detectLanguage(base: string, ignoreGlobs: string[], signal?: AbortSignal): Promise<FindUsagesLanguage> {
+  const [hasCSharpMarkers, hasVenv, hasNodeModules] = await Promise.all([
+    fg(["**/*.sln", "**/*.csproj"], {
+      cwd: base,
+      ignore: ignoreGlobs,
+      onlyFiles: true,
+      dot: false,
+      followSymbolicLinks: false,
+    }).then((entries) => entries.length > 0),
+    fs
+      .stat(path.join(base, ".venv"))
+      .then((s) => s.isDirectory())
+      .catch(() => false),
+    fs
+      .stat(path.join(base, "node_modules"))
+      .then((s) => s.isDirectory())
+      .catch(() => false),
+  ]);
+
+  signal?.throwIfAborted();
+
+  const detected: FindUsagesLanguage[] = [];
+  if (hasCSharpMarkers) detected.push("csharp");
+  if (hasVenv) detected.push("python");
+  if (hasNodeModules) detected.push("typescript");
+
+  if (detected.length !== 1) {
+    const reason =
+      detected.length === 0
+        ? "found none of: a .sln/.csproj file, a .venv folder, a node_modules folder"
+        : `found markers for multiple languages (${detected.join(", ")})`;
+    throw new Error(`find_usages could not auto-detect a language under "${base}" (${reason}) — specify "language" explicitly.`);
+  }
+
+  return detected[0]!;
+}
+
+/**
  * Finds structural usages of `symbol` under `base`, applying `language`'s regex-based rule table
  * (see src/tools/usageRules/). Unlike `grepFiles`, this never hands user-controlled text to the
  * regex engine as a *pattern* — `symbol` is validated as a plain identifier and only ever
  * interpolated as an escaped literal into a small, fixed, pre-reviewed set of patterns per
  * language, so there's no catastrophic-backtracking surface to guard against and no worker thread
  * is needed (contrast with grep.ts, which takes an arbitrary regex from the caller).
+ *
+ * `language` defaults to `"auto"`, which calls `detectLanguage` against `base`.
  */
 export async function findUsages(
   base: string,
   symbol: string,
-  language: FindUsagesLanguage,
+  language: FindUsagesLanguage | "auto" = "auto",
   opts: FindUsagesOptions = {}
 ): Promise<FindUsagesResult> {
   if (!isValidIdentifier(symbol)) {
@@ -53,8 +98,8 @@ export async function findUsages(
     );
   }
 
-  const rule = LANGUAGE_RULES[language];
   const max = opts.maxResults ?? 200;
+  const ignoreGlobs = opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS;
 
   let baseStat;
   try {
@@ -68,9 +113,12 @@ export async function findUsages(
 
   opts.signal?.throwIfAborted();
 
+  const resolvedLanguage = language === "auto" ? await detectLanguage(base, ignoreGlobs, opts.signal) : language;
+  const rule = LANGUAGE_RULES[resolvedLanguage];
+
   const entries = await fg(rule.glob, {
     cwd: base,
-    ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
+    ignore: ignoreGlobs,
     onlyFiles: true,
     dot: false,
     followSymbolicLinks: false,
@@ -134,14 +182,14 @@ export function registerFindUsagesTool(pi: ExtensionAPI) {
     ...FIND_USAGES_TOOL_DEFINITION,
     renderCall(args, theme) {
       let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
-      text += theme.fg("toolOutput", ` (${args.language ?? "?"})`);
+      text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);
       if (args.path) text += theme.fg("toolOutput", ` in ${args.path}`);
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await findUsages(base, params.symbol, params.language as FindUsagesLanguage, {
+      const result = await findUsages(base, params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {
         maxResults: params.maxResults,
         signal,
         ignoreGlobs,

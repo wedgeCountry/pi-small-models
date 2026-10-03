@@ -7,7 +7,8 @@ export const FIND_USAGES_TOOL_DEFINITION = {
   description:
     "Find structural usages of a class or function name across a Python, TypeScript/JavaScript, or " +
     "C# codebase — definitions, instantiations, imports, type references, qualified access, and plain " +
-    "calls, each labeled with how it's used.",
+    'calls, each labeled with how it\'s used. "language" defaults to auto-detecting from project ' +
+    "markers if omitted.",
   promptSnippet: "find_usages: locate usages of a class/function name, labeled by how they're used",
   promptGuidelines: [
     "Use find_usages to see everywhere a class or function name is defined, imported, instantiated, " +
@@ -23,9 +24,14 @@ export const FIND_USAGES_TOOL_DEFINITION = {
     symbol: Type.String({
       description: "The class or function name to search for. Matched case-sensitively as a whole identifier.",
     }),
-    language: Type.Union(
-      FIND_USAGES_LANGUAGES.map((lang) => Type.Literal(lang)),
-      { description: "Which language's usage patterns to apply." }
+    language: Type.Optional(
+      Type.Union([Type.Literal("auto"), ...FIND_USAGES_LANGUAGES.map((lang) => Type.Literal(lang))], {
+        description:
+          'Which language\'s usage patterns to apply. Defaults to "auto", which detects the language ' +
+          "from project markers under \"path\": a .sln or .csproj file → csharp, a .venv folder → " +
+          "python, a node_modules folder → typescript. Throws if detection finds none or more than one.",
+        default: "auto",
+      })
     ),
     path: Type.Optional(
       Type.String({ description: 'Base directory to search from, relative to the project root. Defaults to ".".' })

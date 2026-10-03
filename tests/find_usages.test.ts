@@ -141,3 +141,81 @@ test("classifies a C# base-class reference end-to-end", async (t) => {
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "type-reference");
 });
+
+test("auto-detects csharp from a .sln file", async (t) => {
+  const dir = await makeFixture({
+    "App.sln": "",
+    "Sample.cs": "public class MyHandler : Handler {\n}\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findUsages(dir, "Handler", "auto");
+  assert.equal(result.total, 1);
+  assert.equal(result.matches[0]?.kind, "type-reference");
+});
+
+test("auto-detects csharp from a nested .csproj file", async (t) => {
+  const dir = await makeFixture({
+    "src/App.csproj": "<Project />",
+    "src/Sample.cs": "public class MyHandler : Handler {\n}\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findUsages(dir, "Handler", "auto");
+  assert.equal(result.total, 1);
+  assert.equal(result.matches[0]?.kind, "type-reference");
+});
+
+test("auto-detects python from a .venv folder", async (t) => {
+  const dir = await makeFixture({
+    ".venv/pyvenv.cfg": "",
+    "a.py": "class Handler:\n    pass\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findUsages(dir, "Handler", "auto");
+  assert.equal(result.total, 1);
+  assert.equal(result.matches[0]?.kind, "definition");
+});
+
+test("auto-detects typescript from a node_modules folder", async (t) => {
+  const dir = await makeFixture({
+    "node_modules/pkg/index.js": "",
+    "a.ts": "const h = new Handler();\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findUsages(dir, "Handler", "auto");
+  assert.equal(result.total, 1);
+  assert.equal(result.matches[0]?.kind, "instantiation");
+});
+
+test("defaults to auto-detection when language is omitted entirely", async (t) => {
+  const dir = await makeFixture({
+    ".venv/pyvenv.cfg": "",
+    "a.py": "class Handler:\n    pass\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findUsages(dir, "Handler");
+  assert.equal(result.total, 1);
+  assert.equal(result.matches[0]?.kind, "definition");
+});
+
+test("throws when auto-detection finds no language markers", async (t) => {
+  const dir = await makeFixture({ "a.py": "class Handler:\n    pass\n" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => findUsages(dir, "Handler", "auto"), /could not auto-detect a language/);
+});
+
+test("throws when auto-detection finds markers for more than one language", async (t) => {
+  const dir = await makeFixture({
+    "App.sln": "",
+    ".venv/pyvenv.cfg": "",
+    "a.py": "class Handler:\n    pass\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(() => findUsages(dir, "Handler", "auto"), /markers for multiple languages/);
+});
