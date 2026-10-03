@@ -48,25 +48,31 @@ export async function dotnetBuild(cwd: string, opts: DotnetBuildOptions = {}): P
       cwd, 
       signal: opts.signal, 
       maxBuffer: MAX_BUFFER,
-      reject: false // Don't throw on non-zero exit — we want to report build failures
     });
     stdout = result.stdout;
     stderr = result.stderr;
-    exitCode = result.status ?? 0;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+    const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
+    if (e.name === "AbortError") throw err;
+    if (e.code === "ENOENT") {
       return {
         success: false,
         output: "dotnet is not installed or not on PATH",
         exitCode: -1,
       };
     }
-    return {
-      success: false,
-      output: `dotnet build failed: ${describeError(err)}`,
-      exitCode: -1,
-    };
+    // execFile rejects on non-zero exit, with `code` = exit code and stdout/stderr attached.
+    if (typeof e.code === "number") {
+      stdout = e.stdout ?? "";
+      stderr = e.stderr ?? "";
+      exitCode = e.code;
+    } else {
+      return {
+        success: false,
+        output: `dotnet build failed: ${describeError(err)}`,
+        exitCode: -1,
+      };
+    }
   }
 
   const output = [stdout, stderr].filter(Boolean).join("\n").trim() || "(no output)";

@@ -112,7 +112,8 @@ test("restricted glob lists are exactly what each mode advertises", () => {
 
 test("case sensitivity of restricted globs matches the current platform", () => {
   const caseInsensitive = process.platform === "win32" || process.platform === "darwin";
-  assert.equal(fileIsSafe(root, ".SSH/id_rsa", "read"), !caseInsensitive);
+  // Not ".SSH/id_rsa": the bare "**/id_rsa" glob would block that on every platform regardless.
+  assert.equal(fileIsSafe(root, ".SSH/config", "read"), !caseInsensitive);
 });
 
 test("resolveSandboxPath returns the resolved path on success and throws on violation", () => {
@@ -257,6 +258,8 @@ test("still allows a symlink inside root that points to an unrestricted target i
   t.after(() => fs.rm(realRoot, { recursive: true, force: true }));
 
   await fs.mkdir(path.join(realRoot, "real-target"));
+  // Must exist: isEntrySandboxSafe resolves a symlinked entry's real path and fails closed if it can't.
+  await fs.writeFile(path.join(realRoot, "real-target", "file.txt"), "ok", "utf8");
   const link = path.join(realRoot, "link");
   try {
     await fs.symlink(path.join(realRoot, "real-target"), link, "dir");
