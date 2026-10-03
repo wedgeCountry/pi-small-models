@@ -28,8 +28,8 @@ export const FIND_USAGES_TOOL_DEFINITION = {
       Type.Union([Type.Literal("auto"), ...FIND_USAGES_LANGUAGES.map((lang) => Type.Literal(lang))], {
         description:
           'Which language\'s usage patterns to apply. Defaults to "auto", which detects the language ' +
-          "from project markers under \"path\": a .sln or .csproj file → csharp, a .venv folder → " +
-          "python, a node_modules folder → typescript. Throws if detection finds none or more than one.",
+          "from project markers under \"path\" Throws if detection finds none or more than one. " +
+          "supported languages: " + FIND_USAGES_LANGUAGES ,
         default: "auto",
       })
     ),
