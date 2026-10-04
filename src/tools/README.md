@@ -21,9 +21,16 @@ which walk a directory tree rather than resolving a single path, additionally fi
 through `isEntrySandboxSafe(base, entryPath, mode, isSymlink)`.
 
 Every file also exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`,
-`removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`) that does the real
-work independent of `ExtensionAPI` — the tests in `../../tests` call these directly instead of going through
-the tool wrapper.
+`removePath`, `copyFile`, `moveFile`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`,
+`gitDiff`) that does the real work independent of `ExtensionAPI` — the tests in `../../tests` call these
+directly instead of going through the tool wrapper.
+
+`copy.ts`/`move.ts` each take a `source` and `destination`: `copyFile` only ever reads `source` (so only
+`destination` is queued via `withFileMutationQueue`), while `moveFile` mutates both (queuing both, always in
+the same lexically-sorted order so two moves swapping the same pair of paths can't deadlock on each other's
+lock). `moveFile` tries `fs.rename` first and falls back to `fs.cp` + removing the source on `EXDEV`
+(cross-filesystem moves). Both reuse `remove.ts`'s exported `removeRecursively` rather than duplicating its
+signal-aware recursive-delete walk.
 
 `grep.ts` is the exception: its actual scanning loop runs off the main thread in `grepWorker.ts`, since a
 runaway regex can only be stopped by killing the thread it runs on, not by checking an `AbortSignal`.

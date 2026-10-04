@@ -32,6 +32,12 @@ test("describeToolCall formats each tool's input", () => {
   assert.equal(describeToolCall("remove", { path: "build" }), "remove build");
   assert.equal(describeToolCall("remove", { path: "build", recursive: true }), "remove build (recursive)");
 
+  assert.equal(describeToolCall("copy", { path: "a.txt", destination: "b.txt" }), "copy a.txt -> b.txt");
+  assert.equal(
+    describeToolCall("move", { path: "src", destination: "dest", recursive: true }),
+    "move src -> dest (recursive)"
+  );
+
   assert.equal(describeToolCall("list", {}), "list .");
   assert.equal(describeToolCall("list", { path: "src" }), "list src");
   assert.equal(describeToolCall("list", { path: "src", recursive: true }), "list src (recursive)");
@@ -93,6 +99,20 @@ test("gateToolCall blocks a gated call while off when the user declines", async 
   const { ctx } = makeContext(true, false);
   const result = await gateToolCall(makeEvent("write", { path: "src/index.ts", content: "x" }), ctx);
   assert.deepEqual(result, { block: true, reason: "Denied by user (sandbox is off): write" });
+});
+
+test("gateToolCall gates copy and move while off, same as the other tools this project registers", async (t) => {
+  t.after(() => setSandboxState("on"));
+  setSandboxState("off");
+
+  const { ctx: denyCtx } = makeContext(true, false);
+  assert.deepEqual(await gateToolCall(makeEvent("copy", { path: "a.txt", destination: "b.txt" }), denyCtx), {
+    block: true,
+    reason: "Denied by user (sandbox is off): copy",
+  });
+
+  const { ctx: allowCtx } = makeContext(true, true);
+  assert.equal(await gateToolCall(makeEvent("move", { path: "a.txt", destination: "b.txt" }), allowCtx), undefined);
 });
 
 test("gateToolCall blocks a gated call while off without prompting when no UI is available", async (t) => {
