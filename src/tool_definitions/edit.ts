@@ -3,12 +3,10 @@ import { Type } from "typebox";
 export const EDIT_TOOL_DEFINITION = {
   name: "edit",
   label: "Edit",
-  description: "Edit a file by replacing one or more exact, unique blocks of text.",
-  promptSnippet: "edit: replace exact text block(s) in a file; use `edits` to batch several changes to one file in a single call",
+  description: "Edit a file by replacing text blocks.",
   promptGuidelines: [
       "For a single change, pass oldText/newText directly: oldText must match exactly one location in the file's current contents.",
-      "Do not use several separate edit calls on the same file, since a later oldText planned against the original file may no longer match once an earlier edit has changed the text.",
-      "Instead, for multiple changes to the SAME file, pass an `edits` array instead of oldText/newText. " +
+      "When performing several edits, call this tool with the 'edits' parameter, since multiple edits are safer this way.",
       "Keep each oldText as small as possible while still being unique in the file — do not pad it with large unchanged regions.",
       "Never pass both oldText/newText and edits in the same call."
   ],
@@ -34,7 +32,7 @@ export const EDIT_TOOL_DEFINITION = {
         Type.Object({
           oldText: Type.String({
             minLength: 1,
-            description: "Exact text to replace for this edit. Must match exactly one location in the file at the point this edit is applied, unless allowMultipleMatches is set. Each edit is applied in order against the result of the previous one, and the file is only written if every edit in the array succeeds. ",
+            description: "Exact text to replace for this edit. Must match exactly one location in the file at the point this edit is applied, unless allowMultipleMatches is set. Each edit is attempted in order against the result of the previous successful edit; if this edit fails to match it is skipped and reported as a failure, but other edits in the array still apply and are saved.",
           }),
           newText: Type.String({ description: "Text to replace oldText with for this edit." }),
           allowMultipleMatches: Type.Optional(
@@ -46,7 +44,7 @@ export const EDIT_TOOL_DEFINITION = {
         }),
         {
           minItems: 1,
-          description: "Apply one or more edits to the same file in one call, in order, atomically — the file is only written if all edits succeed. Use instead of oldText/newText, e.g. when a file needs more than one change.",
+          description: "Apply one or more edits to the same file in one call, in order. As many edits as possible are applied and saved; any edit that fails to match is skipped and reported back with an error instead of failing the whole call. Use instead of oldText/newText, e.g. when a file needs more than one change.",
         }
       )
     ),
