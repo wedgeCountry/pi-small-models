@@ -5,6 +5,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
 import { isValidIdentifier } from "./usageRules/shared.ts";
@@ -180,6 +181,7 @@ export async function findUsages(
 export function registerFindUsagesTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...FIND_USAGES_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(FIND_USAGES_TOOL_DEFINITION.name, FIND_USAGES_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
       text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);

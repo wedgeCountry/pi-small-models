@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DOTNET_LIST_TOOL_DEFINITION } from "../tool_definitions/dotnet_list.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -115,6 +116,7 @@ function describeError(err: unknown): string {
 export function registerDotnetListTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...DOTNET_LIST_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(DOTNET_LIST_TOOL_DEFINITION.name, DOTNET_LIST_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = callName(theme, "dotnet_list");
       if (args.path) {

@@ -5,6 +5,7 @@ import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
 import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
@@ -64,6 +65,7 @@ export async function insertText(filePath: string, line: number, text: string, o
 export function registerInsertTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...INSERT_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(INSERT_TOOL_DEFINITION.name, INSERT_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       const text = `${callName(theme, "insert")} ${theme.fg("accent", args.path ?? "")}`;
       return oneLine(text + theme.fg("toolOutput", ` after line ${args.line}`));

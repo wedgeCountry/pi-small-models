@@ -4,6 +4,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { NPM_LIST_TOOL_DEFINITION } from "../tool_definitions/npm_list.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -77,6 +78,7 @@ function describeError(err: unknown): string {
 export function registerNpmListTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...NPM_LIST_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(NPM_LIST_TOOL_DEFINITION.name, NPM_LIST_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "npm_list")}`;
       if (args.package) text += theme.fg("accent", ` ${args.package}`);

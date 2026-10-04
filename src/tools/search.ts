@@ -5,6 +5,7 @@ import { findFiles } from "./find.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface SearchOptions {
   maxResults?: number;
@@ -35,6 +36,7 @@ export async function searchFiles(
 export function registerSearchTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...SEARCH_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(SEARCH_TOOL_DEFINITION.name, SEARCH_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "search")} ${theme.fg("accent", args.pattern ?? "")}`;
       text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TS_CHECK_TOOL_DEFINITION } from "../tool_definitions/ts_check.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -98,6 +99,7 @@ function describeError(err: unknown): string {
 export function registerTsCheckTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...TS_CHECK_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(TS_CHECK_TOOL_DEFINITION.name, TS_CHECK_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = callName(theme, "ts_check");
       if (args.path) {

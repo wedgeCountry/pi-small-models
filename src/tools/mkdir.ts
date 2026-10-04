@@ -4,6 +4,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
@@ -43,6 +44,7 @@ export async function makeDir(dirPath: string, opts: MakeDirOptions = {}): Promi
 export function registerMkdirTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...MKDIR_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(MKDIR_TOOL_DEFINITION.name, MKDIR_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       return oneLine(`${callName(theme, "mkdir")} ${theme.fg("accent", args.path ?? "")}`);
     },

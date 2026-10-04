@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -113,6 +114,7 @@ function describeError(err: unknown): string {
 export function registerGitStatusTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GIT_STATUS_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(GIT_STATUS_TOOL_DEFINITION.name, GIT_STATUS_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       const text = callName(theme, "git_status");
       return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);

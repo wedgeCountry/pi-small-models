@@ -5,6 +5,7 @@ import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import {resolveSandboxPath, isEntrySandboxSafe} from "../sandbox.ts";
 import {oneLine, callName} from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -94,6 +95,7 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
 export function registerFindTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...FIND_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(FIND_TOOL_DEFINITION.name, FIND_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "find")} ${theme.fg("accent", args.pattern ?? "")}`;
       text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

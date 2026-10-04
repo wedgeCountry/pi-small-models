@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -87,6 +88,7 @@ export async function readFile(filePath: string, opts: ReadOptions = {}): Promis
 export function registerReadTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...READ_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(READ_TOOL_DEFINITION.name, READ_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
       if (args.offset !== undefined || args.limit !== undefined) {

@@ -5,6 +5,7 @@ import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
 import {resolveSandboxPath, type SandboxMode} from "../sandbox.ts";
 import {withFileMutationQueue} from "../mutationQueue.ts";
 import {oneLine, callName} from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
@@ -189,6 +190,7 @@ export async function editFileMulti(
 export function registerEditTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...EDIT_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(EDIT_TOOL_DEFINITION.name, EDIT_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "edit")} ${theme.fg("accent", args.path ?? "")}`;
       text += theme.fg("toolOutput", args.edits ? ` (${args.edits.length} edits)` : "");

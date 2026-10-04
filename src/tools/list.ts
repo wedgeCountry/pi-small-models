@@ -6,6 +6,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -74,6 +75,7 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
 export function registerListTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...LIST_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(LIST_TOOL_DEFINITION.name, LIST_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
       if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);

@@ -5,6 +5,7 @@ import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
 import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
@@ -95,6 +96,7 @@ export async function removePath(targetPath: string, opts: RemoveOptions = {}): 
 export function registerRemoveTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...REMOVE_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(REMOVE_TOOL_DEFINITION.name, REMOVE_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "remove")} ${theme.fg("accent", args.path ?? "")}`;
       if (args.recursive) text += theme.fg("toolOutput", " (recursive)");

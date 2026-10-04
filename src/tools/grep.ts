@@ -7,6 +7,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import { resolveSandboxPath, isEntrySandboxSafe, getSandboxState, type SandboxState } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface GrepOptions {
   glob?: string;
@@ -207,6 +208,7 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
 export function registerGrepTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GREP_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(GREP_TOOL_DEFINITION.name, GREP_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.pattern ?? ""}/`)}`;
       text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

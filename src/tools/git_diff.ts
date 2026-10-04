@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -110,6 +111,7 @@ function describeError(err: unknown): string {
 export function registerGitDiffTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GIT_DIFF_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(GIT_DIFF_TOOL_DEFINITION.name, GIT_DIFF_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       const text = callName(theme, "git_diff");
       return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);

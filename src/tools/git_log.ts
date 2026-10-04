@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
 import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -96,6 +97,7 @@ export function formatGitLog(result: GitLogResult): string {
 export function registerGitLogTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...GIT_LOG_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(GIT_LOG_TOOL_DEFINITION.name, GIT_LOG_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = callName(theme, "git_log");
       if (args.maxCount) text += theme.fg("toolOutput", ` -${args.maxCount}`);

@@ -5,6 +5,7 @@ import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
 import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
@@ -60,6 +61,7 @@ export async function writeFile(filePath: string, content: string, opts: WriteOp
 export function registerWriteTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...WRITE_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(WRITE_TOOL_DEFINITION.name, WRITE_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       const text = `${callName(theme, "write")} ${theme.fg("accent", args.path ?? "")}`;
       const size = args.content?.length;

@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LSTAT_TOOL_DEFINITION } from "../tool_definitions/lstat.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface LstatResult {
   isFile: boolean;
@@ -33,6 +34,7 @@ export async function lstatPath(targetPath: string): Promise<LstatResult> {
 export function registerLstatTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...LSTAT_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(LSTAT_TOOL_DEFINITION.name, LSTAT_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       return oneLine(`${callName(theme, "lstat")} ${theme.fg("accent", args.path ?? "")}`);
     },

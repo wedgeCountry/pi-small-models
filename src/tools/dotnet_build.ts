@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DOTNET_BUILD_TOOL_DEFINITION } from "../tool_definitions/dotnet_build.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
+import { withConciseValidationErrors } from "../toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -89,6 +90,7 @@ function describeError(err: unknown): string {
 export function registerDotnetBuildTool(pi: ExtensionAPI) {
   pi.registerTool({
     ...DOTNET_BUILD_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(DOTNET_BUILD_TOOL_DEFINITION.name, DOTNET_BUILD_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = callName(theme, "dotnet_build");
       if (args.path) {
