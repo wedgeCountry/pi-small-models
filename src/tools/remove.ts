@@ -35,8 +35,13 @@ export interface RemoveOptions {
  * actually be interrupted instead of running to completion unstoppably.
  * Node's `fs.rm`/`fs.mkdir` don't accept a `signal` option themselves, so
  * that check has to happen at this granularity to do anything useful.
+ *
+ * Exported so `move.ts` can reuse it for deleting an overwritten destination
+ * and for the source side of its cross-device (`EXDEV`) rename fallback,
+ * rather than duplicating this walk. It stats `targetPath` itself, so a
+ * caller never needs to branch on file-vs-directory before calling it.
  */
-async function removeRecursively(targetPath: string, signal?: AbortSignal): Promise<void> {
+export async function removeRecursively(targetPath: string, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   const stat = await fs.lstat(targetPath);
   if (stat.isDirectory()) {

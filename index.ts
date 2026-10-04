@@ -1,4 +1,5 @@
 import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {registerCopyTool} from "./src/tools/copy.ts";
 import {registerDotnetBuildTool} from "./src/tools/dotnet_build.ts";
 import {registerDotnetListTool} from "./src/tools/dotnet_list.ts";
 import {registerEditTool} from "./src/tools/edit.ts";
@@ -12,6 +13,7 @@ import {registerInsertTool} from "./src/tools/insert.ts";
 import {registerListTool} from "./src/tools/list.ts";
 import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
+import {registerMoveTool} from "./src/tools/move.ts";
 import {registerNpmListTool} from "./src/tools/npm_list.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
@@ -34,6 +36,7 @@ const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 const DISABLED_TOOLS = new Set(["bash"]);
 
 export default function (pi: ExtensionAPI) {
+  registerCopyTool(pi);
   registerDotnetBuildTool(pi);
   registerDotnetListTool(pi);
   registerEditTool(pi);
@@ -47,6 +50,7 @@ export default function (pi: ExtensionAPI) {
   registerListTool(pi);
   registerLstatTool(pi);
   registerMkdirTool(pi);
+  registerMoveTool(pi);
   registerNpmListTool(pi);
   registerReadTool(pi);
   registerRemoveTool(pi);
