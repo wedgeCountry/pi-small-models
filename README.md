@@ -66,13 +66,6 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 
 `read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
 
-### `peek` in more detail
-
-`peek` is meant for models with a small context window: instead of reading a whole file, the model sees
-its shape first and then reads only the part it needs. It works for Python, TypeScript/JavaScript, C# and
-Markdown. By default it shows only public members; it can also include protected or private members and
-doc comments.
-
 ## Safety: the sandbox
 
 By default the model is kept inside your project folder. It can't read or change anything outside it,
