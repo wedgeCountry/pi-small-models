@@ -14,18 +14,19 @@ Each tool is two files that must stay in sync:
 - `parameters` — a typebox `Type.Object({...})` schema
 
 **2. `src/tools/<tool>.ts`** — two exports:
-- A **plain async function** (`makeDir`, `readFile`, `editFile`, ...) that does the real work: plain
-  arguments (paths, strings, an `{signal}` options bag), no `ExtensionAPI` involved. This is what
+- A **plain async function** (`makeDir`, `readFile`, `editFile`, ...) that does the real work: a `Sandbox`
+  first, then plain arguments (paths as the model gave them, strings, an `{signal}` options bag), no
+  `ExtensionAPI` involved. It resolves every path through the sandbox itself, so it can't be called unchecked. This is what
   `../tests` calls directly — no mock harness needed.
-- A **`registerXTool(pi)`** function that spreads the `*_TOOL_DEFINITION` into `pi.registerTool({...})`,
+- A **`registerXTool(pi: ToolRegistry)`** function that spreads the `*_TOOL_DEFINITION` into `pi.registerTool({...})`,
   adds a `renderCall` (how the call renders in the UI), and an `execute()` that:
-  1. resolves/sandboxes the path via `resolveSandboxPath(ctx.cwd, params.path, mode)`
-  2. calls the plain function
-  3. wraps the result as `{content: [...], details: {...}}`
+  1. calls the plain function with `sandboxFor(ctx.cwd)` and the raw parameters
+  2. wraps the result as `{content: [...], details: {...}}`
 
-`index.ts` just imports every `registerXTool` and calls them all in its default export. Nothing tool-specific
+`index.ts` just imports every `registerXTool` and calls them all with the gated registry from
+`createGatedRegistry(pi)`, so every tool asks for confirmation while the sandbox is off. Nothing tool-specific
 lives in `index.ts` — it only does global-level things once (filtering `bash` out of active tools, registering
-slash commands, wiring `permissionGate` on `pi.on("tool_call", ...)`).
+slash commands, wiring the permission gate on `pi.on("tool_call", ...)`).
 
 ## Why the split
 
@@ -58,31 +59,31 @@ export const TOUCH_TOOL_DEFINITION = {
 `src/tools/touch.ts`:
 ```ts
 import * as fs from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TOUCH_TOOL_DEFINITION } from "../tool_definitions/touch.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { oneLine, callName } from "../renderCall.ts";
 
 export interface TouchOptions {
   signal?: AbortSignal;
 }
 
-// Plain function: no ExtensionAPI, directly unit-testable.
-export async function touchFile(filePath: string, opts: TouchOptions = {}): Promise<void> {
+// Plain function: no ExtensionAPI, directly unit-testable with `new Sandbox(fixtureDir)`.
+export async function touchFile(sb: Sandbox, target: string, opts: TouchOptions = {}): Promise<void> {
   opts.signal?.throwIfAborted();
+  const filePath = sb.resolve(target); // throws SandboxError outside the root or on a protected path
   const handle = await fs.open(filePath, "a");
   await handle.close();
 }
 
-export function registerTouchTool(pi: ExtensionAPI) {
+export function registerTouchTool(pi: ToolRegistry) {
   pi.registerTool({
     ...TOUCH_TOOL_DEFINITION,
     renderCall(args, theme) {
       return oneLine(`${callName(theme, "touch")} ${theme.fg("accent", args.path ?? "")}`);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit"); // "read" for non-mutating tools
-      await touchFile(filePath, { signal });
+      await touchFile(sandboxFor(ctx.cwd), params.path, { signal });
 
       return {
         content: [{ type: "text", text: `Created ${params.path}.` }],
@@ -98,8 +99,9 @@ export function registerTouchTool(pi: ExtensionAPI) {
 import { registerTouchTool } from "./src/tools/touch.ts";
 // ...
 export default function (pi: ExtensionAPI) {
-  registerTouchTool(pi);
-  // ...other registerXTool(pi) calls
+  const {registry: tools, gatedTools} = createGatedRegistry(pi);
+  registerTouchTool(tools);
+  // ...other registerXTool(tools) calls
 }
 ```
 
@@ -108,7 +110,9 @@ Test (`../tests`) calls `touchFile()` directly against a fixture dir from
 
 ## Checklist for a new tool
 
-- Pick `mode: "read"` or `"edit"` for `resolveSandboxPath` based on whether it mutates the filesystem.
+- Take a `Sandbox` first and resolve every model-supplied path through it (`sb.resolve`, or `sb.relative`
+  for a path handed to a child process). Filter walk results with `sb.entryFilter(base)` and paths reported
+  by another program with `sb.allowsReported`.
 - If it mutates an existing file, wrap the read-modify-write in `withFileMutationQueue`
   (`src/mutationQueue.ts`).
 - If it can run long (globbing, recursive walk, big regex), thread `AbortSignal` through and honor it —

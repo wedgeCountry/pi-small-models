@@ -1,8 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
-import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -10,22 +10,6 @@ import { withConciseValidationErrors } from "../toolValidation.ts";
 export interface RemoveOptions {
   recursive?: boolean;
   signal?: AbortSignal;
-  /**
-   * Absolute path to the project root. When set, `removePath` refuses to
-   * delete a target that resolves to exactly this path — this is the guard
-   * against an LLM call deleting the whole project, and living here (rather
-   * than only in `execute()`) makes it exercisable by the plain-function
-   * tests like every other safety check in this codebase.
-   */
-  projectRoot?: string;
-  /**
-   * Sandbox root directory for path validation. When set along with
-   * `sandboxMode`, `removePath` will reject paths that are restricted by
-   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
-   * sandbox check exercisable by plain-function tests.
-   */
-  sandboxRoot?: string;
-  sandboxMode?: SandboxMode;
 }
 
 /**
@@ -56,7 +40,8 @@ export async function removeRecursively(targetPath: string, signal?: AbortSignal
 }
 
 /**
- * Deletes `targetPath`. Directories require `recursive: true`.
+ * Deletes `target` (resolved through `sb`). Directories require `recursive: true`, and the project
+ * root itself is never removed.
  *
  * The lstat-then-delete runs under `withFileMutationQueue` (keyed by `targetPath` itself, before
  * any children a recursive delete walks into) so a concurrent edit/write/insert/remove targeting
@@ -65,15 +50,10 @@ export async function removeRecursively(targetPath: string, signal?: AbortSignal
  * subtree underneath it, so a concurrent call targeting a path nested inside a directory being
  * recursively removed isn't blocked by this lock.
  */
-export async function removePath(targetPath: string, opts: RemoveOptions = {}): Promise<void> {
-  if (opts.projectRoot !== undefined && path.resolve(targetPath) === path.resolve(opts.projectRoot)) {
+export async function removePath(sb: Sandbox, target: string, opts: RemoveOptions = {}): Promise<void> {
+  const targetPath = sb.resolve(target);
+  if (targetPath === sb.root) {
     throw new Error("Refusing to remove the project root");
-  }
-
-  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
-  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
-  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, targetPath), opts.sandboxMode);
   }
 
   await withFileMutationQueue(targetPath, async () => {
@@ -98,7 +78,7 @@ export async function removePath(targetPath: string, opts: RemoveOptions = {}): 
   });
 }
 
-export function registerRemoveTool(pi: ExtensionAPI) {
+export function registerRemoveTool(pi: ToolRegistry) {
   pi.registerTool({
     ...REMOVE_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(REMOVE_TOOL_DEFINITION.name, REMOVE_TOOL_DEFINITION.parameters),
@@ -108,9 +88,7 @@ export function registerRemoveTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const targetPath = resolveSandboxPath(ctx.cwd, params.path, "edit");
-
-      await removePath(targetPath, { recursive: params.recursive, signal, projectRoot: ctx.cwd });
+      await removePath(sandboxFor(ctx.cwd), params.path, { recursive: params.recursive, signal });
 
       return {
         content: [{ type: "text", text: `Removed ${params.path}.` }],

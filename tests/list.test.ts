@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { listDir } from "../src/tools/list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("lists top-level entries non-recursively", async (t) => {
   const dir = await makeFixture({
@@ -12,7 +13,7 @@ test("lists top-level entries non-recursively", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await listDir(dir);
+  const result = await listDir(new Sandbox(dir), ".");
   assert.deepEqual(
     result.entries.map((e) => e.path).sort(),
     ["a.txt", "sub"]
@@ -26,13 +27,13 @@ test("lists recursively up to maxDepth", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const shallow = await listDir(dir, { recursive: true, maxDepth: 1 });
+  const shallow = await listDir(new Sandbox(dir), ".", { recursive: true, maxDepth: 1 });
   assert.deepEqual(
     shallow.entries.map((e) => e.path).sort(),
     ["a", "a/b"]
   );
 
-  const deep = await listDir(dir, { recursive: true, maxDepth: 5 });
+  const deep = await listDir(new Sandbox(dir), ".", { recursive: true, maxDepth: 5 });
   assert.ok(deep.entries.some((e) => e.path === "a/b/c/d.txt"));
 });
 
@@ -43,10 +44,10 @@ test("hides dotfiles by default and shows them with showHidden", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const withoutHidden = await listDir(dir);
+  const withoutHidden = await listDir(new Sandbox(dir), ".");
   assert.deepEqual(withoutHidden.entries.map((e) => e.path), ["visible.txt"]);
 
-  const withHidden = await listDir(dir, { showHidden: true });
+  const withHidden = await listDir(new Sandbox(dir), ".", { showHidden: true });
   assert.deepEqual(withHidden.entries.map((e) => e.path).sort(), [".hidden", "visible.txt"]);
 });
 
@@ -57,7 +58,7 @@ test("skips default-ignored directories like node_modules", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await listDir(dir, { recursive: true, maxDepth: 5 });
+  const result = await listDir(new Sandbox(dir), ".", { recursive: true, maxDepth: 5 });
   assert.ok(!result.entries.some((e) => e.path.includes("node_modules")));
 });
 
@@ -68,7 +69,7 @@ test("honors custom ignoreGlobs (e.g. from /ignore), excluding a trailing-/** ma
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await listDir(dir, { recursive: true, maxDepth: 5, ignoreGlobs: ["temp/**"] });
+  const result = await listDir(new Sandbox(dir), ".", { recursive: true, maxDepth: 5, ignoreGlobs: ["temp/**"] });
   assert.deepEqual(
     result.entries.map((e) => e.path).sort(),
     ["src", "src/index.ts"]
@@ -84,7 +85,7 @@ test("truncates at maxResults", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await listDir(dir, { maxResults: 2 });
+  const result = await listDir(new Sandbox(dir), ".", { maxResults: 2 });
   assert.equal(result.entries.length, 2);
   assert.equal(result.total, 4);
   assert.equal(result.truncated, true);
@@ -97,7 +98,7 @@ test("does not report truncated when entry count exactly equals maxResults", asy
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await listDir(dir, { maxResults: 2 });
+  const result = await listDir(new Sandbox(dir), ".", { maxResults: 2 });
   assert.equal(result.entries.length, 2);
   assert.equal(result.truncated, false);
 });
@@ -115,6 +116,6 @@ test("omits a symlink that points outside the base directory", async (t) => {
     return;
   }
 
-  const result = await listDir(dir);
+  const result = await listDir(new Sandbox(dir), ".");
   assert.deepEqual(result.entries.map((e) => e.path), ["real.txt"]);
 });

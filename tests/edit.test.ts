@@ -4,12 +4,13 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { editFile, editFileMulti } from "../src/tools/edit.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("replaces a unique block of text", async (t) => {
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFile(path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;");
+  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;");
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 2;\nconst bar = 2;\n");
 });
@@ -18,35 +19,35 @@ test("rejects when oldText is not found", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "missing", "x"));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "missing", "x"));
 });
 
 test("rejects when oldText matches more than once", async (t) => {
   const dir = await makeFixture({ "a.txt": "dup\ndup\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "dup", "x"));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "dup", "x"));
 });
 
 test("rejects when oldText and newText are identical", async (t) => {
   const dir = await makeFixture({ "a.txt": "same\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "same", "same"));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "same", "same"));
 });
 
 test("rejects when the file does not exist", async (t) => {
   const dir = await makeFixture({});
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "missing.txt"), "a", "b"));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "missing.txt"), "a", "b"));
 });
 
 test("replaces all occurrences when allowMultipleMatches is set", async (t) => {
   const dir = await makeFixture({ "a.txt": "dup\ndup\ndup\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFile(path.join(dir, "a.txt"), "dup", "x", { allowMultipleMatches: true });
+  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "dup", "x", { allowMultipleMatches: true });
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "x\nx\nx\n");
 });
@@ -55,7 +56,7 @@ test("still rejects when oldText is not found and allowMultipleMatches is set", 
   const dir = await makeFixture({ "a.txt": "hello\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "missing", "x", { allowMultipleMatches: true }));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "missing", "x", { allowMultipleMatches: true }));
 });
 
 test("rejects when the signal is already aborted, without modifying the file", async (t) => {
@@ -64,7 +65,7 @@ test("rejects when the signal is already aborted, without modifying the file", a
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;", { signal: ac.signal }));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "const foo = 1;", "const foo = 2;", { signal: ac.signal }));
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 1;\n");
 });
@@ -73,7 +74,7 @@ test("rejects an empty oldText instead of matching every position", async (t) =>
   const dir = await makeFixture({ "a.txt": "abc\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "", "X"));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "", "X"));
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "abc\n");
 });
@@ -82,7 +83,7 @@ test("rejects an empty oldText even with allowMultipleMatches, without splicing 
   const dir = await makeFixture({ "a.txt": "abc\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFile(path.join(dir, "a.txt"), "", "X", { allowMultipleMatches: true }));
+  await assert.rejects(() => editFile(new Sandbox(dir), path.join(dir, "a.txt"), "", "X", { allowMultipleMatches: true }));
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "abc\n");
 });
@@ -91,7 +92,7 @@ test("editFileMulti applies several edits atomically in one call", async (t) => 
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFileMulti(path.join(dir, "a.txt"), [
+  await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "const foo = 1;", newText: "const foo = 10;" },
     { oldText: "const bar = 2;", newText: "const bar = 20;" },
   ]);
@@ -103,7 +104,7 @@ test("editFileMulti accepts a single-item edits array", async (t) => {
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFileMulti(path.join(dir, "a.txt"), [{ oldText: "const foo = 1;", newText: "const foo = 10;" }]);
+  await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [{ oldText: "const foo = 1;", newText: "const foo = 10;" }]);
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 10;\nconst bar = 2;\n");
 });
@@ -113,7 +114,7 @@ test("editFileMulti applies later edits against the result of earlier ones", asy
   t.after(() => cleanupFixture(dir));
 
   // The second edit's oldText only exists in the file *after* the first edit runs.
-  await editFileMulti(path.join(dir, "a.txt"), [
+  await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "one\ntwo", newText: "uno\ndos" },
     { oldText: "uno\ndos\nthree", newText: "uno\ndos\ntres" },
   ]);
@@ -125,7 +126,7 @@ test("editFileMulti applies the edits that match and reports the ones that fail"
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await editFileMulti(path.join(dir, "a.txt"), [
+  const result = await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "const foo = 1;", newText: "const foo = 10;" },
     { oldText: "not in the file", newText: "x" },
   ]);
@@ -143,7 +144,7 @@ test("editFileMulti leaves the file untouched if every edit fails", async (t) =>
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await editFileMulti(path.join(dir, "a.txt"), [
+  const result = await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "not in the file", newText: "x" },
     { oldText: "also not in the file", newText: "y" },
   ]);
@@ -158,14 +159,14 @@ test("editFileMulti rejects an empty edits array", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => editFileMulti(path.join(dir, "a.txt"), []));
+  await assert.rejects(() => editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), []));
 });
 
 test("editFileMulti reports when one edit's oldText is not unique, without throwing", async (t) => {
   const dir = await makeFixture({ "a.txt": "dup\ndup\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await editFileMulti(path.join(dir, "a.txt"), [{ oldText: "dup", newText: "x" }]);
+  const result = await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [{ oldText: "dup", newText: "x" }]);
   assert.equal(result.applied, 0);
   assert.equal(result.failures.length, 1);
   assert.match(result.failures[0]!.error, /not unique/);
@@ -178,7 +179,7 @@ test("editFileMulti applies a later edit even when an earlier one in the batch f
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await editFileMulti(path.join(dir, "a.txt"), [
+  const result = await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "not in the file", newText: "x" },
     { oldText: "const bar = 2;", newText: "const bar = 20;" },
   ]);
@@ -194,7 +195,7 @@ test("editFileMulti honors per-edit allowMultipleMatches", async (t) => {
   const dir = await makeFixture({ "a.txt": "dup\ndup\nother\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFileMulti(path.join(dir, "a.txt"), [
+  await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "dup", newText: "x", allowMultipleMatches: true },
     { oldText: "other", newText: "y" },
   ]);
@@ -206,7 +207,7 @@ test("matches oldText with bare LF against a CRLF file, and keeps the file CRLF"
   const dir = await makeFixture({ "a.txt": "const foo = 1;\r\nconst bar = 2;\r\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFile(path.join(dir, "a.txt"), "const foo = 1;\nconst bar = 2;", "const foo = 10;\nconst bar = 20;");
+  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "const foo = 1;\nconst bar = 2;", "const foo = 10;\nconst bar = 20;");
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 10;\r\nconst bar = 20;\r\n");
 });
@@ -215,7 +216,7 @@ test("matches oldText with CRLF against a file that's actually LF, and keeps the
   const dir = await makeFixture({ "a.txt": "const foo = 1;\nconst bar = 2;\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFile(path.join(dir, "a.txt"), "const foo = 1;\r\nconst bar = 2;", "const foo = 10;\r\nconst bar = 20;");
+  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "const foo = 1;\r\nconst bar = 2;", "const foo = 10;\r\nconst bar = 20;");
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
   assert.equal(content, "const foo = 10;\nconst bar = 20;\n");
 });
@@ -224,7 +225,7 @@ test("editFileMulti matches bare-LF oldText against a CRLF file across several e
   const dir = await makeFixture({ "a.txt": "const foo = 1;\r\nconst bar = 2;\r\n" });
   t.after(() => cleanupFixture(dir));
 
-  await editFileMulti(path.join(dir, "a.txt"), [
+  await editFileMulti(new Sandbox(dir), path.join(dir, "a.txt"), [
     { oldText: "const foo = 1;", newText: "const foo = 10;" },
     { oldText: "const bar = 2;", newText: "const bar = 20;" },
   ]);
@@ -239,7 +240,7 @@ test("serializes concurrent edits to different parts of the same file so neither
 
   // Without serialization, both calls would read the original "foo\nbar\n" before either
   // writes, and whichever write lands last would silently discard the other call's change.
-  await Promise.all([editFile(file, "foo", "FOO"), editFile(file, "bar", "BAR")]);
+  await Promise.all([editFile(new Sandbox(dir), file, "foo", "FOO"), editFile(new Sandbox(dir), file, "bar", "BAR")]);
 
   const content = await fs.readFile(file, "utf8");
   assert.equal(content, "FOO\nBAR\n");
@@ -250,8 +251,8 @@ test("refuses to edit a file inside .git", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => editFile(path.join(dir, ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev", { sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => editFile(new Sandbox(dir), path.join(dir, ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev"),
+    /restricted by the sandbox/
   );
 });
 
@@ -260,8 +261,8 @@ test("refuses to edit a nested .git file", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => editFile(path.join(dir, "packages", "api", ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev", { sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => editFile(new Sandbox(dir), path.join(dir, "packages", "api", ".git", "HEAD"), "ref: refs/heads/main", "ref: refs/heads/dev"),
+    /restricted by the sandbox/
   );
 });
 
@@ -270,7 +271,7 @@ test("refuses to use editFileMulti on a file inside .git", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => editFileMulti(path.join(dir, ".git", "config"), [{ oldText: "[core]", newText: "[core]\\nfoo" }], { sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => editFileMulti(new Sandbox(dir), path.join(dir, ".git", "config"), [{ oldText: "[core]", newText: "[core]\\nfoo" }]),
+    /restricted by the sandbox/
   );
 });

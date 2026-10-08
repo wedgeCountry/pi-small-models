@@ -6,6 +6,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { gitDiff } from "../src/tools/git_diff.ts";
 import { makeFixture, cleanupFixture, initGitRepo } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -14,7 +15,7 @@ test("reports no changes for a clean repo", async (t) => {
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.equal(result.text, "");
   assert.equal(result.truncated, false);
 });
@@ -26,7 +27,7 @@ test("shows unstaged changes", async (t) => {
 
   await fs.writeFile(path.join(dir, "a.txt"), "goodbye\n", "utf8");
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.match(result.text, /-hello/);
   assert.match(result.text, /\+goodbye/);
 });
@@ -39,7 +40,7 @@ test("does not show a change that's already staged (git_diff is unstaged-only)",
   await fs.writeFile(path.join(dir, "a.txt"), "goodbye\n", "utf8");
   await execFile("git", ["add", "a.txt"], { cwd: dir });
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.equal(result.text, "");
 });
 
@@ -51,7 +52,7 @@ test("scopes the diff to a path", async (t) => {
   await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
   await fs.writeFile(path.join(dir, "sub/b.txt"), "changed\n", "utf8");
 
-  const result = await gitDiff(dir, { path: "sub" });
+  const result = await gitDiff(new Sandbox(dir), { path: "sub" });
   assert.match(result.text, /b\.txt/);
   assert.doesNotMatch(result.text, /a\.txt/);
 });
@@ -65,7 +66,7 @@ test("truncates a large diff", async (t) => {
   const changed = Array.from({ length: 3000 }, (_, i) => `line ${i} changed`).join("\n") + "\n";
   await fs.writeFile(path.join(dir, "big.txt"), changed, "utf8");
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.equal(result.truncated, true);
 });
 
@@ -73,7 +74,7 @@ test("rejects when the directory is not a git repository", async (t) => {
   const dir = await makeFixture({ "a.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => gitDiff(dir), /git diff failed/);
+  await assert.rejects(() => gitDiff(new Sandbox(dir)), /git diff failed/);
 });
 
 test("omits a sandbox-restricted file's diff, even though git itself reports it", async (t) => {
@@ -87,7 +88,7 @@ test("omits a sandbox-restricted file's diff, even though git itself reports it"
   await fs.writeFile(path.join(dir, "a.txt"), "goodbye\n", "utf8");
   await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.match(result.text, /a\.txt/);
   assert.match(result.text, /-hello/);
   assert.match(result.text, /\+goodbye/);
@@ -103,8 +104,7 @@ test("omits a restricted file's diff even when explicitly scoped to it by path",
 
   await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
 
-  const result = await gitDiff(dir, { path: ".env" });
-  assert.equal(result.text, "");
+  await assert.rejects(gitDiff(new Sandbox(dir), { path: ".env" }), /restricted by the sandbox/);
 });
 
 test("still shows an unrestricted file's diff normally when a restricted one is also changed", async (t) => {
@@ -116,7 +116,7 @@ test("still shows an unrestricted file's diff normally when a restricted one is 
   await fs.writeFile(path.join(dir, "b.txt"), "changed-b\n", "utf8");
   await fs.writeFile(path.join(dir, ".env"), "SECRET=2\n", "utf8");
 
-  const result = await gitDiff(dir);
+  const result = await gitDiff(new Sandbox(dir));
   assert.match(result.text, /changed-a/);
   assert.match(result.text, /changed-b/);
   assert.doesNotMatch(result.text, /SECRET/);
@@ -131,5 +131,5 @@ test("rejects when the signal is already aborted", async (t) => {
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => gitDiff(dir, { signal: ac.signal }));
+  await assert.rejects(() => gitDiff(new Sandbox(dir), { signal: ac.signal }));
 });

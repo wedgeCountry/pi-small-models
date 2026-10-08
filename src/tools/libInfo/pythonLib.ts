@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isLibraryPathSafe } from "../../sandbox.ts";
+import type { Sandbox } from "../../sandbox/sandbox.ts";
 import { runCommand, CommandNotFoundError, describeCommandError } from "../../runCommand.ts";
 import type { ApiEntry, LibExtraction, LibraryInfo } from "./types.ts";
 import { displayPath, isFile } from "./paths.ts";
@@ -124,8 +124,8 @@ export interface PyLibOptions extends PyHelperOptions {
  * lost a leading module path ("requests.adapters.HTTPAdapter" → module requests.adapters,
  * symbol HTTPAdapter).
  */
-export async function extractPyLibrary(root: string, pkg: string, opts: PyLibOptions = {}): Promise<LibExtraction & { symbol?: string }> {
-  const absRoot = path.resolve(root);
+export async function extractPyLibrary(sb: Sandbox, pkg: string, opts: PyLibOptions = {}): Promise<LibExtraction & { symbol?: string }> {
+  const absRoot = sb.root;
   const res = await runPyHelper<LibResponse>(
     absRoot,
     { cmd: "lib", package: pkg, module: opts.module, symbol: opts.symbol, includePrivate: opts.includePrivate ?? false },
@@ -135,7 +135,7 @@ export async function extractPyLibrary(root: string, pkg: string, opts: PyLibOpt
   // The helper only opens .py/.pyi files under sys.path; double-check everything it reports
   // against the same roots (plus the project, for editable installs) before showing paths.
   const libRoots = [absRoot, ...res.env.paths, ...(opts.extraSysPath ?? [])];
-  const safe = (p: string | null | undefined) => !!p && isLibraryPathSafe(libRoots, p);
+  const safe = (p: string | null | undefined) => !!p && sb.allowsLibraryFile(libRoots, p);
   const show = (p: string | null | undefined) => (p ? displayPath(absRoot, p) : undefined);
 
   const entries: ApiEntry[] = [];
@@ -194,8 +194,8 @@ export interface PyListResult {
 const MAX_LIST_ROWS = 1000;
 
 /** `pip list`-like listing of the interpreter's installed distributions, via importlib.metadata. */
-export async function pyListPackages(root: string, filter: string | undefined, opts: PyHelperOptions = {}): Promise<PyListResult> {
-  const absRoot = path.resolve(root);
+export async function pyListPackages(sb: Sandbox, filter: string | undefined, opts: PyHelperOptions = {}): Promise<PyListResult> {
+  const absRoot = sb.root;
   const res = await runPyHelper<ListResponse>(absRoot, { cmd: "list", filter: filter ?? "" }, opts);
   const lines: string[] = [`Python ${res.env.version} — ${displayPath(absRoot, res.env.python)} (${res.interpreter.reason})`];
   if (res.env.sitePackages.length) lines.push(`site-packages: ${res.env.sitePackages.map((p) => displayPath(absRoot, p)).join(", ")}`);

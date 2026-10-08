@@ -1,4 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { PY_LIB_TOOL_DEFINITION } from "../tool_definitions/py_lib.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -15,12 +16,12 @@ export interface PyLibToolOptions extends LibQueryOptions, PyHelperOptions {
  * Plain entry point (no ExtensionAPI): read `pkg`'s API with the project's Python interpreter
  * (see `findPythonInterpreter`) and render the overview / search / symbol view as text.
  */
-export async function pyLib(root: string, pkg: string, opts: PyLibToolOptions = {}): Promise<LibRenderResult> {
-  const ex = await extractPyLibrary(root, pkg, opts);
+export async function pyLib(sb: Sandbox, pkg: string, opts: PyLibToolOptions = {}): Promise<LibRenderResult> {
+  const ex = await extractPyLibrary(sb, pkg, opts);
   return renderLibrary(ex, { ...opts, symbol: opts.symbol ? ex.symbol ?? opts.symbol : undefined });
 }
 
-export function registerPyLibTool(pi: ExtensionAPI) {
+export function registerPyLibTool(pi: ToolRegistry) {
   pi.registerTool({
     ...PY_LIB_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(PY_LIB_TOOL_DEFINITION.name, PY_LIB_TOOL_DEFINITION.parameters),
@@ -32,7 +33,7 @@ export function registerPyLibTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await pyLib(ctx.cwd, params.package, { ...params, signal });
+      const result = await pyLib(sandboxFor(ctx.cwd), params.package, { ...params, signal });
       return {
         content: [{ type: "text", text: result.text }],
         details: { view: result.view, truncated: result.truncated },

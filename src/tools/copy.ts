@@ -1,8 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { COPY_TOOL_DEFINITION } from "../tool_definitions/copy.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -11,13 +11,6 @@ export interface CopyOptions {
   recursive?: boolean;
   overwrite?: boolean;
   signal?: AbortSignal;
-  /**
-   * Sandbox root directory for path validation. When set, `copyFile` validates `sourcePath`
-   * (read mode — it's only ever read here, never mutated) and `destPath` (edit mode) against the
-   * sandbox's restricted-path rules (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the sandbox
-   * check exercisable by plain-function tests, same as every other tool in this project.
-   */
-  sandboxRoot?: string;
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
@@ -31,7 +24,7 @@ async function pathExists(targetPath: string): Promise<boolean> {
 }
 
 /**
- * Copies `sourcePath` to `destPath`, leaving `sourcePath` untouched. A directory source requires
+ * Copies `source` to `destination` (both resolved through `sb`), leaving `sourcePath` untouched. A directory source requires
  * `recursive: true`; an already-existing `destPath` requires `overwrite: true`. Missing parent
  * directories of `destPath` are created first, mirroring `writeFile`.
  *
@@ -39,11 +32,9 @@ async function pathExists(targetPath: string): Promise<boolean> {
  * a concurrent edit/write/insert/remove racing against it is the same "not blocked" tradeoff the
  * other tools already accept for paths outside their literal target (see `remove.ts`).
  */
-export async function copyFile(sourcePath: string, destPath: string, opts: CopyOptions = {}): Promise<void> {
-  if (opts.sandboxRoot !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, sourcePath), "read");
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, destPath), "edit");
-  }
+export async function copyFile(sb: Sandbox, source: string, destination: string, opts: CopyOptions = {}): Promise<void> {
+  const sourcePath = sb.resolve(source);
+  const destPath = sb.resolve(destination);
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
     throw new Error("Source and destination are the same path");
@@ -90,7 +81,7 @@ export async function copyFile(sourcePath: string, destPath: string, opts: CopyO
   });
 }
 
-export function registerCopyTool(pi: ExtensionAPI) {
+export function registerCopyTool(pi: ToolRegistry) {
   pi.registerTool({
     ...COPY_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(COPY_TOOL_DEFINITION.name, COPY_TOOL_DEFINITION.parameters),
@@ -103,10 +94,7 @@ export function registerCopyTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const sourcePath = resolveSandboxPath(ctx.cwd, params.path, "read");
-      const destPath = resolveSandboxPath(ctx.cwd, params.destination, "edit");
-
-      await copyFile(sourcePath, destPath, { recursive: params.recursive, overwrite: params.overwrite, signal });
+      await copyFile(sandboxFor(ctx.cwd), params.path, params.destination, { recursive: params.recursive, overwrite: params.overwrite, signal });
 
       return {
         content: [{ type: "text", text: `Copied ${params.path} to ${params.destination}.` }],

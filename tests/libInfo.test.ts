@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { normalizeSymbol, selectView } from "../src/tools/libInfo/query.ts";
 import { renderLibrary, capOutput, MAX_OUTPUT_LINES } from "../src/tools/libInfo/format.ts";
 import type { ApiEntry, LibExtraction } from "../src/tools/libInfo/types.ts";
-import { resolveLibraryPath, isLibraryPathSafe, setSandboxState } from "../src/sandbox.ts";
-import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 function entry(kind: string, name: string, container = "", signature = `${kind} ${name}`, docs?: string): ApiEntry {
   return { kind, name, container, signature, docs };
@@ -57,7 +53,7 @@ test("too many distinct matches gives an ambiguous list", () => {
 });
 
 test("overview shows root children with member counts; search ranks name matches first", () => {
-  const r = renderLibrary(EX, {});
+  const r = renderLibrary(EX);
   assert.match(r.text, /class Session {2}\(\+2 members\)/);
   assert.doesNotMatch(r.text, /def post/);
   assert.doesNotMatch(r.text, /A session/); // no docs without includeDocs
@@ -84,31 +80,4 @@ test("capOutput truncates by line count with a hint", () => {
   const { text, truncated } = capOutput(lines);
   assert.equal(truncated, true);
   assert.match(text, /Output truncated/);
-});
-
-test("resolveLibraryPath allows files under a lib root and rejects others", async (t) => {
-  const dir = await makeFixture({
-    "libs/pkg/a.py": "",
-    "libs/pkg/.env": "SECRET=1",
-    "elsewhere/b.py": "",
-  });
-  t.after(() => cleanupFixture(dir));
-  const roots = [path.join(dir, "libs")];
-
-  assert.equal(resolveLibraryPath(roots, path.join(dir, "libs/pkg/a.py")), path.join(dir, "libs/pkg/a.py"));
-  assert.throws(() => resolveLibraryPath(roots, path.join(dir, "elsewhere/b.py")), /outside the installed-package locations/);
-  assert.throws(() => resolveLibraryPath(roots, path.join(dir, "libs/../elsewhere/b.py")), /outside/);
-  assert.throws(() => resolveLibraryPath(roots, path.join(dir, "libs/pkg/.env")), /restricted/);
-  assert.equal(isLibraryPathSafe(roots, path.join(dir, "elsewhere/b.py")), false);
-
-  try {
-    await fs.symlink(path.join(dir, "elsewhere"), path.join(dir, "libs/escape"), "dir");
-    assert.equal(isLibraryPathSafe(roots, path.join(dir, "libs/escape/b.py")), false);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "EPERM") throw err;
-  }
-
-  setSandboxState("off");
-  t.after(() => setSandboxState("on"));
-  assert.equal(isLibraryPathSafe(roots, path.join(dir, "elsewhere/b.py")), true);
 });

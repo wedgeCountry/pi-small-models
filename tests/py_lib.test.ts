@@ -7,6 +7,7 @@ import { pyList } from "../src/tools/py_list.ts";
 import { findPythonInterpreter, PYTHON_ENV_VAR } from "../src/tools/libInfo/pythonLib.ts";
 import { runCommand } from "../src/runCommand.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 const PYTHON = process.platform === "win32" ? "python" : "python3";
 
@@ -103,7 +104,7 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
 
 test("overview: dist metadata, submodules, re-exports, no private names", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const r = await pyLib(dir, "demo-pkg", { extraSysPath });
+  const r = await pyLib(new Sandbox(dir), "demo-pkg", { extraSysPath });
   assert.match(r.text, /^demo-pkg 1\.2\.3 \(python\)/);
   assert.match(r.text, /Summary: A demo package/);
   assert.match(r.text, /Dependencies: requests>=2, \(\+1 optional extras\)/);
@@ -118,13 +119,13 @@ test("overview: dist metadata, submodules, re-exports, no private names", { skip
 
 test("import name and pip name both work", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const r = await pyLib(dir, "demo_pkg", { extraSysPath });
+  const r = await pyLib(new Sandbox(dir), "demo_pkg", { extraSysPath });
   assert.match(r.text, /^demo-pkg 1\.2\.3/);
 });
 
 test("symbol view: class with members, docs, decorators; private hidden", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const r = await pyLib(dir, "demo_pkg", { symbol: "Client", extraSysPath });
+  const r = await pyLib(new Sandbox(dir), "demo_pkg", { symbol: "Client", extraSysPath });
   assert.match(r.text, /Talks to the server\./);
   assert.match(r.text, /Re-exported from: demo_pkg\.core/);
   assert.match(r.text, /def __init__\(self, base_url: str, \*, retries: int=3\) -> None/);
@@ -135,18 +136,18 @@ test("symbol view: class with members, docs, decorators; private hidden", { skip
   assert.doesNotMatch(r.text, /_hidden/);
   assert.equal((r.text.match(/def name\(/g) ?? []).length, 1); // setter skipped
 
-  const m = await pyLib(dir, "demo_pkg", { symbol: "Client.get", extraSysPath });
+  const m = await pyLib(new Sandbox(dir), "demo_pkg", { symbol: "Client.get", extraSysPath });
   assert.match(m.text, /:param path: the path/);
   assert.match(m.text, /Source: site\/demo_pkg\/core\.py:10/);
 
-  const priv = await pyLib(dir, "demo_pkg", { symbol: "Client", includePrivate: true, extraSysPath });
+  const priv = await pyLib(new Sandbox(dir), "demo_pkg", { symbol: "Client", includePrivate: true, extraSysPath });
   assert.match(priv.text, /_hidden/);
 });
 
 test("dotted symbols and module= select submodules", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
   for (const opts of [{ symbol: "demo_pkg.core.internal_only" }, { symbol: "core.internal_only" }, { module: "demo_pkg.core", symbol: "internal_only" }, { module: "core", symbol: "internal_only" }]) {
-    const r = await pyLib(dir, "demo_pkg", { ...opts, extraSysPath });
+    const r = await pyLib(new Sandbox(dir), "demo_pkg", { ...opts, extraSysPath });
     assert.match(r.text, /module demo_pkg\.core/, JSON.stringify(opts));
     assert.match(r.text, /== internal_only/, JSON.stringify(opts));
   }
@@ -154,54 +155,54 @@ test("dotted symbols and module= select submodules", { skip: SKIP }, async (t) =
 
 test(".pyi stubs win over .py, and <pkg>-stubs packages over inline sources", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const inline = await pyLib(dir, "demo_pkg", { module: "demo_pkg.stubbed", extraSysPath });
+  const inline = await pyLib(new Sandbox(dir), "demo_pkg", { module: "demo_pkg.stubbed", extraSysPath });
   assert.match(inline.text, /def typed\(x: int\) -> int/);
   assert.match(inline.text, /\.pyi stub/);
 
-  const pkg = await pyLib(dir, "stubbed_lib", { extraSysPath });
+  const pkg = await pyLib(new Sandbox(dir), "stubbed_lib", { extraSysPath });
   assert.match(pkg.text, /def f\(x: int\) -> int/);
   assert.match(pkg.text, /stubbed_lib-stubs package/);
 });
 
 test("compiled modules without stubs are reported, not imported", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const r = await pyLib(dir, "fastmod", { extraSysPath });
+  const r = await pyLib(new Sandbox(dir), "fastmod", { extraSysPath });
   assert.match(r.text, /compiled extension module/);
   assert.match(r.text, /No public API entries found/);
 });
 
 test("loose modules and NamedTuple fields; stdlib works", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const r = await pyLib(dir, "nodist", { symbol: "Point", extraSysPath });
+  const r = await pyLib(new Sandbox(dir), "nodist", { symbol: "Point", extraSysPath });
   assert.match(r.text, /class Point\(NamedTuple\)/);
   assert.match(r.text, /y: int = 0/);
 
-  const json = await pyLib(dir, "json", { symbol: "dumps", extraSysPath });
+  const json = await pyLib(new Sandbox(dir), "json", { symbol: "dumps", extraSysPath });
   assert.match(json.text, /json stdlib, Python 3/);
   assert.match(json.text, /def dumps\(obj/);
 });
 
 test("errors: unknown package, invalid names, unknown module", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  await assert.rejects(() => pyLib(dir, "no-such-package-xyz", { extraSysPath }), /not installed.*py_list/);
-  await assert.rejects(() => pyLib(dir, "../etc", { extraSysPath }), /not a valid Python package/);
-  await assert.rejects(() => pyLib(dir, "demo_pkg", { module: "../x", extraSysPath }), /not a valid dotted module name/);
-  await assert.rejects(() => pyLib(dir, "demo_pkg", { module: "demo_pkg.nope", extraSysPath }), /Module "demo_pkg\.nope" not found/);
+  await assert.rejects(() => pyLib(new Sandbox(dir), "no-such-package-xyz", { extraSysPath }), /not installed.*py_list/);
+  await assert.rejects(() => pyLib(new Sandbox(dir), "../etc", { extraSysPath }), /not a valid Python package/);
+  await assert.rejects(() => pyLib(new Sandbox(dir), "demo_pkg", { module: "../x", extraSysPath }), /not a valid dotted module name/);
+  await assert.rejects(() => pyLib(new Sandbox(dir), "demo_pkg", { module: "demo_pkg.nope", extraSysPath }), /Module "demo_pkg\.nope" not found/);
 });
 
 test("py_list lists distributions and shows details for an exact name", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
-  const all = await pyList(dir, { package: "demo", extraSysPath });
+  const all = await pyList(new Sandbox(dir), { package: "demo", extraSysPath });
   assert.match(all.text, /demo-pkg==1\.2\.3 {2}— A demo package/);
   assert.match(all.text, /user-of-demo==0\.1/);
 
-  const one = await pyList(dir, { package: "demo_pkg", extraSysPath });
+  const one = await pyList(new Sandbox(dir), { package: "demo_pkg", extraSysPath });
   assert.match(one.text, /^demo-pkg 1\.2\.3$/m);
   assert.match(one.text, /Import as: demo_pkg/);
   assert.match(one.text, /Requires: requests>=2 \(\+1 optional extras\)/);
   assert.match(one.text, /Required by: user-of-demo/);
 
-  const none = await pyList(dir, { package: "zzz-nothing", extraSysPath });
+  const none = await pyList(new Sandbox(dir), { package: "zzz-nothing", extraSysPath });
   assert.match(none.text, /No installed package matches/);
 });
 
@@ -211,14 +212,14 @@ test("findPythonInterpreter precedence: env var, VIRTUAL_ENV, project venv, PATH
 
   assert.deepEqual(findPythonInterpreter(dir, { [PYTHON_ENV_VAR]: "/opt/py" }), { command: "/opt/py", reason: `$${PYTHON_ENV_VAR}` });
   assert.equal(findPythonInterpreter(dir, { VIRTUAL_ENV: path.join(dir, "other") }).reason, "$VIRTUAL_ENV");
-  assert.equal(findPythonInterpreter(dir, {}).reason, "project .venv");
+  assert.equal(findPythonInterpreter(dir).reason, "project .venv");
   await fs.rm(path.join(dir, ".venv"), { recursive: true });
-  assert.equal(findPythonInterpreter(dir, {}).reason, "PATH");
+  assert.equal(findPythonInterpreter(dir).reason, "PATH");
 });
 
 test("rejects when the signal is already aborted", { skip: SKIP }, async (t) => {
   const { dir, extraSysPath } = await fixture(t);
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => pyLib(dir, "demo_pkg", { extraSysPath, signal: ac.signal }), { name: "AbortError" });
+  await assert.rejects(() => pyLib(new Sandbox(dir), "demo_pkg", { extraSysPath, signal: ac.signal }), { name: "AbortError" });
 });

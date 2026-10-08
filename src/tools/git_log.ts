@@ -1,9 +1,8 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
-import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -40,11 +39,11 @@ const RECORD_SEP = "\x1e";
 const FIELD_SEP = "\x1f";
 
 /**
- * Runs `git log` in `cwd` and returns the newest `maxCount` commits with the files each changed.
+ * Runs `git log` in the project root and returns the newest `maxCount` commits with the files each changed.
  * File names are run through the same read-restricted-globs filter `git_diff` applies, so a
  * tracked `.env` can't have its path disclosed just by appearing in a commit's file list.
  */
-export async function gitLog(cwd: string, opts: GitLogOptions = {}): Promise<GitLogResult> {
+export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<GitLogResult> {
   const maxCount = Math.min(Math.max(Math.trunc(opts.maxCount ?? DEFAULT_MAX_COUNT), 1), MAX_COUNT_CEILING);
   const args = [
     "log",
@@ -52,11 +51,12 @@ export async function gitLog(cwd: string, opts: GitLogOptions = {}): Promise<Git
     `--format=${RECORD_SEP}%H${FIELD_SEP}%an${FIELD_SEP}%aI${FIELD_SEP}%s`,
     "--name-only",
   ];
-  if (opts.path) args.push("--", opts.path);
+  const scope = opts.path ? sb.relative(opts.path) : "";
+  if (scope) args.push("--", scope);
 
   let stdout: string;
   try {
-    ({ stdout } = await execFile("git", args, { cwd, signal: opts.signal, maxBuffer: MAX_BUFFER }));
+    ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
     // A repository with no commits yet makes `git log` exit non-zero; that's just "no history".
@@ -71,7 +71,7 @@ export async function gitLog(cwd: string, opts: GitLogOptions = {}): Promise<Git
     const [hash = "", author = "", date = "", subject = ""] = header.split(FIELD_SEP);
     const files = rest
       .filter((f) => f !== "")
-      .filter((f) => isEntrySandboxSafe(cwd, f, "read", false));
+      .filter((f) => sb.allowsReported(f));
     commits.push({ hash, author, date, subject, files });
   }
   return { commits };
@@ -94,7 +94,7 @@ export function formatGitLog(result: GitLogResult): string {
     .join("\n\n");
 }
 
-export function registerGitLogTool(pi: ExtensionAPI) {
+export function registerGitLogTool(pi: ToolRegistry) {
   pi.registerTool({
     ...GIT_LOG_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(GIT_LOG_TOOL_DEFINITION.name, GIT_LOG_TOOL_DEFINITION.parameters),
@@ -105,14 +105,7 @@ export function registerGitLogTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let relPath: string | undefined;
-      if (params.path) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relPath = rel === "" ? undefined : rel;
-      }
-
-      const result = await gitLog(ctx.cwd, { maxCount: params.maxCount, path: relPath, signal });
+      const result = await gitLog(sandboxFor(ctx.cwd), { maxCount: params.maxCount, path: params.path, signal });
 
       return {
         content: [{ type: "text", text: formatGitLog(result) }],

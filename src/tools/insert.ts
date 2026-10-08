@@ -1,41 +1,28 @@
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
-import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
-  /**
-   * Sandbox root directory for path validation. When set along with
-   * `sandboxMode`, `insertText` will reject paths that are restricted by
-   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
-   * sandbox check exercisable by plain-function tests.
-   */
-  sandboxRoot?: string;
-  sandboxMode?: SandboxMode;
 }
 
 /**
- * Inserts `text` into `filePath` after the given 1-indexed `line` (0 inserts before the first
+ * Inserts `text` into `target` (resolved through `sb`) after the given 1-indexed `line` (0 inserts before the first
  * line).
  *
  * The read-modify-write runs under `withFileMutationQueue` so a concurrent edit/write/insert/
  * remove on the same path can't interleave with it.
  */
-export async function insertText(filePath: string, line: number, text: string, opts: InsertOptions = {}): Promise<void> {
+export async function insertText(sb: Sandbox, target: string, line: number, text: string, opts: InsertOptions = {}): Promise<void> {
   if (!Number.isInteger(line) || line < 0) {
     throw new Error(`line must be a non-negative integer, got ${line}`);
   }
 
-  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
-  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
-  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
-  }
+  const filePath = sb.resolve(target);
 
   await withFileMutationQueue(filePath, async () => {
     let content: string;
@@ -62,7 +49,7 @@ export async function insertText(filePath: string, line: number, text: string, o
   });
 }
 
-export function registerInsertTool(pi: ExtensionAPI) {
+export function registerInsertTool(pi: ToolRegistry) {
   pi.registerTool({
     ...INSERT_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(INSERT_TOOL_DEFINITION.name, INSERT_TOOL_DEFINITION.parameters),
@@ -71,8 +58,7 @@ export function registerInsertTool(pi: ExtensionAPI) {
       return oneLine(text + theme.fg("toolOutput", ` after line ${args.line}`));
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
-      await insertText(filePath, params.line, params.text, { signal });
+      await insertText(sandboxFor(ctx.cwd), params.path, params.line, params.text, { signal });
 
       return {
         content: [{ type: "text", text: `Inserted text into ${params.path} after line ${params.line}.` }],

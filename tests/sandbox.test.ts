@@ -1,279 +1,272 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
-import {
-  directoryIsSafe,
-  fileIsSafe,
-  resolveSandboxPath,
-  isEntrySandboxSafe,
-  getSandboxState,
-  setSandboxState,
-  cycleSandboxState,
-  READ_RESTRICTED_GLOBS,
-  EDIT_RESTRICTED_GLOBS,
-} from "../src/sandbox.ts";
+import { RESTRICTED_GLOBS, isInside, isRestricted } from "../src/sandbox/policy.ts";
+import { Sandbox, SandboxError, getSandboxState, sandboxFor, setSandboxState } from "../src/sandbox/sandbox.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
+// A root that does not exist on disk: the lexical checks must still work (B2, B3).
 const root = path.resolve("/project");
+const sandbox = new Sandbox(root);
 
-test("the project root itself is safe in both modes", () => {
-  assert.equal(directoryIsSafe(root, ".", "read"), true);
-  assert.equal(directoryIsSafe(root, "", "edit"), true);
-  assert.equal(fileIsSafe(root, ".", "read"), true);
-});
+const CASE_INSENSITIVE = process.platform === "win32" || process.platform === "darwin";
 
-test("an ordinary child path is safe in both modes", () => {
-  assert.equal(fileIsSafe(root, "src/index.ts", "read"), true);
-  assert.equal(fileIsSafe(root, "src/index.ts", "edit"), true);
-  assert.equal(directoryIsSafe(root, "src", "read"), true);
-});
-
-test("rejects paths that escape the root, regardless of mode", () => {
-  assert.equal(directoryIsSafe(root, "../outside", "read"), false);
-  assert.equal(directoryIsSafe(root, "../outside", "edit"), false);
-  assert.equal(fileIsSafe(root, "../../etc/passwd", "read"), false);
-});
-
-test("rejects absolute paths outside the root", () => {
-  const outside = process.platform === "win32" ? "C:\\Windows" : "/etc";
-  assert.equal(fileIsSafe(root, outside, "edit"), false);
-});
-
-test("edit mode restricts .git and .ssh", () => {
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
-  assert.equal(directoryIsSafe(root, ".git", "edit"), false);
-  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "edit"), false);
-});
-
-test("read mode restricts .ssh and .git", () => {
-  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), false);
-  assert.equal(directoryIsSafe(root, ".ssh", "read"), false);
-  assert.equal(fileIsSafe(root, ".git/config", "read"), false);
-});
-
-test("both modes restrict .env files", () => {
-  assert.equal(fileIsSafe(root, ".env", "read"), false);
-  assert.equal(fileIsSafe(root, ".env", "edit"), false);
-  assert.equal(fileIsSafe(root, ".env.local", "read"), false);
-  assert.equal(fileIsSafe(root, ".env.local", "edit"), false);
-});
-
-test("read mode also restricts .aws and .netrc", () => {
-  assert.equal(fileIsSafe(root, ".aws/credentials", "read"), false);
-  assert.equal(fileIsSafe(root, ".netrc", "read"), false);
-});
-
-test("both modes restrict the broader credential-store additions", () => {
-  for (const mode of ["read", "edit"] as const) {
-    assert.equal(fileIsSafe(root, ".npmrc", mode), false);
-    assert.equal(fileIsSafe(root, ".pgpass", mode), false);
-    assert.equal(fileIsSafe(root, ".docker/config.json", mode), false);
-    assert.equal(fileIsSafe(root, ".kube/config", mode), false);
-    assert.equal(fileIsSafe(root, ".gnupg/private-keys-v1.d/foo", mode), false);
-    assert.equal(fileIsSafe(root, ".config/gcloud/credentials.db", mode), false);
-    assert.equal(fileIsSafe(root, "id_rsa", mode), false);
-    assert.equal(fileIsSafe(root, "deploy/id_ed25519", mode), false);
+async function trySymlink(t: { skip(msg: string): void }, target: string, link: string): Promise<boolean> {
+  try {
+    await fs.symlink(target, link, "dir");
+    return true;
+  } catch (err) {
+    t.skip(`cannot create symlinks here: ${(err as Error).message}`);
+    return false;
   }
-  // Public keys aren't secret and aren't covered by the bare-filename patterns.
-  assert.equal(fileIsSafe(root, "id_rsa.pub", "read"), true);
+}
+
+function rejection(fn: () => unknown): SandboxError["reason"] | undefined {
+  try {
+    fn();
+    return undefined;
+  } catch (err) {
+    assert.ok(err instanceof SandboxError, `expected SandboxError, got ${String(err)}`);
+    return err.reason;
+  }
+}
+
+// --- policy.ts -------------------------------------------------------------------------------
+
+test("policy: the protected patterns are exactly the credential stores plus .git", () => {
+  assert.deepEqual(
+    [...RESTRICTED_GLOBS],
+    [
+      "**/.ssh/**",
+      "**/.aws/**",
+      "**/.env*",
+      "**/.netrc",
+      "**/.npmrc",
+      "**/.pgpass",
+      "**/.docker/**",
+      "**/.kube/**",
+      "**/.gnupg/**",
+      "**/.config/gcloud/**",
+      "**/id_rsa",
+      "**/id_dsa",
+      "**/id_ecdsa",
+      "**/id_ed25519",
+      "**/.git/**",
+    ]
+  );
 });
 
-test("restricted globs apply regardless of nesting depth", () => {
-  assert.equal(fileIsSafe(root, "packages/api/.git/config", "edit"), false);
-  assert.equal(fileIsSafe(root, "packages/api/.env", "read"), false);
-  assert.equal(fileIsSafe(root, "nested/deep/.ssh/id_rsa", "read"), false);
-});
-
-test("restricted glob lists are exactly what each mode advertises", () => {
-  const credentialGlobs = [
-    "**/.ssh/**",
-    "**/.aws/**",
-    "**/.env*",
-    "**/.netrc",
-    "**/.npmrc",
-    "**/.pgpass",
-    "**/.docker/**",
-    "**/.kube/**",
-    "**/.gnupg/**",
-    "**/.config/gcloud/**",
-    "**/id_rsa",
-    "**/id_dsa",
-    "**/id_ecdsa",
-    "**/id_ed25519",
+test("policy: isRestricted matches at any depth and leaves ordinary files alone", () => {
+  const restricted = [
+    ".env",
+    ".env.local",
+    "packages/api/.env",
+    ".ssh/id_rsa",
+    "nested/deep/.ssh/config",
+    ".aws/credentials",
+    ".netrc",
+    ".npmrc",
+    ".pgpass",
+    ".docker/config.json",
+    ".kube/config",
+    ".gnupg/private-keys-v1.d/foo",
+    ".config/gcloud/credentials.db",
+    "id_rsa",
+    "deploy/id_ed25519",
+    "id_dsa",
+    "id_ecdsa",
+    ".git/config",
+    "packages/api/.git/HEAD",
   ];
-  const restrictedGlobs = [...credentialGlobs, "**/.git/**"];
-  // .git/** is a disclosure risk (embedded credentials, historical secrets in objects/packed-refs)
-  // as well as a mutation risk, so both modes restrict it identically.
-  assert.deepEqual([...READ_RESTRICTED_GLOBS], restrictedGlobs);
-  assert.deepEqual([...EDIT_RESTRICTED_GLOBS], restrictedGlobs);
+  for (const rel of restricted) assert.equal(isRestricted(rel), true, rel);
+
+  for (const rel of ["src/index.ts", "id_rsa.pub", ".config/other/x", "README.md", ""]) {
+    assert.equal(isRestricted(rel), false, rel);
+  }
 });
 
-test("case sensitivity of restricted globs matches the current platform", () => {
-  const caseInsensitive = process.platform === "win32" || process.platform === "darwin";
-  // Not ".SSH/id_rsa": the bare "**/id_rsa" glob would block that on every platform regardless.
-  assert.equal(fileIsSafe(root, ".SSH/config", "read"), !caseInsensitive);
+test("policy: case sensitivity follows the platform's filesystem", () => {
+  assert.equal(isRestricted(".SSH/config"), CASE_INSENSITIVE);
 });
 
-test("resolveSandboxPath returns the resolved path on success and throws on violation", () => {
-  assert.equal(resolveSandboxPath(root, "src/index.ts", "read"), path.resolve(root, "src/index.ts"));
-  assert.throws(() => resolveSandboxPath(root, "../outside", "edit"), /outside the project root/);
-  assert.throws(() => resolveSandboxPath(root, ".git/config", "edit"), /restricted in edit mode/);
+test("policy: isInside rejects parent escapes and absolute paths", () => {
+  assert.equal(isInside(""), true);
+  assert.equal(isInside("src/a.ts"), true);
+  assert.equal(isInside("..foo"), true); // a file name starting with dots is still inside
+  assert.equal(isInside(".."), false);
+  assert.equal(isInside(`..${path.sep}x`), false);
+  assert.equal(isInside(path.resolve("/elsewhere")), false);
 });
 
-test("state 'on' enforces both containment and restricted globs (the default)", (t) => {
+// --- B1: state switch ------------------------------------------------------------------------
+
+test("B1: the switch starts on, and sandboxFor snapshots it per call", (t) => {
   t.after(() => setSandboxState("on"));
-  setSandboxState("on");
-
   assert.equal(getSandboxState(), "on");
-  assert.equal(fileIsSafe(root, "../outside", "edit"), false);
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
-});
+  assert.equal(sandboxFor(root).enforced, true);
 
-test("state 'off' bypasses everything, including root containment", (t) => {
-  t.after(() => setSandboxState("on"));
+  const snapshot = sandboxFor(root);
   setSandboxState("off");
-
-  assert.equal(getSandboxState(), "off");
-  assert.equal(fileIsSafe(root, "../outside", "edit"), true);
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), true);
-  assert.equal(fileIsSafe(root, ".ssh/id_rsa", "read"), true);
-  assert.doesNotThrow(() => resolveSandboxPath(root, "../outside", "edit"));
-  assert.equal(resolveSandboxPath(root, ".git/config", "edit"), path.resolve(root, ".git/config"));
+  assert.equal(snapshot.enforced, true, "a sandbox already handed out keeps its state");
+  assert.equal(sandboxFor(root).enforced, false);
 });
 
-test("cycleSandboxState toggles on <-> off", (t) => {
-  t.after(() => setSandboxState("on"));
-  setSandboxState("on");
+// --- B2: root containment --------------------------------------------------------------------
 
-  assert.equal(cycleSandboxState(), "off");
-  assert.equal(cycleSandboxState(), "on");
-  assert.equal(cycleSandboxState(), "off");
+test("B2: resolve returns absolute paths inside the root", () => {
+  assert.equal(sandbox.resolve(""), root);
+  assert.equal(sandbox.resolve("."), root);
+  assert.equal(sandbox.resolve("src/index.ts"), path.join(root, "src", "index.ts"));
+  assert.equal(sandbox.resolve(path.join(root, "src")), path.join(root, "src"));
 });
 
-test("isEntrySandboxSafe filters restricted entries during a directory walk, symlink or not", () => {
-  assert.equal(isEntrySandboxSafe(root, ".ssh", "read", false), false);
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), false);
-  assert.equal(isEntrySandboxSafe(root, "src/index.ts", "read", false), true);
-  assert.equal(isEntrySandboxSafe(root, ".git/config", "edit", false), false);
-  assert.equal(isEntrySandboxSafe(root, ".git/config", "read", false), false);
+test("B2: resolve rejects parent escapes and absolute paths outside the root", () => {
+  assert.equal(rejection(() => sandbox.resolve("../outside")), "outside-root");
+  assert.equal(rejection(() => sandbox.resolve("../../etc/passwd")), "outside-root");
+  assert.equal(rejection(() => sandbox.resolve(process.platform === "win32" ? "C:\\Windows" : "/etc")), "outside-root");
 });
 
-test("isEntrySandboxSafe respects sandbox state the same way resolveSandboxPath does", (t) => {
-  t.after(() => setSandboxState("on"));
-
-  setSandboxState("off");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), true);
-});
-
-test("isEntrySandboxSafe's stateOverride wins over this module's own sandboxState", (t) => {
-  t.after(() => setSandboxState("on"));
-
-  // Module state says "on" (restricted), but an explicit "off" override — as grepWorker.ts must
-  // pass, since its own import of this module starts from a separate, independent "on" — bypasses
-  // everything, and vice versa.
-  setSandboxState("on");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "off"), true);
-
-  setSandboxState("off");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false, "on"), false);
-
-  // No override falls back to this module's own current state, as before.
-  setSandboxState("on");
-  assert.equal(isEntrySandboxSafe(root, ".ssh/id_rsa", "read", false), false);
-});
-
-test("works against a real fixture tree", async (t) => {
-  const dir = await makeFixture({
-    "src/index.ts": "export {};",
-    ".git/config": "[core]",
-    ".ssh/id_rsa": "not a real key",
-    ".env": "SECRET=1",
-  });
+test("B2: resolve rejects an in-root symlink that points outside, even for files not yet created", async (t) => {
+  const dir = await makeFixture({ "project/src/a.ts": "", "outside/secret.txt": "x" });
   t.after(() => cleanupFixture(dir));
+  const project = path.join(dir, "project");
+  if (!(await trySymlink(t, path.join(dir, "outside"), path.join(project, "link")))) return;
 
-  assert.equal(fileIsSafe(dir, "src/index.ts", "read"), true);
-  assert.equal(fileIsSafe(dir, ".git/config", "edit"), false);
-  assert.equal(fileIsSafe(dir, ".git/config", "read"), false);
-  assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "read"), false);
-  assert.equal(fileIsSafe(dir, ".ssh/id_rsa", "edit"), false);
-  assert.equal(fileIsSafe(dir, ".env", "read"), false);
-  assert.equal(fileIsSafe(dir, ".env", "edit"), false);
-
-  // isEntrySandboxSafe against entries as find/grep/list's walks would produce them
-  // (paths relative to the fixture root, exactly as fast-glob/readdir report them).
-  assert.equal(isEntrySandboxSafe(dir, "src/index.ts", "read", false), true);
-  assert.equal(isEntrySandboxSafe(dir, ".ssh/id_rsa", "read", false), false);
-  assert.equal(isEntrySandboxSafe(dir, ".git/config", "edit", false), false);
+  const sb = new Sandbox(project);
+  assert.equal(rejection(() => sb.resolve("link/secret.txt")), "outside-root");
+  assert.equal(rejection(() => sb.resolve("link/not-yet/new.txt")), "outside-root");
 });
 
-test("rejects a symlink inside root that points outside it, regardless of mode", async (t) => {
-  const realRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-tools-sandbox-root-"));
-  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "pi-tools-sandbox-outside-"));
-  await fs.writeFile(path.join(outside, "secret.txt"), "top secret", "utf8");
-  t.after(async () => {
-    await fs.rm(realRoot, { recursive: true, force: true });
-    await fs.rm(outside, { recursive: true, force: true });
-  });
+test("B2: resolve allows an in-root symlink that points inside", async (t) => {
+  const dir = await makeFixture({ "real-target/file.txt": "ok" });
+  t.after(() => cleanupFixture(dir));
+  if (!(await trySymlink(t, path.join(dir, "real-target"), path.join(dir, "link")))) return;
 
-  const link = path.join(realRoot, "link");
-  try {
-    await fs.symlink(outside, link, "dir");
-  } catch (err) {
-    t.skip(`cannot create symlinks in this environment: ${(err as Error).message}`);
-    return;
+  assert.equal(new Sandbox(dir).resolve("link/file.txt"), path.join(dir, "link", "file.txt"));
+});
+
+test("B2: relative gives the checked path relative to the root", () => {
+  assert.equal(sandbox.relative("."), "");
+  assert.equal(sandbox.relative("src/a.ts"), path.join("src", "a.ts"));
+  assert.equal(rejection(() => sandbox.relative("../x")), "outside-root");
+});
+
+// --- B3: protected paths ---------------------------------------------------------------------
+
+test("B3: resolve rejects protected paths, at any depth", () => {
+  for (const target of [".git", ".git/config", ".ssh/id_rsa", ".env", "packages/api/.env", ".config/gcloud/x"]) {
+    assert.equal(rejection(() => sandbox.resolve(target)), "restricted", target);
   }
-
-  assert.equal(fileIsSafe(realRoot, "link/secret.txt", "read"), false);
-  assert.equal(fileIsSafe(realRoot, "link/secret.txt", "edit"), false);
-  assert.equal(isEntrySandboxSafe(realRoot, "link/secret.txt", "read", true), false);
+  assert.equal(sandbox.resolve("id_rsa.pub"), path.join(root, "id_rsa.pub"));
 });
 
-test("catches a symlink that points at a restricted directory under a disguised name", async (t) => {
-  const realRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-tools-sandbox-root-"));
-  t.after(() => fs.rm(realRoot, { recursive: true, force: true }));
+test("B3: a symlink with an innocent name pointing at .git is caught by its real path", async (t) => {
+  const dir = await makeFixture({ ".git/config": "[core]" });
+  t.after(() => cleanupFixture(dir));
+  if (!(await trySymlink(t, path.join(dir, ".git"), path.join(dir, "totally-not-git")))) return;
 
-  await fs.mkdir(path.join(realRoot, ".git"));
-  await fs.writeFile(path.join(realRoot, ".git", "config"), "[core]", "utf8");
-
-  const link = path.join(realRoot, "totally-not-git");
-  try {
-    await fs.symlink(path.join(realRoot, ".git"), link, "dir");
-  } catch (err) {
-    t.skip(`cannot create symlinks in this environment: ${(err as Error).message}`);
-    return;
-  }
-
-  // The lexical name ("totally-not-git") wouldn't match "**/.git/**" on its own —
-  // only resolving the symlink's real target catches it.
-  assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "edit"), false);
-  assert.equal(isEntrySandboxSafe(realRoot, "totally-not-git/config", "edit", true), false);
-  // .git is restricted in read mode too, so the same symlink is caught there as well.
-  assert.equal(fileIsSafe(realRoot, "totally-not-git/config", "read"), false);
+  assert.equal(rejection(() => new Sandbox(dir).resolve("totally-not-git/config")), "restricted");
 });
 
-test("still allows a symlink inside root that points to an unrestricted target inside it", async (t) => {
-  const realRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-tools-sandbox-root-"));
-  t.after(() => fs.rm(realRoot, { recursive: true, force: true }));
+// --- B4: walk entries ------------------------------------------------------------------------
 
-  await fs.mkdir(path.join(realRoot, "real-target"));
-  // Must exist: isEntrySandboxSafe resolves a symlinked entry's real path and fails closed if it can't.
-  await fs.writeFile(path.join(realRoot, "real-target", "file.txt"), "ok", "utf8");
-  const link = path.join(realRoot, "link");
-  try {
-    await fs.symlink(path.join(realRoot, "real-target"), link, "dir");
-  } catch (err) {
-    t.skip(`cannot create symlinks in this environment: ${(err as Error).message}`);
-    return;
-  }
-
-  assert.equal(fileIsSafe(realRoot, "link/file.txt", "read"), true);
-  assert.equal(directoryIsSafe(realRoot, "link", "edit"), true);
-  assert.equal(isEntrySandboxSafe(realRoot, "link/file.txt", "read", true), true);
+test("B4: entryFilter drops protected entries and keeps ordinary ones", () => {
+  const allow = sandbox.entryFilter(root);
+  assert.equal(allow("src/index.ts", false), true);
+  assert.equal(allow(".ssh", false), false);
+  assert.equal(allow(".ssh/id_rsa", false), false);
+  assert.equal(allow(".git/config", false), false);
+  assert.equal(allow(path.join(root, ".env"), false), false, "absolute entry paths work too");
 });
 
-test("still resolves normally when root does not exist on disk (e.g. in unit tests)", () => {
-  assert.equal(fileIsSafe(root, "src/index.ts", "read"), true);
-  assert.equal(fileIsSafe(root, ".git/config", "edit"), false);
+test("B4: entryFilter matches relative to the project root, not the walked folder", () => {
+  const allow = sandbox.entryFilter(path.join(root, ".config"));
+  assert.equal(allow("gcloud/credentials.db", false), false);
+  assert.equal(allow("other/settings.json", false), true);
+});
+
+test("B4: entryFilter drops symlinks that escape the root or are broken, keeps in-root ones", async (t) => {
+  const dir = await makeFixture({ "project/real/file.txt": "ok", "outside/secret.txt": "x" });
+  t.after(() => cleanupFixture(dir));
+  const project = path.join(dir, "project");
+  if (!(await trySymlink(t, path.join(dir, "outside"), path.join(project, "escape")))) return;
+  await fs.symlink(path.join(project, "real"), path.join(project, "inside"), "dir");
+  await fs.symlink(path.join(project, "missing"), path.join(project, "broken"), "dir");
+
+  await fs.symlink(path.join(project, "real/file.txt"), path.join(project, ".env"));
+
+  const allow = new Sandbox(project).entryFilter(project);
+  assert.equal(allow("escape", true), false);
+  assert.equal(allow("broken", true), false);
+  assert.equal(allow("inside", true), true);
+  assert.equal(allow(".env", true), false, "a protected name is refused even if its target is harmless");
+});
+
+test("B4: entryFilter checks entries under a symlinked base by their real location", async (t) => {
+  const dir = await makeFixture({ ".config/gcloud/credentials.db": "x" });
+  t.after(() => cleanupFixture(dir));
+  if (!(await trySymlink(t, path.join(dir, ".config"), path.join(dir, "cfg")))) return;
+
+  const sb = new Sandbox(dir);
+  const allow = sb.entryFilter(sb.resolve("cfg"));
+  assert.equal(allow("gcloud/credentials.db", false), false);
+});
+
+// --- B5: paths reported by other programs ----------------------------------------------------
+
+test("B5: allowsReported filters root-relative paths by the protected patterns", () => {
+  assert.equal(sandbox.allowsReported("src/a.ts"), true);
+  assert.equal(sandbox.allowsReported(".env"), false);
+  assert.equal(sandbox.allowsReported("config/.git/HEAD"), false);
+});
+
+// --- B6: unenforced sandbox ------------------------------------------------------------------
+
+test("B6: an unenforced sandbox checks nothing", () => {
+  const off = new Sandbox(root, false);
+  assert.equal(off.resolve("../outside"), path.resolve(root, "../outside"));
+  assert.equal(off.resolve(".git/config"), path.join(root, ".git", "config"));
+  assert.equal(off.entryFilter(root)(".ssh/id_rsa", true), true);
+  assert.equal(off.allowsReported(".env"), true);
+  assert.equal(off.resolveLibraryFile([], "/anywhere/x.py"), path.resolve("/anywhere/x.py"));
+});
+
+// --- B7: error messages ----------------------------------------------------------------------
+
+test("B7: errors say which check failed", () => {
+  assert.throws(() => sandbox.resolve("../outside"), /Path "\.\.\/outside" is outside the project root/);
+  assert.throws(() => sandbox.resolve(".git/config"), /Path "\.git\/config" is restricted by the sandbox/);
+});
+
+test("B7: escaping the root wins over a protected name", () => {
+  assert.equal(rejection(() => sandbox.resolve("../elsewhere/.env")), "outside-root");
+});
+
+// --- B8: installed-package locations ---------------------------------------------------------
+
+test("B8: resolveLibraryFile allows files under a library root and rejects everything else", async (t) => {
+  const dir = await makeFixture({ "libs/pkg/a.py": "", "libs/pkg/.env": "SECRET=1", "elsewhere/b.py": "" });
+  t.after(() => cleanupFixture(dir));
+  const sb = new Sandbox(path.join(dir, "project"));
+  const roots = [path.join(dir, "libs")];
+
+  assert.equal(sb.resolveLibraryFile(roots, path.join(dir, "libs/pkg/a.py")), path.join(dir, "libs/pkg/a.py"));
+  assert.throws(
+    () => sb.resolveLibraryFile(roots, path.join(dir, "elsewhere/b.py")),
+    /Library file ".*b\.py" is outside the installed-package locations this tool may read/
+  );
+  assert.throws(() => sb.resolveLibraryFile(roots, path.join(dir, "libs/../elsewhere/b.py")), /outside/);
+  assert.throws(() => sb.resolveLibraryFile(roots, path.join(dir, "libs/pkg/.env")), /Library file .* is restricted by the sandbox/);
+  assert.equal(sb.allowsLibraryFile(roots, path.join(dir, "libs/pkg/a.py")), true);
+  assert.equal(sb.allowsLibraryFile(roots, path.join(dir, "elsewhere/b.py")), false);
+});
+
+test("B8: a symlink inside a library root that escapes it is rejected", async (t) => {
+  const dir = await makeFixture({ "libs/.keep": "", "elsewhere/b.py": "" });
+  t.after(() => cleanupFixture(dir));
+  if (!(await trySymlink(t, path.join(dir, "elsewhere"), path.join(dir, "libs/escape")))) return;
+
+  const sb = new Sandbox(dir);
+  assert.equal(sb.allowsLibraryFile([path.join(dir, "libs")], path.join(dir, "libs/escape/b.py")), false);
 });

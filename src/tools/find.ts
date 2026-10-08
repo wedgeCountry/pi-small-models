@@ -1,9 +1,10 @@
 import fg from "fast-glob";
 import type {Readable} from "node:stream";
 import {DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs} from "../ignore.ts";
-import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
-import {resolveSandboxPath, isEntrySandboxSafe} from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {oneLine, callName} from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -20,19 +21,18 @@ export interface FindResult {
   truncated: boolean;
 }
 
-/** Finds files/directories under `base` matching a glob pattern. */
-export async function findFiles(base: string, pattern: string, opts: FindOptions = {}): Promise<FindResult> {
+/** Finds files/directories under `target` (resolved through `sb`) matching a glob pattern. */
+export async function findFiles(sb: Sandbox, target: string, pattern: string, opts: FindOptions = {}): Promise<FindResult> {
+  const base = sb.resolve(target);
   const max = opts.maxResults ?? 200;
   opts.signal?.throwIfAborted();
 
   const entries = await streamGlob(base, pattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
-  // followSymbolicLinks: false only stops fast-glob from descending into a
-  // symlinked directory — a symlinked entry itself still comes back in the
-  // list, so re-check every entry against the sandbox (restricted globs
-  // apply regardless of symlink status; the symlink-escape check only needs
-  // to run for entries actually flagged as symlinks) before disclosing them.
+  // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
+  // symlinked entry itself still comes back, so every entry goes through the sandbox's filter.
+  const allowed = sb.entryFilter(base);
   const matches = entries
-    .filter((e) => isEntrySandboxSafe(base, e.path, "read", e.dirent.isSymbolicLink()))
+    .filter((e) => allowed(e.path, e.dirent.isSymbolicLink()))
     .map((e) => e.path)
     .sort();
   const truncated = matches.length > max;
@@ -92,7 +92,7 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
   });
 }
 
-export function registerFindTool(pi: ExtensionAPI) {
+export function registerFindTool(pi: ToolRegistry) {
   pi.registerTool({
     ...FIND_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(FIND_TOOL_DEFINITION.name, FIND_TOOL_DEFINITION.parameters),
@@ -103,9 +103,8 @@ export function registerFindTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await findFiles(base, params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
+      const result = await findFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
 
       const text = result.matches.length
           ? result.matches.join("\n") +

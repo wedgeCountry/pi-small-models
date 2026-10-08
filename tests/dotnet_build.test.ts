@@ -2,12 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dotnetBuild } from "../src/tools/dotnet_build.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("handles missing dotnet project gracefully", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await dotnetBuild(dir);
+  const result = await dotnetBuild(new Sandbox(dir));
   // Build should fail (no .csproj/.sln in fixture), but shouldn't crash
   assert.equal(result.success, false);
   // Output should mention the failure reason (no project, or dotnet not found)
@@ -20,7 +21,7 @@ test("rejects when the signal is already aborted", async (t) => {
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => dotnetBuild(dir, { signal: ac.signal }));
+  await assert.rejects(() => dotnetBuild(new Sandbox(dir), { signal: ac.signal }));
 });
 
 test("accepts configuration option", async (t) => {
@@ -28,7 +29,7 @@ test("accepts configuration option", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   // This will still fail (no dotnet project), but we're testing that the option is accepted
-  const result = await dotnetBuild(dir, { configuration: "Release" });
+  const result = await dotnetBuild(new Sandbox(dir), { configuration: "Release" });
   assert.equal(result.success, false);
   // Should mention dotnet not found or build failure, not crash
   assert.ok(typeof result.output === "string");
@@ -39,7 +40,7 @@ test("accepts path option", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   // This will still fail (no dotnet project), but we're testing that the option is accepted
-  const result = await dotnetBuild(dir, { path: "MyProject.csproj" });
+  const result = await dotnetBuild(new Sandbox(dir), { path: "MyProject.csproj" });
   assert.equal(result.success, false);
   // Should mention dotnet not found or build failure, not crash
   assert.ok(typeof result.output === "string");

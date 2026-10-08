@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { describeToolCall, gateToolCall } from "../src/permissionGate.ts";
-import { setSandboxState } from "../src/sandbox.ts";
+import { createGatedRegistry, createPermissionGate, describeToolCall } from "../src/sandbox/permissionGate.ts";
+import { setSandboxState } from "../src/sandbox/sandbox.ts";
+
+const gateToolCall = createPermissionGate(new Set(["read", "write", "copy", "move"]));
 
 function makeEvent(toolName: string, input: Record<string, unknown>): ToolCallEvent {
   return { type: "tool_call", toolCallId: "test-call", toolName, input } as ToolCallEvent;
@@ -73,7 +75,7 @@ test("gateToolCall lets everything through while sandbox is on, without promptin
   assert.equal(calls.confirm, 0);
 });
 
-test("gateToolCall ignores tool names this project doesn't register, even while off", async (t) => {
+test("gateToolCall ignores tool names it wasn't given, even while off", async (t) => {
   t.after(() => setSandboxState("on"));
   setSandboxState("off");
 
@@ -123,4 +125,25 @@ test("gateToolCall blocks a gated call while off without prompting when no UI is
   const result = await gateToolCall(makeEvent("read", { path: "src/index.ts" }), ctx);
   assert.equal((result as { block?: boolean } | undefined)?.block, true);
   assert.equal(calls.confirm, 0);
+});
+
+test("createGatedRegistry forwards every registration and gates exactly the registered names", async (t) => {
+  t.after(() => setSandboxState("on"));
+  const forwarded: string[] = [];
+  const { registry, gatedTools } = createGatedRegistry({
+    registerTool: (tool) => {
+      forwarded.push(tool.name);
+    },
+  });
+  registry.registerTool({ name: "dotnet_build" } as Parameters<typeof registry.registerTool>[0]);
+  registry.registerTool({ name: "npm_list" } as Parameters<typeof registry.registerTool>[0]);
+
+  assert.deepEqual(forwarded, ["dotnet_build", "npm_list"]);
+  assert.deepEqual([...gatedTools], ["dotnet_build", "npm_list"]);
+
+  setSandboxState("off");
+  const gate = createPermissionGate(gatedTools);
+  const { ctx } = makeContext(false, true);
+  assert.equal((await gate(makeEvent("dotnet_build", {}), ctx) as { block?: boolean } | undefined)?.block, true);
+  assert.equal(await gate(makeEvent("bash", {}), ctx), undefined);
 });

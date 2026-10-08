@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -32,7 +32,7 @@ export interface ReadResult {
 }
 
 /**
- * Reads `filePath` as UTF-8 text and returns it as 1-indexed `{line, text}` pairs — the same line
+ * Reads `target` (resolved through `sb`) as UTF-8 text and returns it as 1-indexed `{line, text}` pairs — the same line
  * numbering `grep` reports and `insert` expects, so a model can chain grep -> read -> insert calls
  * against consistent line numbers. Lines are split on `\r\n`/`\n` the same way `insertText` does,
  * so a file's reported line count (and therefore valid `offset`/`insert` targets) agree between
@@ -45,7 +45,8 @@ export interface ReadResult {
  * kicked in or because the caller's own `limit` did — and the last returned line number tells the
  * caller where to resume with a follow-up `offset`.
  */
-export async function readFile(filePath: string, opts: ReadOptions = {}): Promise<ReadResult> {
+export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = {}): Promise<ReadResult> {
+  const filePath = sb.resolve(target);
   if (opts.offset !== undefined && (!Number.isInteger(opts.offset) || opts.offset < 1)) {
     throw new Error(`offset must be a positive integer, got ${opts.offset}`);
   }
@@ -91,19 +92,7 @@ export async function readFile(filePath: string, opts: ReadOptions = {}): Promis
   };
 }
 
-/**
- * The sandboxed entry point to `read`: resolves `target` against the project `root` through
- * `resolveSandboxPath(..., "read")` (root containment, symlink escapes, restricted globs such as
- * `.env*`/`.ssh`/`.git`) and only then reads it with `readFile`. The `read` tool's own `execute()`
- * uses this, and so does every tool that reads a file's contents on top of read (`peek`), so
- * they all share exactly one sandboxing path rather than each resolving paths on their own.
- */
-export async function readProjectFile(root: string, target: string, opts: ReadOptions = {}): Promise<ReadResult> {
-  const filePath = resolveSandboxPath(root, target, "read");
-  return readFile(filePath, opts);
-}
-
-export function registerReadTool(pi: ExtensionAPI) {
+export function registerReadTool(pi: ToolRegistry) {
   pi.registerTool({
     ...READ_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(READ_TOOL_DEFINITION.name, READ_TOOL_DEFINITION.parameters),
@@ -117,7 +106,7 @@ export function registerReadTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await readProjectFile(ctx.cwd, params.path, { offset: params.offset, limit: params.limit, signal });
+      const result = await readFile(sandboxFor(ctx.cwd), params.path, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
       if (result.truncated) {

@@ -1,9 +1,8 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DOTNET_BUILD_TOOL_DEFINITION } from "../tool_definitions/dotnet_build.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -12,7 +11,7 @@ const execFile = promisify(execFileCb);
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — builds can produce substantial output
 
 export interface DotnetBuildOptions {
-  /** Path (relative to `cwd`) to the project or solution to build. Omit for the current directory. */
+  /** Path (resolved through the sandbox) to the project or solution to build. Omit for the current directory. */
   path?: string;
   /** Build configuration: Debug or Release. */
   configuration?: "Debug" | "Release";
@@ -29,11 +28,12 @@ export interface DotnetBuildResult {
 /**
  * Runs `dotnet build` on a project or solution.
  */
-export async function dotnetBuild(cwd: string, opts: DotnetBuildOptions = {}): Promise<DotnetBuildResult> {
+export async function dotnetBuild(sb: Sandbox, opts: DotnetBuildOptions = {}): Promise<DotnetBuildResult> {
   const args = ["build"];
   
-  if (opts.path) {
-    args.push(opts.path);
+  const scope = opts.path ? sb.relative(opts.path) : "";
+  if (scope) {
+    args.push(scope);
   }
   
   if (opts.configuration) {
@@ -46,7 +46,7 @@ export async function dotnetBuild(cwd: string, opts: DotnetBuildOptions = {}): P
   
   try {
     const result = await execFile("dotnet", args, { 
-      cwd, 
+      cwd: sb.root, 
       signal: opts.signal, 
       maxBuffer: MAX_BUFFER,
     });
@@ -87,7 +87,7 @@ function describeError(err: unknown): string {
   return e.stderr?.trim() || e.message || String(err);
 }
 
-export function registerDotnetBuildTool(pi: ExtensionAPI) {
+export function registerDotnetBuildTool(pi: ToolRegistry) {
   pi.registerTool({
     ...DOTNET_BUILD_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(DOTNET_BUILD_TOOL_DEFINITION.name, DOTNET_BUILD_TOOL_DEFINITION.parameters),
@@ -102,15 +102,8 @@ export function registerDotnetBuildTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let relPath: string | undefined;
-      if (params.path) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relPath = rel === "" ? undefined : rel;
-      }
-
-      const result = await dotnetBuild(ctx.cwd, { 
-        path: relPath, 
+      const result = await dotnetBuild(sandboxFor(ctx.cwd), { 
+        path: params.path, 
         configuration: params.configuration as "Debug" | "Release" | undefined,
         signal 
       });

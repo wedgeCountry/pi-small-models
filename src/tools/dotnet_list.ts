@@ -1,7 +1,6 @@
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DOTNET_LIST_TOOL_DEFINITION } from "../tool_definitions/dotnet_list.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
@@ -9,7 +8,7 @@ import { runCommand, CommandNotFoundError, describeCommandError } from "../runCo
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — package lists can be substantial for large solutions
 
 export interface DotnetListOptions {
-  /** Path (relative to `cwd`) to the project or solution to list packages for. Omit for the current directory. */
+  /** Path (resolved through the sandbox) to the project or solution to list packages for. Omit for the current directory. */
   path?: string;
   /** Show available updates for packages. */
   outdated?: boolean;
@@ -36,13 +35,14 @@ export interface DotnetListResult {
 /**
  * Runs `dotnet package list` on a project or solution.
  */
-export async function dotnetList(cwd: string, opts: DotnetListOptions = {}): Promise<DotnetListResult> {
+export async function dotnetList(sb: Sandbox, opts: DotnetListOptions = {}): Promise<DotnetListResult> {
   // Use "noun first" form (dotnet package list) for .NET 10+, but fall back to "verb first" (dotnet list package) for .NET 6-9
   // We'll use the newer form and let dotnet handle compatibility
   const args = ["package", "list"];
   
-  if (opts.path) {
-    args.push(opts.path);
+  const scope = opts.path ? sb.relative(opts.path) : "";
+  if (scope) {
+    args.push(scope);
   }
   
   if (opts.outdated) {
@@ -75,7 +75,7 @@ export async function dotnetList(cwd: string, opts: DotnetListOptions = {}): Pro
 
   try {
     ({ stdout, stderr, exitCode } = await runCommand("dotnet", args, {
-      cwd,
+      cwd: sb.root,
       signal: opts.signal,
       maxBuffer: MAX_BUFFER,
     }));
@@ -97,7 +97,7 @@ export async function dotnetList(cwd: string, opts: DotnetListOptions = {}): Pro
   return { success, output, exitCode };
 }
 
-export function registerDotnetListTool(pi: ExtensionAPI) {
+export function registerDotnetListTool(pi: ToolRegistry) {
   pi.registerTool({
     ...DOTNET_LIST_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(DOTNET_LIST_TOOL_DEFINITION.name, DOTNET_LIST_TOOL_DEFINITION.parameters),
@@ -127,15 +127,8 @@ export function registerDotnetListTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let relPath: string | undefined;
-      if (params.path) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relPath = rel === "" ? undefined : rel;
-      }
-
-      const result = await dotnetList(ctx.cwd, { 
-        path: relPath, 
+      const result = await dotnetList(sandboxFor(ctx.cwd), { 
+        path: params.path, 
         outdated: params.outdated,
         includeTransitive: params.includeTransitive,
         includePrerelease: params.includePrerelease,

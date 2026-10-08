@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ts from "typescript";
-import { isLibraryPathSafe } from "../../sandbox.ts";
+import type { Sandbox } from "../../sandbox/sandbox.ts";
 import type { ApiEntry, LibExtraction, LibraryInfo } from "./types.ts";
 import { ancestors, displayPath, isDirectory, isFile, realpathOr } from "./paths.ts";
 
@@ -331,16 +331,16 @@ class Extractor {
  * `.js` when no types ship at all), then lists its exports with the TypeScript checker — which
  * follows `export *` / `export { x } from` chains, merges overloads and reads JSDoc.
  *
- * Every file the compiler opens must pass `isLibraryPathSafe` against the project root, the
+ * Every file the compiler opens must pass `sb.allowsLibraryFile` against the project root, the
  * `node_modules` lookup chain and TypeScript's own lib directory; anything else looks absent.
  */
-export async function extractTsLibrary(root: string, pkg: string, opts: TsLibOptions = {}): Promise<LibExtraction> {
+export async function extractTsLibrary(sb: Sandbox, pkg: string, opts: TsLibOptions = {}): Promise<LibExtraction> {
   opts.signal?.throwIfAborted();
   pkg = pkg.trim();
   if (!NPM_NAME.test(pkg)) throw new Error(`"${pkg}" is not a valid npm package name`);
   const specifier = moduleSpecifier(pkg, opts.module);
 
-  const absRoot = path.resolve(root);
+  const absRoot = sb.root;
   const pkgDir = findPackageDir(absRoot, pkg);
   const typesDir = findPackageDir(absRoot, typesPackageName(pkg));
   if (!pkgDir && !typesDir) {
@@ -359,7 +359,7 @@ export async function extractTsLibrary(root: string, pkg: string, opts: TsLibOpt
   };
   const libDir = path.dirname(ts.getDefaultLibFilePath(baseOptions));
   const libRoots = [absRoot, ...nodeModulesChain(absRoot), libDir, ...[pkgDir, typesDir].filter((d): d is string => !!d).map(realpathOr)];
-  const allowed = (f: string) => isLibraryPathSafe(libRoots, f);
+  const allowed = (f: string) => sb.allowsLibraryFile(libRoots, f);
 
   const makeHost = (options: ts.CompilerOptions): ts.CompilerHost => {
     const host = ts.createCompilerHost(options, true);

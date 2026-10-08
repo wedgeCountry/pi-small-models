@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import fg from "fast-glob";
-import { resolveSandboxPath, resolveLibraryPath } from "../../sandbox.ts";
+import type { Sandbox } from "../../sandbox/sandbox.ts";
 import type { ApiEntry, LibExtraction, LibraryInfo } from "./types.ts";
 import { displayPath, isDirectory, isFile, realpathOr } from "./paths.ts";
 import { parseXmlDocMembers, xmlDocsToEntries } from "./xmlDocs.ts";
@@ -77,14 +77,14 @@ function projectsInSolution(slnPath: string): string[] {
 }
 
 /** Candidate project files: the given one, those in a given solution/dir, or all under the root. */
-function findProjects(root: string, project: string | undefined): string[] {
-  const target = project ? resolveSandboxPath(root, project, "read") : root;
+function findProjects(sb: Sandbox, project: string | undefined): string[] {
+  const target = project ? sb.resolve(project) : sb.root;
   if (isFile(target)) {
     if (PROJECT_EXTS.some((e) => target.endsWith(e))) return [target];
     if (/\.slnx?$/.test(target)) {
       return projectsInSolution(target).filter((p) => {
         try {
-          return isFile(resolveSandboxPath(root, p, "read"));
+          return isFile(sb.resolve(p));
         } catch {
           return false; // outside the project root / restricted
         }
@@ -106,12 +106,12 @@ function findProjects(root: string, project: string | undefined): string[] {
 }
 
 /** obj/project.assets.json for a project (also the artifacts/obj layout of UseArtifactsOutput). */
-function assetsFor(root: string, projectFile: string): string | undefined {
+function assetsFor(sb: Sandbox, projectFile: string): string | undefined {
   const name = path.basename(projectFile).replace(/\.[^.]+$/, "");
-  const candidates = [path.join(path.dirname(projectFile), "obj", "project.assets.json"), path.join(root, "artifacts", "obj", name, "project.assets.json")];
+  const candidates = [path.join(path.dirname(projectFile), "obj", "project.assets.json"), path.join(sb.root, "artifacts", "obj", name, "project.assets.json")];
   return candidates.find((c) => {
     try {
-      return isFile(resolveSandboxPath(root, path.relative(root, c), "read"));
+      return isFile(sb.resolve(c));
     } catch {
       return false;
     }
@@ -193,18 +193,18 @@ interface Located {
  * Microsoft.* names not in the assets file, in the SDK's framework reference packs — and returns
  * the XML doc files that document its compile-time assemblies.
  */
-function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { project: string; tfm: string; tfms: string[] } {
-  const projects = findProjects(root, opts.project);
+function locate(sb: Sandbox, pkg: string, opts: DotnetLibOptions): Located & { project: string; tfm: string; tfms: string[] } {
+  const projects = findProjects(sb, opts.project);
   if (projects.length === 0) throw new Error("No .NET project (.csproj/.fsproj/.vbproj) found under the project root. Pass project= to point at one.");
 
   const restored: { project: string; assets: AssetsFile; assetsPath: string }[] = [];
   for (const p of projects) {
-    const a = assetsFor(root, p);
+    const a = assetsFor(sb, p);
     const assets = a && readJson<AssetsFile>(a);
     if (assets) restored.push({ project: p, assets, assetsPath: a! });
   }
   if (restored.length === 0) {
-    throw new Error(`No obj/project.assets.json found for ${projects.map((p) => displayPath(root, p)).join(", ")}. Restore/build first (dotnet_build), then retry.`);
+    throw new Error(`No obj/project.assets.json found for ${projects.map((p) => displayPath(sb.root, p)).join(", ")}. Restore/build first (dotnet_build), then retry.`);
   }
 
   const lower = pkg.toLowerCase();
@@ -214,7 +214,7 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
     let targetKey = targetKeys[0];
     if (opts.tfm) {
       const i = tfms.findIndex((t) => t.toLowerCase() === opts.tfm!.toLowerCase());
-      if (i < 0) throw new Error(`Target framework "${opts.tfm}" not in ${displayPath(root, project)} (has: ${tfms.join(", ")})`);
+      if (i < 0) throw new Error(`Target framework "${opts.tfm}" not in ${displayPath(sb.root, project)} (has: ${tfms.join(", ")})`);
       targetKey = targetKeys[i];
     }
     if (!targetKey) continue;
@@ -246,14 +246,14 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
         const sameDir = dll.replace(/\.dll$/, ".xml");
         const candidates = [sameDir, ...files.filter((f) => f.toLowerCase().endsWith(`/${asm.toLowerCase()}.xml`) && /^(lib|ref)\//.test(f))];
         const found = candidates.map((c) => path.join(pkgDir, c)).find(isFile);
-        if (found) xmlFiles.push(resolveLibraryPath(libRoots, found));
+        if (found) xmlFiles.push(sb.resolveLibraryFile(libRoots, found));
         else undocumented.push(dll);
       }
       const nuspecFile = files.find((f) => f.endsWith(".nuspec"));
       let summary: string | undefined;
       const notes: string[] = [];
       if (nuspecFile && isFile(path.join(pkgDir, nuspecFile))) {
-        const n = nuspecInfo(fs.readFileSync(resolveLibraryPath(libRoots, path.join(pkgDir, nuspecFile)), "utf8"));
+        const n = nuspecInfo(fs.readFileSync(sb.resolveLibraryFile(libRoots, path.join(pkgDir, nuspecFile)), "utf8"));
         summary = n.description;
         if (n.projectUrl) notes.push(`Project URL: ${n.projectUrl}`);
       }
@@ -272,7 +272,7 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
         const asmXml = fs.readdirSync(dir).find((f) => f.toLowerCase() === `${lower}.xml`);
         if (asmXml) {
           const version = path.basename(path.dirname(path.dirname(dir)));
-          return { ...base, kind: "framework", id: pkg, version, pkgDir: dir, xmlFiles: [resolveLibraryPath(libRoots, path.join(dir, asmXml))], undocumented: [], dependencies: [], notes: [`Part of the shared framework (${path.basename(path.dirname(path.dirname(path.dirname(dir))))}).`], libRoots };
+          return { ...base, kind: "framework", id: pkg, version, pkgDir: dir, xmlFiles: [sb.resolveLibraryFile(libRoots, path.join(dir, asmXml))], undocumented: [], dependencies: [], notes: [`Part of the shared framework (${path.basename(path.dirname(path.dirname(path.dirname(dir))))}).`], libRoots };
         }
       }
       // A namespace rather than an assembly name: find the doc files that define types in it.
@@ -280,7 +280,7 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
       for (const dir of refDirs) {
         const hits: string[] = [];
         for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".xml"))) {
-          const full = resolveLibraryPath(libRoots, path.join(dir, f));
+          const full = sb.resolveLibraryFile(libRoots, path.join(dir, f));
           if (fs.readFileSync(full, "utf8").includes(needle)) hits.push(full);
           if (hits.length >= MAX_FRAMEWORK_SCAN_FILES) break;
         }
@@ -298,7 +298,7 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
   const known = restored.flatMap(({ assets }) => Object.entries(assets.libraries ?? {}).filter(([, v]) => v.type === "package").map(([k]) => k.split("/")[0]!));
   const list = [...new Set(known)].sort();
   throw new Error(
-    `Package "${pkg}" is not referenced by ${restored.map((r) => displayPath(root, r.project)).join(", ")}.` +
+    `Package "${pkg}" is not referenced by ${restored.map((r) => displayPath(sb.root, r.project)).join(", ")}.` +
       (list.length ? ` Restored packages: ${list.slice(0, 40).join(", ")}${list.length > 40 ? ", …" : ""}.` : "") +
       " If you just added it, restore/build first (dotnet_build)."
   );
@@ -308,12 +308,12 @@ function locate(root: string, pkg: string, opts: DotnetLibOptions): Located & { 
  * Locates a NuGet package (or framework assembly/namespace) for a project and lists its API from
  * its XML documentation files. `module` scopes to one namespace.
  */
-export async function extractDotnetLibrary(root: string, pkg: string, opts: DotnetLibOptions = {}): Promise<LibExtraction> {
+export async function extractDotnetLibrary(sb: Sandbox, pkg: string, opts: DotnetLibOptions = {}): Promise<LibExtraction> {
   opts.signal?.throwIfAborted();
   pkg = pkg.trim();
   if (!NUGET_ID.test(pkg) || pkg.includes("..")) throw new Error(`"${pkg}" is not a valid NuGet package id`);
-  const absRoot = path.resolve(root);
-  const loc = locate(absRoot, pkg, opts);
+  const absRoot = sb.root;
+  const loc = locate(sb, pkg, opts);
   opts.signal?.throwIfAborted();
 
   const entries: ApiEntry[] = [];

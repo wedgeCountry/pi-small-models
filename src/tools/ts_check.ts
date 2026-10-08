@@ -1,7 +1,6 @@
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TS_CHECK_TOOL_DEFINITION } from "../tool_definitions/ts_check.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
@@ -9,7 +8,7 @@ import { runCommand, CommandNotFoundError, describeCommandError } from "../runCo
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — type errors can produce substantial output
 
 export interface TsCheckOptions {
-  /** Path (relative to `cwd`) to the tsconfig.json or project folder. Omit for the current directory. */
+  /** Path (resolved through the sandbox) to the tsconfig.json or project folder. Omit for the current directory. */
   path?: string;
   /** Same as --project flag: compile the project given the path to its configuration file or folder. */
   project?: string;
@@ -30,11 +29,12 @@ export interface TsCheckResult {
 /**
  * Runs `tsc --noEmit` to type-check TypeScript code without emitting files.
  */
-export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<TsCheckResult> {
+export async function tsCheck(sb: Sandbox, opts: TsCheckOptions = {}): Promise<TsCheckResult> {
   const args = [];
   
   // Determine project path
-  const projectPath = opts.project || opts.path;
+  const target = opts.project || opts.path;
+  const projectPath = target ? sb.relative(target) : "";
   if (projectPath) {
     args.push("--project", projectPath);
   }
@@ -58,7 +58,7 @@ export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<T
   try {
     // tsc exits non-zero when there are type errors; runCommand still returns its output then.
     ({ stdout, stderr, exitCode } = await runCommand("npx", ["tsc", ...args], {
-      cwd,
+      cwd: sb.root,
       signal: opts.signal,
       maxBuffer: MAX_BUFFER,
     }));
@@ -85,7 +85,7 @@ export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<T
   return { success, output, exitCode };
 }
 
-export function registerTsCheckTool(pi: ExtensionAPI) {
+export function registerTsCheckTool(pi: ToolRegistry) {
   pi.registerTool({
     ...TS_CHECK_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(TS_CHECK_TOOL_DEFINITION.name, TS_CHECK_TOOL_DEFINITION.parameters),
@@ -106,24 +106,9 @@ export function registerTsCheckTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let relPath: string | undefined;
-      let relProject: string | undefined;
-      
-      if (params.path) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relPath = rel === "" ? undefined : rel;
-      }
-      
-      if (params.project) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.project, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relProject = rel === "" ? undefined : rel;
-      }
-
-      const result = await tsCheck(ctx.cwd, { 
-        path: relPath,
-        project: relProject,
+      const result = await tsCheck(sandboxFor(ctx.cwd), {
+        path: params.path,
+        project: params.project,
         noEmit: params.noEmit,
         pretty: params.pretty,
         signal 

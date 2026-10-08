@@ -4,8 +4,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { tsLib } from "../src/tools/ts_lib.ts";
 import { extractTsLibrary, moduleSpecifier } from "../src/tools/libInfo/typescriptLib.ts";
-import { setSandboxState } from "../src/sandbox.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 const pkgJson = (o: object) => JSON.stringify(o);
 
@@ -60,7 +60,7 @@ test("overview lists version, modules, deps and flattened re-exports", async (t)
   const dir = await makeFixture(TYPED_PKG);
   t.after(() => cleanupFixture(dir));
 
-  const r = await tsLib(dir, "typed-lib");
+  const r = await tsLib(new Sandbox(dir), "typed-lib");
   assert.equal(r.view, "overview");
   assert.match(r.text, /^typed-lib 2\.1\.0 \(npm\)/);
   assert.match(r.text, /Location: node_modules\/typed-lib/);
@@ -79,13 +79,13 @@ test("symbol view shows overloads, docs and members, hiding private members", as
   const dir = await makeFixture(TYPED_PKG);
   t.after(() => cleanupFixture(dir));
 
-  const add = await tsLib(dir, "typed-lib", { symbol: "add" });
+  const add = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "add" });
   assert.equal(add.view, "symbol");
   assert.match(add.text, /== add \(2 declarations\)/);
   assert.match(add.text, /Adds numbers\./);
   assert.match(add.text, /Adds strings\./);
 
-  const client = await tsLib(dir, "typed-lib", { symbol: "Client" });
+  const client = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "Client" });
   assert.match(client.text, /The main client\./);
   assert.match(client.text, /@example new Client/);
   assert.match(client.text, /Source: node_modules\/typed-lib\/dist\/client\.d\.ts:5/);
@@ -95,7 +95,7 @@ test("symbol view shows overloads, docs and members, hiding private members", as
   assert.match(client.text, /constructor\(options: import\('\.\/index'\)\.Options\)/);
   assert.doesNotMatch(client.text, /secret/);
 
-  const member = await tsLib(dir, "typed-lib", { symbol: "Client.send()" });
+  const member = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "Client.send()" });
   assert.match(member.text, /== Client\.send/);
 });
 
@@ -103,7 +103,7 @@ test("a type alias shows the members of the type it refers to", async (t) => {
   const dir = await makeFixture(TYPED_PKG);
   t.after(() => cleanupFixture(dir));
 
-  const r = await tsLib(dir, "typed-lib", { symbol: "Alias" });
+  const r = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "Alias" });
   assert.match(r.text, /type Alias = Options/);
   assert.match(r.text, /mode\?: Mode/);
   assert.match(r.text, /\/\/ How fast\./);
@@ -114,24 +114,24 @@ test("module selects a subpath export", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   for (const module of ["typed-lib/extra", "./extra", "extra"]) {
-    const r = await tsLib(dir, "typed-lib", { module });
+    const r = await tsLib(new Sandbox(dir), "typed-lib", { module });
     assert.match(r.text, /module typed-lib\/extra/);
     assert.match(r.text, /const VERSION: string/);
   }
-  await assert.rejects(() => tsLib(dir, "typed-lib", { module: "missing" }), /Available modules: typed-lib, typed-lib\/extra/);
+  await assert.rejects(() => tsLib(new Sandbox(dir), "typed-lib", { module: "missing" }), /Available modules: typed-lib, typed-lib\/extra/);
 });
 
 test("query searches names, notFound suggests close names", async (t) => {
   const dir = await makeFixture(TYPED_PKG);
   t.after(() => cleanupFixture(dir));
 
-  const q = await tsLib(dir, "typed-lib", { query: "SEND" });
+  const q = await tsLib(new Sandbox(dir), "typed-lib", { query: "SEND" });
   assert.equal(q.view, "search");
   assert.match(q.text, /send\(path: string.*\[in Client\]/);
 
-  const nf = await tsLib(dir, "typed-lib", { symbol: "Clientt.sendd" });
+  const nf = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "Clientt.sendd" });
   assert.equal(nf.view, "notFound");
-  const nf2 = await tsLib(dir, "typed-lib", { symbol: "mod" });
+  const nf2 = await tsLib(new Sandbox(dir), "typed-lib", { symbol: "mod" });
   assert.equal(nf2.view, "notFound");
   assert.match(nf2.text, /Options\.mode/);
 });
@@ -145,7 +145,7 @@ test("falls back to @types and notes it", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const r = await tsLib(dir, "untyped");
+  const r = await tsLib(new Sandbox(dir), "untyped");
   assert.match(r.text, /^untyped 1\.0\.0/);
   assert.match(r.text, /Types come from @types\/untyped 1\.0\.3/);
   assert.match(r.text, /CommonJS module/);
@@ -160,7 +160,7 @@ test("plain JavaScript packages still list exports, with a note", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const r = await tsLib(dir, "plainjs");
+  const r = await tsLib(new Sandbox(dir), "plainjs");
   assert.match(r.text, /ships no type declarations/);
   assert.match(r.text, /function greet\(name: any\): string/);
   assert.match(r.text, /const answer: 42/);
@@ -174,7 +174,7 @@ test("scoped packages and packages hoisted to a parent node_modules are found", 
   });
   t.after(() => cleanupFixture(dir));
 
-  const r = await tsLib(path.join(dir, "apps/web"), "@scope/pkg");
+  const r = await tsLib(new Sandbox(path.join(dir, "apps/web")), "@scope/pkg");
   assert.match(r.text, /@scope\/pkg 3\.0\.0/);
   assert.match(r.text, /function scoped\(\)/);
 });
@@ -183,8 +183,8 @@ test("rejects bad package names and missing packages", async (t) => {
   const dir = await makeFixture({ "package.json": "{}" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => tsLib(dir, "../etc"), /not a valid npm package name/);
-  await assert.rejects(() => tsLib(dir, "nope"), /not installed.*npm_list/);
+  await assert.rejects(() => tsLib(new Sandbox(dir), "../etc"), /not a valid npm package name/);
+  await assert.rejects(() => tsLib(new Sandbox(dir), "nope"), /not installed.*npm_list/);
   assert.throws(() => moduleSpecifier("a", "../b"), /Invalid module/);
 });
 
@@ -198,14 +198,12 @@ test("files outside the installed-package locations are invisible while sandboxe
   t.after(() => cleanupFixture(base));
   const dir = path.join(base, "proj");
 
-  const r = await tsLib(dir, "leaky");
+  const r = await tsLib(new Sandbox(dir), "leaky");
   assert.match(r.text, /const OK: number/);
   assert.doesNotMatch(r.text, /SECRET/);
   assert.doesNotMatch(r.text, /TOKEN/);
 
-  setSandboxState("off");
-  t.after(() => setSandboxState("on"));
-  const off = await tsLib(dir, "leaky");
+  const off = await tsLib(new Sandbox(dir, false), "leaky");
   assert.match(off.text, /SECRET/);
 });
 
@@ -222,7 +220,7 @@ test("a symlinked (linked/workspace) package is followed", async (t) => {
     if ((err as NodeJS.ErrnoException).code === "EPERM") return t.skip("symlinks not permitted");
     throw err;
   }
-  const r = await tsLib(dir, "linked");
+  const r = await tsLib(new Sandbox(dir), "linked");
   assert.match(r.text, /function linkedFn\(\)/);
 });
 
@@ -231,5 +229,5 @@ test("rejects when the signal is already aborted", async (t) => {
   t.after(() => cleanupFixture(dir));
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => extractTsLibrary(dir, "typed-lib", { signal: ac.signal }), { name: "AbortError" });
+  await assert.rejects(() => extractTsLibrary(new Sandbox(dir), "typed-lib", { signal: ac.signal }), { name: "AbortError" });
 });

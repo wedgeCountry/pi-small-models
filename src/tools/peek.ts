@@ -1,7 +1,8 @@
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { PEEK_TOOL_DEFINITION } from "../tool_definitions/peek.ts";
-import { readProjectFile } from "./read.ts";
+import { readFile } from "./read.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
@@ -29,16 +30,16 @@ export interface PeekResult {
 }
 
 /**
- * Builds a structural outline of the file at `target` (relative to the project `root`) with the
+ * Builds a structural outline of the file at `target` (resolved through `sb`) with the
  * PreviewManager registered for its extension (see src/tools/previewManagers/).
  *
- * The file is read exclusively through `read`'s sandboxed entry point, `readProjectFile`, so peek
+ * The file is read exclusively through `read`'s `readFile`, so peek
  * gets exactly the same root containment, symlink-escape and restricted-glob checks (and the same
  * line splitting/numbering) as `read` — it never touches the filesystem itself. Throws for an
  * unsupported extension, a sandbox violation, a directory, or a binary file. Output lines keep
  * the file's 1-indexed line numbers, so they chain into `read`'s `offset`/`limit`.
  */
-export async function peekFile(root: string, target: string, opts: PeekOptions = {}): Promise<PeekResult> {
+export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = {}): Promise<PeekResult> {
   const ext = path.extname(target);
   const manager = previewManagerFor(ext);
   if (!manager) {
@@ -54,7 +55,7 @@ export async function peekFile(root: string, target: string, opts: PeekOptions =
   }
 
   // `uncapped`: peek has to see the whole file to outline it; its own output is capped below.
-  const read = await readProjectFile(root, target, { uncapped: true, signal: opts.signal });
+  const read = await readFile(sb, target, { uncapped: true, signal: opts.signal });
   const allLines = read.lines.map((l) => l.text);
   if (allLines.some((l) => l.includes("\0"))) throw new Error(`Could not peek "${target}": it looks like a binary file.`);
   opts.signal?.throwIfAborted();
@@ -101,7 +102,7 @@ export function renderPeekResult(displayPath: string, result: PeekResult, visibi
   return text;
 }
 
-export function registerPeekTool(pi: ExtensionAPI) {
+export function registerPeekTool(pi: ToolRegistry) {
   pi.registerTool({
     ...PEEK_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(PEEK_TOOL_DEFINITION.name, PEEK_TOOL_DEFINITION.parameters),
@@ -116,7 +117,7 @@ export function registerPeekTool(pi: ExtensionAPI) {
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const visibility = (params.visibility ?? "public") as PeekVisibility;
-      const result = await peekFile(ctx.cwd, params.path, {
+      const result = await peekFile(sandboxFor(ctx.cwd), params.path, {
         visibility,
         includeDocs: params.includeDocs,
         maxDepth: params.maxDepth,

@@ -1,8 +1,7 @@
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import type {ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
-import {resolveSandboxPath, type SandboxMode} from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../mutationQueue.ts";
 import {oneLine, callName} from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -11,14 +10,6 @@ export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
   allowMultipleMatches?: boolean;
   signal?: AbortSignal;
-  /**
-   * Sandbox root directory for path validation. When set along with
-   * `sandboxMode`, `editFile` will reject paths that are restricted by
-   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
-   * sandbox check exercisable by plain-function tests.
-   */
-  sandboxRoot?: string;
-  sandboxMode?: SandboxMode;
 }
 
 export interface EditSpec {
@@ -29,14 +20,6 @@ export interface EditSpec {
 
 export interface EditMultiOptions {
   signal?: AbortSignal;
-  /**
-   * Sandbox root directory for path validation. When set along with
-   * `sandboxMode`, `editFileMulti` will reject paths that are restricted by
-   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
-   * sandbox check exercisable by plain-function tests.
-   */
-  sandboxRoot?: string;
-  sandboxMode?: SandboxMode;
 }
 
 /** One edit in a batch that failed to apply, by its (0-indexed) position in the `edits` array. */
@@ -117,7 +100,7 @@ async function readForEdit(filePath: string, signal?: AbortSignal): Promise<stri
 }
 
 /**
- * Replaces `oldText` with `newText` in `filePath`. By default `oldText` must match exactly
+ * Replaces `oldText` with `newText` in `target` (resolved through `sb`). By default `oldText` must match exactly
  * one location, or an error is thrown; pass `allowMultipleMatches: true` to replace all
  * occurrences instead.
  *
@@ -133,16 +116,13 @@ async function readForEdit(filePath: string, signal?: AbortSignal): Promise<stri
  * another call has already changed it, then overwrite that call's change.
  */
 export async function editFile(
-  filePath: string,
+  sb: Sandbox,
+  target: string,
   oldText: string,
   newText: string,
   opts: EditOptions = {}
 ): Promise<void> {
-  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
-  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
-  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
-  }
+  const filePath = sb.resolve(target);
 
   await withFileMutationQueue(filePath, async () => {
     const content = await readForEdit(filePath, opts.signal);
@@ -157,7 +137,7 @@ export async function editFile(
 }
 
 /**
- * Applies several edits to `filePath` in one read-modify-write, applying as many as possible:
+ * Applies several edits to `target` (resolved through `sb`) in one read-modify-write, applying as many as possible:
  * each edit is attempted in order against the result of the previous *successful* edit (so
  * offsets stay correct as the file changes), and a failing edit is skipped and recorded rather
  * than aborting the whole batch. The file is written once, at the end, with every successful
@@ -171,7 +151,8 @@ export async function editFile(
  * Also runs under `withFileMutationQueue`, for the same reason as `editFile`.
  */
 export async function editFileMulti(
-  filePath: string,
+  sb: Sandbox,
+  target: string,
   edits: EditSpec[],
   opts: EditMultiOptions = {}
 ): Promise<EditMultiResult> {
@@ -179,11 +160,7 @@ export async function editFileMulti(
     throw new Error("edits must contain at least one edit");
   }
 
-  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
-  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
-  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
-  }
+  const filePath = sb.resolve(target);
 
   return withFileMutationQueue(filePath, async () => {
     const content = await readForEdit(filePath, opts.signal);
@@ -216,7 +193,7 @@ export async function editFileMulti(
   });
 }
 
-export function registerEditTool(pi: ExtensionAPI) {
+export function registerEditTool(pi: ToolRegistry) {
   pi.registerTool({
     ...EDIT_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(EDIT_TOOL_DEFINITION.name, EDIT_TOOL_DEFINITION.parameters),
@@ -226,7 +203,7 @@ export function registerEditTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
+      const sb = sandboxFor(ctx.cwd);
       const hasSingle = params.oldText !== undefined || params.newText !== undefined;
       const hasBatch = params.edits !== undefined;
 
@@ -235,7 +212,7 @@ export function registerEditTool(pi: ExtensionAPI) {
       }
 
       if (hasBatch) {
-        const result = await editFileMulti(filePath, params.edits!, { signal });
+        const result = await editFileMulti(sb, params.path, params.edits!, { signal });
         const lines = [`Applied ${result.applied} of ${result.total} edit(s) to ${params.path}.`];
         if (result.failures.length > 0) {
           lines.push("Failed edits:");
@@ -252,7 +229,7 @@ export function registerEditTool(pi: ExtensionAPI) {
       if (params.oldText === undefined || params.newText === undefined) {
         throw new Error("Specify either oldText and newText, or a non-empty edits array.");
       }
-      await editFile(filePath, params.oldText, params.newText, {
+      await editFile(sb, params.path, params.oldText, params.newText, {
         allowMultipleMatches: params.allowMultipleMatches,
         signal,
       });

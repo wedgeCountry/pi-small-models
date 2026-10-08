@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { findFiles } from "../src/tools/find.ts";
 import { DEFAULT_IGNORE_GLOBS } from "../src/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("finds files matching a glob pattern", async (t) => {
   const dir = await makeFixture({
@@ -16,7 +17,7 @@ test("finds files matching a glob pattern", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(dir, "**/*.ts");
+  const result = await findFiles(new Sandbox(dir), ".", "**/*.ts");
   assert.deepEqual(result.matches.sort(), ["src/index.ts", "src/util.test.ts", "src/util.ts"]);
   assert.equal(result.total, 3);
   assert.equal(result.truncated, false);
@@ -30,7 +31,7 @@ test("ignores node_modules and other default-ignored directories", async (t) => 
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(dir, "**/*");
+  const result = await findFiles(new Sandbox(dir), ".", "**/*");
   assert.ok(!result.matches.some((m) => m.includes("node_modules")));
   assert.ok(!result.matches.some((m) => m.includes(".git")));
 });
@@ -43,7 +44,7 @@ test("truncates results at maxResults", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(dir, "*.txt", { maxResults: 2 });
+  const result = await findFiles(new Sandbox(dir), ".", "*.txt", { maxResults: 2 });
   assert.equal(result.matches.length, 2);
   assert.equal(result.total, 3);
   assert.equal(result.truncated, true);
@@ -55,7 +56,7 @@ test("rejects immediately when the signal is already aborted", async (t) => {
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => findFiles(dir, "*.txt", { signal: ac.signal }));
+  await assert.rejects(() => findFiles(new Sandbox(dir), ".", "*.txt", { signal: ac.signal }));
 });
 
 test("aborts an in-flight scan via signal", async (t) => {
@@ -63,7 +64,7 @@ test("aborts an in-flight scan via signal", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   const ac = new AbortController();
-  const promise = findFiles(dir, "**/*", { signal: ac.signal });
+  const promise = findFiles(new Sandbox(dir), ".", "**/*", { signal: ac.signal });
   ac.abort();
   await assert.rejects(() => promise, /aborted/);
 });
@@ -76,7 +77,7 @@ test("honors custom ignoreGlobs (e.g. from /ignore) on top of the hardcoded defa
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(dir, "**/*.ts", {
+  const result = await findFiles(new Sandbox(dir), ".", "**/*.ts", {
     ignoreGlobs: [...DEFAULT_IGNORE_GLOBS, "**/temp/**"],
   });
   assert.deepEqual(result.matches, ["src/index.ts"]);
@@ -92,7 +93,7 @@ test("passing ignoreGlobs replaces DEFAULT_IGNORE_GLOBS rather than adding to it
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(dir, "**/*.ts", { ignoreGlobs: ["**/temp/**"] });
+  const result = await findFiles(new Sandbox(dir), ".", "**/*.ts", { ignoreGlobs: ["**/temp/**"] });
   assert.deepEqual(result.matches.sort(), ["node_modules/dep/index.ts", "src/index.ts"]);
 });
 
@@ -109,6 +110,6 @@ test("omits a symlink that points outside the base directory", async (t) => {
     return;
   }
 
-  const result = await findFiles(dir, "**/*");
+  const result = await findFiles(new Sandbox(dir), ".", "**/*");
   assert.deepEqual(result.matches, ["real.txt"]);
 });

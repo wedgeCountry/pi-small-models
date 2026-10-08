@@ -25,8 +25,8 @@ import {registerSearchTool} from "./src/tools/search.ts";
 import {registerTsCheckTool} from "./src/tools/ts_check.ts";
 import {registerTsLibTool} from "./src/tools/ts_lib.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
-import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
-import {gateToolCall} from "./src/permissionGate.ts";
+import {getSandboxState, setSandboxState, type SandboxState} from "./src/sandbox/sandbox.ts";
+import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
 import {
   appendGlobalIgnorePattern,
   getGlobalIgnorePath,
@@ -41,53 +41,55 @@ const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 const DISABLED_TOOLS = new Set(["bash"]);
 
 export default function (pi: ExtensionAPI) {
-  registerCopyTool(pi);
-  registerDotnetBuildTool(pi);
-  registerDotnetLibTool(pi);
-  registerDotnetListTool(pi);
-  registerEditTool(pi);
-  registerFindTool(pi);
-  registerFindUsagesTool(pi);
-  registerGitDiffTool(pi);
-  registerGitLogTool(pi);
-  registerGitStatusTool(pi);
-  registerGrepTool(pi);
-  registerInsertTool(pi);
-  registerListTool(pi);
-  registerLstatTool(pi);
-  registerMkdirTool(pi);
-  registerMoveTool(pi);
-  registerNpmListTool(pi);
-  registerPeekTool(pi);
-  registerPyLibTool(pi);
-  registerPyListTool(pi);
-  registerReadTool(pi);
-  registerRemoveTool(pi);
-  registerSearchTool(pi);
-  registerTsCheckTool(pi);
-  registerTsLibTool(pi);
-  registerWriteTool(pi);
+  // Every tool registered through `tools` is gated: with the sandbox off, it asks before running.
+  const {registry: tools, gatedTools} = createGatedRegistry(pi);
+  registerCopyTool(tools);
+  registerDotnetBuildTool(tools);
+  registerDotnetLibTool(tools);
+  registerDotnetListTool(tools);
+  registerEditTool(tools);
+  registerFindTool(tools);
+  registerFindUsagesTool(tools);
+  registerGitDiffTool(tools);
+  registerGitLogTool(tools);
+  registerGitStatusTool(tools);
+  registerGrepTool(tools);
+  registerInsertTool(tools);
+  registerListTool(tools);
+  registerLstatTool(tools);
+  registerMkdirTool(tools);
+  registerMoveTool(tools);
+  registerNpmListTool(tools);
+  registerPeekTool(tools);
+  registerPyLibTool(tools);
+  registerPyListTool(tools);
+  registerReadTool(tools);
+  registerRemoveTool(tools);
+  registerSearchTool(tools);
+  registerTsCheckTool(tools);
+  registerTsLibTool(tools);
+  registerWriteTool(tools);
 
   pi.registerCommand("toggle-sandbox", {
-    description: "Set src/sandbox.ts's state: on (fully enforced locally — root containment plus " +
+    description: "Set the sandbox (src/sandbox/sandbox.ts): on (fully enforced locally — root containment plus " +
       "credential/.git glob restrictions, no confirmation prompts) or off (nothing enforced locally; " +
       "every call to one of this project's tools requires an explicit approval dialog instead, see " +
-      "src/permissionGate.ts). No argument toggles on <-> off.",
+      "src/sandbox/permissionGate.ts). No argument toggles on <-> off.",
     getArgumentCompletions: (prefix) =>
       [...SANDBOX_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
     handler: async (args, ctx) => {
       const requested = args.trim().toLowerCase();
       let state: SandboxState;
       if (requested === "") {
-        state = cycleSandboxState();
+        state = getSandboxState() === "on" ? "off" : "on";
       } else if (SANDBOX_STATES.has(requested as SandboxState)) {
         state = requested as SandboxState;
-        setSandboxState(state);
       } else {
         ctx.ui.notify(`Unknown sandbox state "${requested}" — expected on or off`, "error");
         return;
       }
 
+      setSandboxState(state);
       ctx.ui.notify(`Sandbox: ${state}`, state === "on" ? "info" : "warning");
     },
   });
@@ -132,15 +134,10 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", (_event) => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
-    // sandboxState (src/sandbox.ts) is a module-level, process-lifetime variable, not a
-    // per-session one — if the extension module is ever shared across concurrent sessions in one
-    // process, a previous session's `/toggle-sandbox off` would otherwise leak into a new session
-    // that never asked for it. Reset it explicitly so every session starts fully enforced
-    // regardless of what any other session left it at.
+    // The sandbox state lives for the whole process, not one session; reset it so a previous
+    // session's `/toggle-sandbox off` never leaks into a new one.
     setSandboxState("on");
   });
 
-  // See src/permissionGate.ts: while sandbox state is "off", intercepts calls to this
-  // project's own tools and requires an explicit ctx.ui.confirm() approval before each one runs.
-  pi.on("tool_call", gateToolCall);
+  pi.on("tool_call", createPermissionGate(gatedTools));
 }

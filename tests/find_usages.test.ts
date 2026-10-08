@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { findUsages } from "../src/tools/find_usages.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("finds usages across multiple files of the same language", async (t) => {
   const dir = await makeFixture({
@@ -12,7 +13,7 @@ test("finds usages across multiple files of the same language", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "python");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "python");
   assert.equal(result.total, 2);
   assert.deepEqual(
     result.matches.map((m) => `${m.file}:${m.kind}`).sort(),
@@ -27,11 +28,11 @@ test("only scans files matching the selected language's glob", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const pythonResult = await findUsages(dir, "Handler", "python");
+  const pythonResult = await findUsages(new Sandbox(dir), ".", "Handler", "python");
   assert.equal(pythonResult.total, 1);
   assert.equal(pythonResult.matches[0]?.file, "a.py");
 
-  const tsResult = await findUsages(dir, "Handler", "typescript");
+  const tsResult = await findUsages(new Sandbox(dir), ".", "Handler", "typescript");
   assert.equal(tsResult.total, 1);
   assert.equal(tsResult.matches[0]?.file, "b.ts");
 });
@@ -43,7 +44,7 @@ test("resolves Python's bare-call ambiguity across the whole scanned scope, not 
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Widget", "python");
+  const result = await findUsages(new Sandbox(dir), ".", "Widget", "python");
   const usageMatch = result.matches.find((m) => m.file === "usage.py");
   assert.equal(usageMatch?.kind, "instantiation");
 });
@@ -54,7 +55,7 @@ test("truncates at maxResults", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "python", { maxResults: 2 });
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "python", { maxResults: 2 });
   assert.equal(result.total, 2);
   assert.equal(result.truncated, true);
 });
@@ -63,7 +64,7 @@ test("does not report truncated when total exactly equals maxResults", async (t)
   const dir = await makeFixture({ "a.py": "Handler()\nHandler()\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "python", { maxResults: 2 });
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "python", { maxResults: 2 });
   assert.equal(result.total, 2);
   assert.equal(result.truncated, false);
 });
@@ -72,16 +73,16 @@ test("rejects a symbol that is not a plain identifier", async (t) => {
   const dir = await makeFixture({ "a.py": "x = 1\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => findUsages(dir, "Foo-Bar", "python"), /not a valid identifier/);
-  await assert.rejects(() => findUsages(dir, "1Foo", "python"), /not a valid identifier/);
-  await assert.rejects(() => findUsages(dir, "Foo.Bar", "python"), /not a valid identifier/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), ".", "Foo-Bar", "python"), /not a valid identifier/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), ".", "1Foo", "python"), /not a valid identifier/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), ".", "Foo.Bar", "python"), /not a valid identifier/);
 });
 
 test("rejects a path that does not exist", async (t) => {
   const dir = await makeFixture({});
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => findUsages(path.join(dir, "nope"), "Handler", "python"), /does not exist/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), path.join(dir, "nope"), "Handler", "python"), /does not exist/);
 });
 
 test("rejects a path that names a file instead of a directory", async (t) => {
@@ -89,7 +90,7 @@ test("rejects a path that names a file instead of a directory", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => findUsages(path.join(dir, "a.py"), "Handler", "python"),
+    () => findUsages(new Sandbox(dir), path.join(dir, "a.py"), "Handler", "python"),
     /is a file, not a directory/
   );
 });
@@ -107,7 +108,7 @@ test("does not read through a symlink that points outside the base directory", a
     return;
   }
 
-  const result = await findUsages(dir, "Handler", "python");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "python");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.file, "real.py");
 });
@@ -119,7 +120,7 @@ test("excludes a sandbox-restricted path even when it matches the language glob"
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "python");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "python");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.file, "a.py");
 });
@@ -128,7 +129,7 @@ test("classifies a TypeScript instantiation end-to-end", async (t) => {
   const dir = await makeFixture({ "a.ts": "const h = new Handler();\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "typescript");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "typescript");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "instantiation");
 });
@@ -137,7 +138,7 @@ test("classifies a C# base-class reference end-to-end", async (t) => {
   const dir = await makeFixture({ "Sample.cs": "public class MyHandler : Handler {\n}\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "csharp");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "csharp");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "type-reference");
 });
@@ -149,7 +150,7 @@ test("auto-detects csharp from a .sln file", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "auto");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "auto");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "type-reference");
 });
@@ -161,7 +162,7 @@ test("auto-detects csharp from a nested .csproj file", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "auto");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "auto");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "type-reference");
 });
@@ -173,7 +174,7 @@ test("auto-detects python from a .venv folder", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "auto");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "auto");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "definition");
 });
@@ -185,7 +186,7 @@ test("auto-detects typescript from a node_modules folder", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler", "auto");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler", "auto");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "instantiation");
 });
@@ -197,7 +198,7 @@ test("defaults to auto-detection when language is omitted entirely", async (t) =
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findUsages(dir, "Handler");
+  const result = await findUsages(new Sandbox(dir), ".", "Handler");
   assert.equal(result.total, 1);
   assert.equal(result.matches[0]?.kind, "definition");
 });
@@ -206,7 +207,7 @@ test("throws when auto-detection finds no language markers", async (t) => {
   const dir = await makeFixture({ "a.py": "class Handler:\n    pass\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => findUsages(dir, "Handler", "auto"), /could not auto-detect a language/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), ".", "Handler", "auto"), /could not auto-detect a language/);
 });
 
 test("throws when auto-detection finds markers for more than one language", async (t) => {
@@ -217,5 +218,5 @@ test("throws when auto-detection finds markers for more than one language", asyn
   });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => findUsages(dir, "Handler", "auto"), /markers for multiple languages/);
+  await assert.rejects(() => findUsages(new Sandbox(dir), ".", "Handler", "auto"), /markers for multiple languages/);
 });

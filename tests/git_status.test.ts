@@ -6,6 +6,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { gitStatus } from "../src/tools/git_status.ts";
 import { makeFixture, cleanupFixture, initGitRepo } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -14,7 +15,7 @@ test("reports a clean repo with no entries and a branch name", async (t) => {
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
 
-  const result = await gitStatus(dir);
+  const result = await gitStatus(new Sandbox(dir));
   assert.deepEqual(result.entries, []);
   assert.equal(typeof result.branch, "string");
   assert.equal(result.ahead, 0);
@@ -29,7 +30,7 @@ test("reports modified and untracked files", async (t) => {
   await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
   await fs.writeFile(path.join(dir, "b.txt"), "new\n", "utf8");
 
-  const result = await gitStatus(dir);
+  const result = await gitStatus(new Sandbox(dir));
   const byPath = Object.fromEntries(result.entries.map((e) => [e.path, e]));
   assert.equal(byPath["a.txt"]!.worktreeStatus, "M");
   assert.equal(byPath["b.txt"]!.indexStatus, "?");
@@ -45,7 +46,7 @@ test("reports staged files separately from unstaged ones", async (t) => {
   await execFile("git", ["add", "a.txt"], { cwd: dir });
   await fs.writeFile(path.join(dir, "b.txt"), "unstaged change\n", "utf8");
 
-  const result = await gitStatus(dir);
+  const result = await gitStatus(new Sandbox(dir));
   const byPath = Object.fromEntries(result.entries.map((e) => [e.path, e]));
   assert.equal(byPath["a.txt"]!.indexStatus, "M");
   assert.equal(byPath["a.txt"]!.worktreeStatus, " ");
@@ -61,7 +62,7 @@ test("scopes status to a path", async (t) => {
   await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
   await fs.writeFile(path.join(dir, "sub/b.txt"), "changed\n", "utf8");
 
-  const result = await gitStatus(dir, { path: "sub" });
+  const result = await gitStatus(new Sandbox(dir), { path: "sub" });
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0]!.path, "sub/b.txt");
 });
@@ -70,14 +71,14 @@ test("rejects when the directory is not a git repository", async (t) => {
   const dir = await makeFixture({ "a.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => gitStatus(dir), /git status failed/);
+  await assert.rejects(() => gitStatus(new Sandbox(dir)), /git status failed/);
 });
 
 test("omits a sandbox-restricted file from status, even though git itself reports it", async (t) => {
   // A .env tracked in git (accidentally committed, or committed with placeholder values and later
   // edited in place) with an uncommitted change is exactly the case that previously leaked: `git
-  // status` doesn't walk the filesystem through isEntrySandboxSafe the way find/grep/list do, so
-  // nothing filtered it out.
+  // status` reports paths from git's index, not from a sandbox-filtered walk, so nothing filtered it
+  // out.
   const dir = await makeFixture({ "a.txt": "hello\n", ".env": "API_KEY=placeholder\n" });
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
@@ -85,7 +86,7 @@ test("omits a sandbox-restricted file from status, even though git itself report
   await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
   await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
 
-  const result = await gitStatus(dir);
+  const result = await gitStatus(new Sandbox(dir));
   assert.deepEqual(
     result.entries.map((e) => e.path),
     ["a.txt"]
@@ -99,7 +100,7 @@ test("omits a restricted rename's source path too", async (t) => {
 
   await execFile("git", ["mv", ".env", "renamed.env"], { cwd: dir });
 
-  const result = await gitStatus(dir);
+  const result = await gitStatus(new Sandbox(dir));
   assert.deepEqual(result.entries, []);
 });
 
@@ -110,5 +111,5 @@ test("rejects when the signal is already aborted", async (t) => {
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => gitStatus(dir, { signal: ac.signal }));
+  await assert.rejects(() => gitStatus(new Sandbox(dir), { signal: ac.signal }));
 });

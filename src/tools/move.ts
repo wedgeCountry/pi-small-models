@@ -1,8 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MOVE_TOOL_DEFINITION } from "../tool_definitions/move.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../renderCall.ts";
@@ -12,19 +12,6 @@ export interface MoveOptions {
   recursive?: boolean;
   overwrite?: boolean;
   signal?: AbortSignal;
-  /**
-   * Absolute path to the project root. When set, `moveFile` refuses to move a source that
-   * resolves to exactly this path — moving the project root out from under itself is as
-   * destructive as `remove`'s equivalent guard, which this mirrors (see `remove.ts`).
-   */
-  projectRoot?: string;
-  /**
-   * Sandbox root directory for path validation. When set, `moveFile` validates both
-   * `sourcePath` and `destPath` — both in edit mode, since unlike `copy` the source is mutated
-   * (deleted) too — against the sandbox's restricted-path rules. Exercisable by plain-function
-   * tests, same as every other tool in this project.
-   */
-  sandboxRoot?: string;
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
@@ -38,7 +25,8 @@ async function pathExists(targetPath: string): Promise<boolean> {
 }
 
 /**
- * Moves (renames) `sourcePath` to `destPath`. A directory source requires `recursive: true`; an
+ * Moves (renames) `source` to `destination`, both resolved through `sb`. The project root itself is
+ * never moved, mirroring `remove`'s guard. A directory source requires `recursive: true`; an
  * already-existing `destPath` requires `overwrite: true` (and is deleted via `removeRecursively`
  * before the move, so the rename always lands on a clean target regardless of either side's
  * file/directory type). Missing parent directories of `destPath` are created first, mirroring
@@ -53,14 +41,11 @@ async function pathExists(targetPath: string): Promise<boolean> {
  * other (classic AB-BA deadlock). Locking the same path twice (sourcePath === destPath) would hit
  * the same deadlock from a single call, which is why that case is rejected up front instead.
  */
-export async function moveFile(sourcePath: string, destPath: string, opts: MoveOptions = {}): Promise<void> {
-  if (opts.projectRoot !== undefined && path.resolve(sourcePath) === path.resolve(opts.projectRoot)) {
+export async function moveFile(sb: Sandbox, source: string, destination: string, opts: MoveOptions = {}): Promise<void> {
+  const sourcePath = sb.resolve(source);
+  const destPath = sb.resolve(destination);
+  if (sourcePath === sb.root) {
     throw new Error("Refusing to move the project root");
-  }
-
-  if (opts.sandboxRoot !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, sourcePath), "edit");
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, destPath), "edit");
   }
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
@@ -122,7 +107,7 @@ export async function moveFile(sourcePath: string, destPath: string, opts: MoveO
   );
 }
 
-export function registerMoveTool(pi: ExtensionAPI) {
+export function registerMoveTool(pi: ToolRegistry) {
   pi.registerTool({
     ...MOVE_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(MOVE_TOOL_DEFINITION.name, MOVE_TOOL_DEFINITION.parameters),
@@ -135,14 +120,10 @@ export function registerMoveTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const sourcePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
-      const destPath = resolveSandboxPath(ctx.cwd, params.destination, "edit");
-
-      await moveFile(sourcePath, destPath, {
+      await moveFile(sandboxFor(ctx.cwd), params.path, params.destination, {
         recursive: params.recursive,
         overwrite: params.overwrite,
         signal,
-        projectRoot: ctx.cwd,
       });
 
       return {

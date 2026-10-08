@@ -1,14 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { readFile, readProjectFile } from "../src/tools/read.ts";
+import { readFile } from "../src/tools/read.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("reads a whole file as 1-indexed lines", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1\nline2\nline3" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"));
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"));
   assert.deepEqual(result.lines, [
     { line: 1, text: "line1" },
     { line: 2, text: "line2" },
@@ -22,7 +23,7 @@ test("honors offset", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1\nline2\nline3" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"), { offset: 2 });
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 2 });
   assert.deepEqual(result.lines, [
     { line: 2, text: "line2" },
     { line: 3, text: "line3" },
@@ -34,7 +35,7 @@ test("honors limit and reports truncation with a continuation offset", async (t)
   const dir = await makeFixture({ "a.txt": "line1\nline2\nline3" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"), { limit: 2 });
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"), { limit: 2 });
   assert.deepEqual(result.lines, [
     { line: 1, text: "line1" },
     { line: 2, text: "line2" },
@@ -47,7 +48,7 @@ test("combines offset and limit", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1\nline2\nline3\nline4" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"), { offset: 2, limit: 2 });
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 2, limit: 2 });
   assert.deepEqual(result.lines, [
     { line: 2, text: "line2" },
     { line: 3, text: "line3" },
@@ -59,7 +60,7 @@ test("is not truncated when limit reaches exactly the end of the file", async (t
   const dir = await makeFixture({ "a.txt": "line1\nline2\nline3" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"), { limit: 3 });
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"), { limit: 3 });
   assert.equal(result.lines.length, 3);
   assert.equal(result.truncated, false);
 });
@@ -68,7 +69,7 @@ test("splits lines the same way insert does, so line numbers agree across tools"
   const dir = await makeFixture({ "a.txt": "line1\r\nline2\r\nline3" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"));
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"));
   assert.deepEqual(
     result.lines.map((l) => l.text),
     ["line1", "line2", "line3"]
@@ -80,7 +81,7 @@ test("caps output at DEFAULT_MAX_LINES lines even without an explicit limit", as
   const dir = await makeFixture({ "a.txt": lines.join("\n") });
   t.after(() => cleanupFixture(dir));
 
-  const result = await readFile(path.join(dir, "a.txt"));
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"));
   assert.equal(result.lines.length, 2000);
   assert.equal(result.totalLines, 2005);
   assert.equal(result.truncated, true);
@@ -90,28 +91,28 @@ test("rejects an offset beyond the end of the file", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1\nline2" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => readFile(path.join(dir, "a.txt"), { offset: 3 }));
+  await assert.rejects(() => readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 3 }));
 });
 
 test("rejects a non-positive offset", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => readFile(path.join(dir, "a.txt"), { offset: 0 }));
+  await assert.rejects(() => readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 0 }));
 });
 
 test("rejects a non-positive limit", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => readFile(path.join(dir, "a.txt"), { limit: 0 }));
+  await assert.rejects(() => readFile(new Sandbox(dir), path.join(dir, "a.txt"), { limit: 0 }));
 });
 
 test("rejects when the file does not exist", async (t) => {
   const dir = await makeFixture({});
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => readFile(path.join(dir, "missing.txt")));
+  await assert.rejects(() => readFile(new Sandbox(dir), path.join(dir, "missing.txt")));
 });
 
 test("rejects when the signal is already aborted", async (t) => {
@@ -120,26 +121,26 @@ test("rejects when the signal is already aborted", async (t) => {
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => readFile(path.join(dir, "a.txt"), { signal: ac.signal }));
+  await assert.rejects(() => readFile(new Sandbox(dir), path.join(dir, "a.txt"), { signal: ac.signal }));
 });
 
 test("uncapped (internal option) returns every line past the 2000-line cap", async (t) => {
   const dir = await makeFixture({ "big.txt": Array.from({ length: 2500 }, (_, i) => `l${i}`).join("\n") });
   t.after(() => cleanupFixture(dir));
 
-  const capped = await readFile(path.join(dir, "big.txt"));
+  const capped = await readFile(new Sandbox(dir), path.join(dir, "big.txt"));
   assert.equal(capped.lines.length, 2000);
-  const full = await readFile(path.join(dir, "big.txt"), { uncapped: true });
+  const full = await readFile(new Sandbox(dir), path.join(dir, "big.txt"), { uncapped: true });
   assert.equal(full.lines.length, 2500);
   assert.equal(full.truncated, false);
 });
 
-test("readProjectFile sandboxes the path before reading", async (t) => {
+test("readFile resolves the path through the sandbox before reading", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello", ".env": "SECRET=1" });
   t.after(() => cleanupFixture(dir));
 
-  const ok = await readProjectFile(dir, "a.txt");
+  const ok = await readFile(new Sandbox(dir), "a.txt");
   assert.deepEqual(ok.lines, [{ line: 1, text: "hello" }]);
-  await assert.rejects(readProjectFile(dir, "../outside.txt"), /outside the project root/);
-  await assert.rejects(readProjectFile(dir, ".env"), /restricted in read mode/);
+  await assert.rejects(readFile(new Sandbox(dir), "../outside.txt"), /outside the project root/);
+  await assert.rejects(readFile(new Sandbox(dir), ".env"), /restricted by the sandbox/);
 });

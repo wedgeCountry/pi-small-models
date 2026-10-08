@@ -5,12 +5,13 @@ import * as path from "node:path";
 import { removePath } from "../src/tools/remove.ts";
 import { editFile } from "../src/tools/edit.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
+import { Sandbox } from "../src/sandbox/sandbox.ts";
 
 test("removes a file", async (t) => {
   const dir = await makeFixture({ "a.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await removePath(path.join(dir, "a.txt"));
+  await removePath(new Sandbox(dir), path.join(dir, "a.txt"));
   await assert.rejects(() => fs.stat(path.join(dir, "a.txt")));
 });
 
@@ -18,7 +19,7 @@ test("rejects removing a directory without recursive", async (t) => {
   const dir = await makeFixture({ "sub/a.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => removePath(path.join(dir, "sub")));
+  await assert.rejects(() => removePath(new Sandbox(dir), path.join(dir, "sub")));
   const stat = await fs.stat(path.join(dir, "sub"));
   assert.ok(stat.isDirectory());
 });
@@ -27,7 +28,7 @@ test("removes a directory and its contents when recursive is set", async (t) => 
   const dir = await makeFixture({ "sub/a.txt": "", "sub/nested/b.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await removePath(path.join(dir, "sub"), { recursive: true });
+  await removePath(new Sandbox(dir), path.join(dir, "sub"), { recursive: true });
   await assert.rejects(() => fs.stat(path.join(dir, "sub")));
 });
 
@@ -35,7 +36,7 @@ test("rejects when the path does not exist", async (t) => {
   const dir = await makeFixture({});
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(() => removePath(path.join(dir, "missing.txt")));
+  await assert.rejects(() => removePath(new Sandbox(dir), path.join(dir, "missing.txt")));
 });
 
 test("rejects when the signal is already aborted, without removing anything", async (t) => {
@@ -44,7 +45,7 @@ test("rejects when the signal is already aborted, without removing anything", as
 
   const ac = new AbortController();
   ac.abort();
-  await assert.rejects(() => removePath(path.join(dir, "a.txt"), { signal: ac.signal }));
+  await assert.rejects(() => removePath(new Sandbox(dir), path.join(dir, "a.txt"), { signal: ac.signal }));
   const stat = await fs.stat(path.join(dir, "a.txt"));
   assert.ok(stat.isFile());
 });
@@ -54,7 +55,7 @@ test("aborts a recursive removal in flight via signal, leaving it intact", async
   t.after(() => cleanupFixture(dir));
 
   const ac = new AbortController();
-  const promise = removePath(path.join(dir, "sub"), { recursive: true, signal: ac.signal });
+  const promise = removePath(new Sandbox(dir), path.join(dir, "sub"), { recursive: true, signal: ac.signal });
   ac.abort();
   await assert.rejects(() => promise);
   const stat = await fs.stat(path.join(dir, "sub"));
@@ -66,7 +67,7 @@ test("refuses to remove the project root when the target matches projectRoot", a
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(dir, { recursive: true, projectRoot: dir }),
+    () => removePath(new Sandbox(dir), dir, { recursive: true }),
     /Refusing to remove the project root/
   );
   const stat = await fs.stat(dir);
@@ -80,7 +81,7 @@ test("refuses to remove the project root even without recursive set", async (t) 
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(dir, { projectRoot: dir }),
+    () => removePath(new Sandbox(dir), dir),
     /Refusing to remove the project root/
   );
   const stat = await fs.stat(dir);
@@ -92,7 +93,7 @@ test("refuses to remove the project root given an unnormalized (trailing-slash) 
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(dir + path.sep, { recursive: true, projectRoot: dir }),
+    () => removePath(new Sandbox(dir), dir + path.sep, { recursive: true }),
     /Refusing to remove the project root/
   );
   const stat = await fs.stat(dir);
@@ -103,7 +104,7 @@ test("still allows removing a path inside the project root when projectRoot is s
   const dir = await makeFixture({ "a.txt": "" });
   t.after(() => cleanupFixture(dir));
 
-  await removePath(path.join(dir, "a.txt"), { projectRoot: dir });
+  await removePath(new Sandbox(dir), path.join(dir, "a.txt"));
   await assert.rejects(() => fs.stat(path.join(dir, "a.txt")));
 });
 
@@ -117,7 +118,7 @@ test("serializes a remove against a concurrent edit on the same file, without re
   // Either way the file must not exist afterward. Without serialization, edit could read the
   // file before remove deletes it and then write its result back *after* the delete, resurrecting
   // a file remove was supposed to have removed for good.
-  await Promise.allSettled([removePath(file), editFile(file, "content", "changed")]);
+  await Promise.allSettled([removePath(new Sandbox(dir), file), editFile(new Sandbox(dir), file, "content", "changed")]);
 
   await assert.rejects(() => fs.stat(file));
 });
@@ -127,8 +128,8 @@ test("refuses to remove the .git directory", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(path.join(dir, ".git"), { recursive: true, sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => removePath(new Sandbox(dir), path.join(dir, ".git"), { recursive: true }),
+    /restricted by the sandbox/
   );
   const stat = await fs.stat(path.join(dir, ".git"));
   assert.ok(stat.isDirectory());
@@ -139,8 +140,8 @@ test("refuses to remove a file inside .git", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(path.join(dir, ".git", "HEAD"), { sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => removePath(new Sandbox(dir), path.join(dir, ".git", "HEAD")),
+    /restricted by the sandbox/
   );
   const stat = await fs.stat(path.join(dir, ".git", "HEAD"));
   assert.ok(stat.isFile());
@@ -151,8 +152,8 @@ test("refuses to remove a nested .git directory", async (t) => {
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => removePath(path.join(dir, "packages", "api", ".git"), { recursive: true, sandboxRoot: dir, sandboxMode: "edit" }),
-    /restricted in edit mode/
+    () => removePath(new Sandbox(dir), path.join(dir, "packages", "api", ".git"), { recursive: true }),
+    /restricted by the sandbox/
   );
   const stat = await fs.stat(path.join(dir, "packages", "api", ".git"));
   assert.ok(stat.isDirectory());
@@ -164,7 +165,7 @@ test("refuses to remove the entire project directory when it contains .git", asy
 
   // Even with recursive:true, removing the project root itself is refused
   await assert.rejects(
-    () => removePath(dir, { recursive: true, projectRoot: dir }),
+    () => removePath(new Sandbox(dir), dir, { recursive: true }),
     /Refusing to remove the project root/
   );
   const stat = await fs.stat(dir);

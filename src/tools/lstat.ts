@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { LSTAT_TOOL_DEFINITION } from "../tool_definitions/lstat.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -13,8 +13,9 @@ export interface LstatResult {
   mtime: string;
 }
 
-/** Returns filesystem metadata for `targetPath` without following symlinks. */
-export async function lstatPath(targetPath: string): Promise<LstatResult> {
+/** Returns filesystem metadata for `target` (resolved through `sb`) without following symlinks. */
+export async function lstatPath(sb: Sandbox, target: string): Promise<LstatResult> {
+  const targetPath = sb.resolve(target);
   let stat;
   try {
     stat = await fs.lstat(targetPath);
@@ -31,7 +32,7 @@ export async function lstatPath(targetPath: string): Promise<LstatResult> {
   };
 }
 
-export function registerLstatTool(pi: ExtensionAPI) {
+export function registerLstatTool(pi: ToolRegistry) {
   pi.registerTool({
     ...LSTAT_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(LSTAT_TOOL_DEFINITION.name, LSTAT_TOOL_DEFINITION.parameters),
@@ -39,8 +40,7 @@ export function registerLstatTool(pi: ExtensionAPI) {
       return oneLine(`${callName(theme, "lstat")} ${theme.fg("accent", args.path ?? "")}`);
     },
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const targetPath = resolveSandboxPath(ctx.cwd, params.path, "read");
-      const result = await lstatPath(targetPath);
+      const result = await lstatPath(sandboxFor(ctx.cwd), params.path);
 
       const type = result.isSymbolicLink ? "symlink" : result.isDirectory ? "directory" : result.isFile ? "file" : "other";
       const text = `${params.path}: ${type}, ${result.size} bytes, modified ${result.mtime}`;

@@ -40,16 +40,17 @@ package's assemblies. `py_list` lists Python packages through the same helper.
 
 ## Sandboxing
 
-Two layers, both under `src/`:
+Everything lives in `src/sandbox/`:
 
-- **`pathSafety.ts`** — the hard, always-on containment check: a tool can't be pointed outside the project
-  root, symlinks included.
-- **`sandbox.ts`** — wraps that with a toggleable, mode-aware restricted-path layer on top (blocking things
-  like `.ssh/`, `.env`, and — in edit mode — `.git/`), togglable via `/toggle-sandbox`. Turning it off
-  hands enforcement to an optional cooperating permission-system extension instead.
-- **`resolveLibraryPath`** (also in `sandbox.ts`) — the one read-only exception to root containment, for
-  the library tools: files of installed packages may live outside the project, but only under roots
-  derived from package-manager metadata, never paths the model supplies.
+- **`policy.ts`** — what is protected: credential stores (`.ssh/`, `.env*`, `.aws/`, …) and `.git/`, as one
+  glob list, plus the pure checks `isRestricted` and `isInside`.
+- **`sandbox.ts`** — `Sandbox`, one unchangeable object per tool call (`sandboxFor(ctx.cwd)`). Tools never
+  check paths themselves; they ask it to `resolve` a path the model gave, filter what a directory walk found
+  (`entryFilter`), filter paths git reports (`allowsReported`), or resolve a file inside an installed package
+  (`resolveLibraryFile` — the one read-only exception to root containment, limited to roots derived from
+  package-manager metadata). Every check runs on the path as given and on its real, symlink-resolved path.
+- **`permissionGate.ts`** — `/toggle-sandbox off` turns the checks off; in exchange every tool registered
+  through the gated registry asks for confirmation before each call (blocked without a UI).
 
 ## Everything else
 

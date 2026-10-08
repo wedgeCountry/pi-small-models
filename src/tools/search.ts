@@ -1,8 +1,8 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { SEARCH_TOOL_DEFINITION } from "../tool_definitions/search.ts";
 import { findFiles } from "./find.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -23,17 +23,18 @@ export interface SearchResult {
  * Wrapper around findFiles with simpler defaults.
  */
 export async function searchFiles(
-  base: string,
+  sb: Sandbox,
+  target: string,
   pattern: string,
   opts: SearchOptions = {}
 ): Promise<SearchResult> {
-  return findFiles(base, pattern, {
+  return findFiles(sb, target, pattern, {
     maxResults: opts.maxResults,
     signal: opts.signal,
   });
 }
 
-export function registerSearchTool(pi: ExtensionAPI) {
+export function registerSearchTool(pi: ToolRegistry) {
   pi.registerTool({
     ...SEARCH_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(SEARCH_TOOL_DEFINITION.name, SEARCH_TOOL_DEFINITION.parameters),
@@ -45,9 +46,8 @@ export function registerSearchTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await searchFiles(base, params.pattern, {
+      const result = await searchFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {
         maxResults: params.maxResults,
         signal,
         ignoreGlobs,

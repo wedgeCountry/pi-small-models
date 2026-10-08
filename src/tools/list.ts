@@ -2,9 +2,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import micromatch from "micromatch";
 import { DEFAULT_IGNORE_NAMES, getEffectiveIgnoreGlobs } from "../ignore.ts";
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
-import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -37,8 +38,10 @@ export interface ListResult {
   truncated: boolean;
 }
 
-/** Lists directory entries under `base`, optionally recursively. */
-export async function listDir(base: string, opts: ListOptions = {}): Promise<ListResult> {
+/** Lists directory entries under `target` (resolved through `sb`), optionally recursively. */
+export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {}): Promise<ListResult> {
+  const base = sb.resolve(target);
+  const allowed = sb.entryFilter(base);
   const maxDepth = opts.recursive ? (opts.maxDepth ?? 3) : 0;
   const max = opts.maxResults ?? 200;
   const entries: ListEntry[] = [];
@@ -53,11 +56,9 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
 
     for (const dirent of filtered) {
       const relPath = relPrefix ? `${relPrefix}/${dirent.name}` : dirent.name;
-      // A symlink inside base can point outside it even though base itself
-      // is safe, and a real (non-symlinked) entry can still fall under a
-      // restricted path (e.g. .ssh) — skip (don't even disclose the name
-      // of) anything the sandbox rejects.
-      if (!isEntrySandboxSafe(base, relPath, "read", dirent.isSymbolicLink())) continue;
+      // Skip (don't even disclose the name of) anything the sandbox rejects: a protected entry such
+      // as .ssh, or a symlink pointing outside the project.
+      if (!allowed(relPath, dirent.isSymbolicLink())) continue;
       if (opts.ignoreGlobs && micromatch.isMatch(relPath, opts.ignoreGlobs, { dot: true })) continue;
       const isDirectory = dirent.isDirectory();
       entries.push({ path: relPath, isDirectory });
@@ -72,7 +73,7 @@ export async function listDir(base: string, opts: ListOptions = {}): Promise<Lis
   return { entries: entries.slice(0, max), total: entries.length, truncated };
 }
 
-export function registerListTool(pi: ExtensionAPI) {
+export function registerListTool(pi: ToolRegistry) {
   pi.registerTool({
     ...LIST_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(LIST_TOOL_DEFINITION.name, LIST_TOOL_DEFINITION.parameters),
@@ -82,9 +83,8 @@ export function registerListTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await listDir(base, {
+      const result = await listDir(sandboxFor(ctx.cwd), params.path ?? ".", {
         recursive: params.recursive,
         maxDepth: params.maxDepth,
         showHidden: params.showHidden,

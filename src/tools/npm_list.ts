@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { NPM_LIST_TOOL_DEFINITION } from "../tool_definitions/npm_list.ts";
-import { resolveSandboxPath } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
@@ -18,10 +18,10 @@ export interface NpmListResult {
 }
 
 /**
- * Runs `npm list` in the given directory and returns the output.
+ * Runs `npm list` in the project root and returns the output.
  * Uses --json=false to get human-readable output and respects the depth option.
  */
-export async function npmList(base: string, opts: NpmListOptions = {}): Promise<NpmListResult> {
+export async function npmList(sb: Sandbox, opts: NpmListOptions = {}): Promise<NpmListResult> {
   const depth = opts.depth ?? 0;
   const pkg = opts.package;
   const long = opts.long ?? false;
@@ -38,7 +38,7 @@ export async function npmList(base: string, opts: NpmListOptions = {}): Promise<
 
   try {
     // `npm list` exits non-zero on missing/invalid/extraneous deps, but still prints the tree.
-    ({ stdout, stderr, exitCode } = await runCommand("npm", args, { cwd: base, signal: opts.signal }));
+    ({ stdout, stderr, exitCode } = await runCommand("npm", args, { cwd: sb.root, signal: opts.signal }));
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
     if (err instanceof CommandNotFoundError) {
@@ -60,7 +60,7 @@ export async function npmList(base: string, opts: NpmListOptions = {}): Promise<
   };
 }
 
-export function registerNpmListTool(pi: ExtensionAPI) {
+export function registerNpmListTool(pi: ToolRegistry) {
   pi.registerTool({
     ...NPM_LIST_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(NPM_LIST_TOOL_DEFINITION.name, NPM_LIST_TOOL_DEFINITION.parameters),
@@ -72,8 +72,7 @@ export function registerNpmListTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSandboxPath(ctx.cwd, ".", "read");
-      const result = await npmList(base, {
+      const result = await npmList(sandboxFor(ctx.cwd), {
         depth: params.depth,
         package: params.package,
         long: params.long,

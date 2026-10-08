@@ -1,9 +1,8 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
-import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -38,18 +37,19 @@ export interface GitStatusResult {
 }
 
 /**
- * Runs `git status --porcelain=v1 --branch` in `cwd` and parses it into a branch/ahead/behind
+ * Runs `git status --porcelain=v1 --branch` in the project root and parses it into a branch/ahead/behind
  * summary plus a list of changed entries. `--porcelain=v1` is used instead of `--short` because
  * git guarantees the porcelain format is stable across versions, unlike `--short`'s human-facing
  * output.
  */
-export async function gitStatus(cwd: string, opts: GitStatusOptions = {}): Promise<GitStatusResult> {
+export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promise<GitStatusResult> {
   const args = ["status", "--porcelain=v1", "--branch"];
-  if (opts.path) args.push("--", opts.path);
+  const scope = opts.path ? sb.relative(opts.path) : "";
+  if (scope) args.push("--", scope);
 
   let stdout: string;
   try {
-    ({ stdout } = await execFile("git", args, { cwd, signal: opts.signal, maxBuffer: MAX_BUFFER }));
+    ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
     throw new Error(`git status failed: ${describeError(err)}`);
@@ -87,19 +87,10 @@ export async function gitStatus(cwd: string, opts: GitStatusOptions = {}): Promi
     entries.push({ path: rest, indexStatus, worktreeStatus, renamedFrom });
   }
 
-  // `git status` reports every changed path in the repo regardless of `opts.path` scoping (and
-  // even when unscoped entirely, the tool's default) — unlike `find`/`grep`/`list`, which only ever
-  // walk filesystem entries that already passed `isEntrySandboxSafe`, nothing here has filtered a
-  // credential-shaped path (`.env`, `.ssh/**`, ...) out yet. Do that now, the same way those tools
-  // do, rather than disclosing that such a file exists (or was renamed/staged) just because git
-  // already knows about it. `isSymlink: false` throughout: git only ever reports a path relative to
-  // the repo's own working tree, never one resolved through a symlink to somewhere else, so the
-  // symlink-escape half of `isEntrySandboxSafe` doesn't apply here — only the restricted-glob check
-  // does.
+  // git reports every changed path it knows, scoped or not, so protected paths (`.env`, `.ssh/**`,
+  // ...) are filtered out here rather than disclosing that such a file exists or was renamed.
   const visibleEntries = entries.filter(
-    (e) =>
-      isEntrySandboxSafe(cwd, e.path, "read", false) &&
-      (e.renamedFrom === undefined || isEntrySandboxSafe(cwd, e.renamedFrom, "read", false))
+    (e) => sb.allowsReported(e.path) && (e.renamedFrom === undefined || sb.allowsReported(e.renamedFrom))
   );
 
   return { branch, ahead, behind, entries: visibleEntries };
@@ -111,7 +102,7 @@ function describeError(err: unknown): string {
   return e.stderr?.trim() || e.message || String(err);
 }
 
-export function registerGitStatusTool(pi: ExtensionAPI) {
+export function registerGitStatusTool(pi: ToolRegistry) {
   pi.registerTool({
     ...GIT_STATUS_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(GIT_STATUS_TOOL_DEFINITION.name, GIT_STATUS_TOOL_DEFINITION.parameters),
@@ -120,14 +111,7 @@ export function registerGitStatusTool(pi: ExtensionAPI) {
       return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let relPath: string | undefined;
-      if (params.path) {
-        const resolved = resolveSandboxPath(ctx.cwd, params.path, "read");
-        const rel = path.relative(ctx.cwd, resolved);
-        relPath = rel === "" ? undefined : rel;
-      }
-
-      const result = await gitStatus(ctx.cwd, { path: relPath, signal });
+      const result = await gitStatus(sandboxFor(ctx.cwd), { path: params.path, signal });
 
       const branchLine = result.branch
         ? `On branch ${result.branch}` +

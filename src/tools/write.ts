@@ -1,26 +1,18 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
-import { resolveSandboxPath, type SandboxMode } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
-  /**
-   * Sandbox root directory for path validation. When set along with
-   * `sandboxMode`, `writeFile` will reject paths that are restricted by
-   * the sandbox (e.g. `.git/**`, `.ssh/**`, `.env*`). This makes the
-   * sandbox check exercisable by plain-function tests.
-   */
-  sandboxRoot?: string;
-  sandboxMode?: SandboxMode;
 }
 
 /**
- * Writes `content` to `filePath`, creating the file if it doesn't exist and overwriting it if it
+ * Writes `content` to `target` (resolved through `sb`), creating the file if it doesn't exist and overwriting it if it
  * does. Missing parent directories are created first, mirroring Pi's built-in write tool.
  *
  * `fs.mkdir` doesn't accept a `signal` option (unlike `fs.readFile`/`writeFile`), so — same as
@@ -29,13 +21,8 @@ export interface WriteOptions {
  * Runs under `withFileMutationQueue` so a `write` racing an `edit`/`insert`/`remove` on the same
  * path can't interleave with it.
  */
-export async function writeFile(filePath: string, content: string, opts: WriteOptions = {}): Promise<void> {
-  // Sandbox check: if sandboxRoot and sandboxMode are provided, validate the path
-  // against the sandbox restrictions (e.g. .git/**, .ssh/**, .env* are blocked).
-  if (opts.sandboxRoot !== undefined && opts.sandboxMode !== undefined) {
-    resolveSandboxPath(opts.sandboxRoot, path.relative(opts.sandboxRoot, filePath), opts.sandboxMode);
-  }
-
+export async function writeFile(sb: Sandbox, target: string, content: string, opts: WriteOptions = {}): Promise<void> {
+  const filePath = sb.resolve(target);
   await withFileMutationQueue(filePath, async () => {
     opts.signal?.throwIfAborted();
 
@@ -58,7 +45,7 @@ export async function writeFile(filePath: string, content: string, opts: WriteOp
   });
 }
 
-export function registerWriteTool(pi: ExtensionAPI) {
+export function registerWriteTool(pi: ToolRegistry) {
   pi.registerTool({
     ...WRITE_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(WRITE_TOOL_DEFINITION.name, WRITE_TOOL_DEFINITION.parameters),
@@ -68,8 +55,7 @@ export function registerWriteTool(pi: ExtensionAPI) {
       return oneLine(text + (size !== undefined ? theme.fg("toolOutput", ` (${size} bytes)`) : ""));
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSandboxPath(ctx.cwd, params.path, "edit");
-      await writeFile(filePath, params.content, { signal });
+      await writeFile(sandboxFor(ctx.cwd), params.path, params.content, { signal });
 
       return {
         content: [{ type: "text", text: `Successfully wrote ${params.content.length} bytes to ${params.path}.` }],

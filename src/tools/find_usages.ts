@@ -1,9 +1,10 @@
 import fg from "fast-glob";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
-import { resolveSandboxPath, isEntrySandboxSafe } from "../sandbox.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
@@ -84,14 +85,17 @@ async function detectLanguage(base: string, ignoreGlobs: string[], signal?: Abor
  * language, so there's no catastrophic-backtracking surface to guard against and no worker thread
  * is needed (contrast with grep.ts, which takes an arbitrary regex from the caller).
  *
- * `language` defaults to `"auto"`, which calls `detectLanguage` against `base`.
+ * `target` is the directory to scan, resolved through `sb`. `language` defaults to `"auto"`, which
+ * calls `detectLanguage` against it.
  */
 export async function findUsages(
-  base: string,
+  sb: Sandbox,
+  target: string,
   symbol: string,
   language: FindUsagesLanguage | "auto" = "auto",
   opts: FindUsagesOptions = {}
 ): Promise<FindUsagesResult> {
+  const base = sb.resolve(target);
   if (!isValidIdentifier(symbol)) {
     throw new Error(
       `find_usages symbol "${symbol}" is not a valid identifier — expected letters, digits, and ` +
@@ -126,11 +130,11 @@ export async function findUsages(
     objectMode: true,
   });
 
-  // See grep.ts's identical comment: followSymbolicLinks: false only stops descending into a
-  // symlinked directory, not excluding a symlinked file from the results, so every entry is
-  // re-checked against the sandbox before its contents are ever read.
+  // followSymbolicLinks: false only stops descending into a symlinked directory, not a symlinked
+  // file showing up, so every entry goes through the sandbox's filter before it is read.
+  const allowed = sb.entryFilter(base);
   const filePaths = entries
-    .filter((e) => isEntrySandboxSafe(base, e.path, "read", e.dirent.isSymbolicLink()))
+    .filter((e) => allowed(e.path, e.dirent.isSymbolicLink()))
     .map((e) => e.path)
     .sort((a, b) => a.localeCompare(b));
 
@@ -178,7 +182,7 @@ export async function findUsages(
   return { matches, total, filesScanned: files.length, truncated };
 }
 
-export function registerFindUsagesTool(pi: ExtensionAPI) {
+export function registerFindUsagesTool(pi: ToolRegistry) {
   pi.registerTool({
     ...FIND_USAGES_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(FIND_USAGES_TOOL_DEFINITION.name, FIND_USAGES_TOOL_DEFINITION.parameters),
@@ -189,9 +193,8 @@ export function registerFindUsagesTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const base = resolveSandboxPath(ctx.cwd, params.path ?? ".", "read");
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await findUsages(base, params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {
+      const result = await findUsages(sandboxFor(ctx.cwd), params.path ?? ".", params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {
         maxResults: params.maxResults,
         signal,
         ignoreGlobs,
