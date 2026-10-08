@@ -111,6 +111,9 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 # open a new terminal, then:
 nvm install 24
 nvm use 24
+# inside the project:
+npm install
+npm test
 ```
 
 **Windows** — with [fnm](https://github.com/Schniz/fnm) (in PowerShell):
@@ -120,6 +123,9 @@ winget install Schniz.fnm
 fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
 fnm install 24
 fnm use 24
+# inside the project:
+fnm install
+fnm test
 ```
 
 To make fnm load in every new PowerShell window, add the `fnm env ...` line to your PowerShell profile
