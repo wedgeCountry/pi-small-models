@@ -12,3 +12,7 @@ attempts. `sandbox.test.ts` covers `resolveSandboxPath`/`isEntrySandboxSafe` —
 every tool actually calls — including its own symlink-escape and restricted-glob cases. Both files' symlink
 cases create real symlinks via `fs.symlink` and `t.skip()` when that fails with `EPERM` — expected on Windows
 without Developer Mode or admin privileges.
+
+`peek.test.ts` covers `peekFile` itself (extension dispatch, defaults, errors, truncation, rendering);
+`peek_python.test.ts`, `peek_typescript.test.ts`, `peek_csharp.test.ts` and `peek_markdown.test.ts` call each
+PreviewManager's `preview()` directly on inline sources and assert the exact outline lines.

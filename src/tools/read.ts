@@ -12,6 +12,12 @@ export interface ReadOptions {
   offset?: number;
   limit?: number;
   signal?: AbortSignal;
+  /**
+   * Internal only — never exposed as a tool parameter. Skips the DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES
+   * output caps so another tool built on top of read (`peek`, which needs the whole file to
+   * outline it) gets every line; that tool applies its own cap to what it returns instead.
+   */
+  uncapped?: boolean;
 }
 
 export interface ReadLine {
@@ -69,11 +75,11 @@ export async function readFile(filePath: string, opts: ReadOptions = {}): Promis
   let endIndex = opts.limit !== undefined ? Math.min(startIndex + opts.limit, totalLines) : totalLines;
 
   // Cap by line count.
-  endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
+  if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
   let selected = allLines.slice(startIndex, endIndex);
-  while (selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  while (!opts.uncapped && selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
     selected = selected.slice(0, -1);
   }
   endIndex = startIndex + selected.length;
@@ -83,6 +89,18 @@ export async function readFile(filePath: string, opts: ReadOptions = {}): Promis
     totalLines,
     truncated: endIndex < totalLines,
   };
+}
+
+/**
+ * The sandboxed entry point to `read`: resolves `target` against the project `root` through
+ * `resolveSandboxPath(..., "read")` (root containment, symlink escapes, restricted globs such as
+ * `.env*`/`.ssh`/`.git`) and only then reads it with `readFile`. The `read` tool's own `execute()`
+ * uses this, and so does every tool that reads a file's contents on top of read (`peek`), so
+ * they all share exactly one sandboxing path rather than each resolving paths on their own.
+ */
+export async function readProjectFile(root: string, target: string, opts: ReadOptions = {}): Promise<ReadResult> {
+  const filePath = resolveSandboxPath(root, target, "read");
+  return readFile(filePath, opts);
 }
 
 export function registerReadTool(pi: ExtensionAPI) {
@@ -99,8 +117,7 @@ export function registerReadTool(pi: ExtensionAPI) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const filePath = resolveSandboxPath(ctx.cwd, params.path, "read");
-      const result = await readFile(filePath, { offset: params.offset, limit: params.limit, signal });
+      const result = await readProjectFile(ctx.cwd, params.path, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
       if (result.truncated) {

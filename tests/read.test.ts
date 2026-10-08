@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { readFile } from "../src/tools/read.ts";
+import { readFile, readProjectFile } from "../src/tools/read.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("reads a whole file as 1-indexed lines", async (t) => {
@@ -121,4 +121,25 @@ test("rejects when the signal is already aborted", async (t) => {
   const ac = new AbortController();
   ac.abort();
   await assert.rejects(() => readFile(path.join(dir, "a.txt"), { signal: ac.signal }));
+});
+
+test("uncapped (internal option) returns every line past the 2000-line cap", async (t) => {
+  const dir = await makeFixture({ "big.txt": Array.from({ length: 2500 }, (_, i) => `l${i}`).join("\n") });
+  t.after(() => cleanupFixture(dir));
+
+  const capped = await readFile(path.join(dir, "big.txt"));
+  assert.equal(capped.lines.length, 2000);
+  const full = await readFile(path.join(dir, "big.txt"), { uncapped: true });
+  assert.equal(full.lines.length, 2500);
+  assert.equal(full.truncated, false);
+});
+
+test("readProjectFile sandboxes the path before reading", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello", ".env": "SECRET=1" });
+  t.after(() => cleanupFixture(dir));
+
+  const ok = await readProjectFile(dir, "a.txt");
+  assert.deepEqual(ok.lines, [{ line: 1, text: "hello" }]);
+  await assert.rejects(readProjectFile(dir, "../outside.txt"), /outside the project root/);
+  await assert.rejects(readProjectFile(dir, ".env"), /restricted in read mode/);
 });

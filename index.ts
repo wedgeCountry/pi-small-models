@@ -15,6 +15,7 @@ import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerMoveTool} from "./src/tools/move.ts";
 import {registerNpmListTool} from "./src/tools/npm_list.ts";
+import {registerPeekTool} from "./src/tools/peek.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerSearchTool} from "./src/tools/search.ts";
@@ -52,6 +53,7 @@ export default function (pi: ExtensionAPI) {
   registerMkdirTool(pi);
   registerMoveTool(pi);
   registerNpmListTool(pi);
+  registerPeekTool(pi);
   registerReadTool(pi);
   registerRemoveTool(pi);
   registerSearchTool(pi);

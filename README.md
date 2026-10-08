@@ -1,82 +1,165 @@
+# pi-small-models
 
-# Pi Coding Agent Extensions for usage of weaker models
+Simpler tools for small models in the [Pi coding agent](https://pi.dev).
 
-I realized that some weaker models, such as gemma4-e4b, are struggling with the default implementations of edit and bash.
-Also they have problems dealing in windows environments.
+Small local models such as `gemma4-e4b` often struggle with Pi's default `bash` and `edit` tools, and
+with Windows shells in particular. This extension takes `bash` away and gives the model a set of small,
+single-purpose tools instead: read a file, edit one spot, list a folder, check git status, and so on.
+Each tool does one thing, takes a few simple arguments and returns a short, predictable answer, which
+weaker models handle much more reliably than a raw shell.
 
-The solution I found was to give them very basic tools instead of bash and simplify the edit tool. 
+Built with [Claude Code](https://claude.ai).
 
-Implemented using the staggering Claude with Claude [claude.ai](https://claude.ai) Code.
+## Install
 
-## Tools
-
-Registered by `index.ts` via `pi.registerTool`. `find`, `grep`, `edit`, `read`, and `write` share a name with
-one of Pi's built-in tools, so registering them here replaces the built-in (same-name registration wins per
-Pi's tool registry); `bash` is disabled outright on `session_start`.
-
-| Tool         | Replaces built-in? | What it does |
-|--------------|---------------------|--------------|
-| `find`       | yes                 | glob-based file search |
-| `grep`       | yes                 | pattern search across files; the scan itself runs on a worker thread with a wall-clock timeout, so a catastrophically-backtracking regex can't hang the session |
-| `edit`       | yes                 | single `{path, oldText, newText}` replacement per call, instead of a batched edit list |
-| `read`       | yes                 | line-numbered file contents, capped at 2000 lines/50KB per call |
-| `write`      | yes                 | create/overwrite a file's full contents, sandboxed the same as the rest of these tools |
-| `list`       | no                  | directory listing |
-| `mkdir`      | no                  | `mkdir -p`-style directory creation |
-| `remove`     | no                  | delete a file or directory (`recursive: true` required for directories; refuses to delete the project root) |
-| `lstat`      | no                  | file/symlink metadata, never follows symlinks |
-| `insert`     | no                  | insert text after a given line without touching the rest of the file |
-| `git_status` | no                  | `git status`, parsed into `{branch, ahead, behind, entries}` |
-| `git_diff`   | no                  | unstaged `git diff`, optionally scoped to a path, with the same line/byte truncation cap as `read` |
-| `git_log`    | no                  | recent commits (default 10, max 50) with author, date, subject, and changed files; optional `path` scope |
-
-Every tool resolves its `path` argument through `resolveSandboxPath` (`src/sandbox.ts`) first, so the model
-can't read or write outside the project root even without `bash`. `git_status`/`git_diff` additionally filter
-their parsed output against the same restricted-path list even on their default, unscoped (whole-repository)
-call, so a tracked `.env` with an uncommitted change can't leak its path or diff content that way either.
-
-## Sandboxing
-
-`src/sandbox.ts` gates every tool call behind a two-state `/toggle-sandbox` toggle:
-
-- **`on`** (default) — full local enforcement: the model can't escape the project root, and a built-in
-  credential/`.git` glob list blocks reads or edits of things like `.env`, `.ssh/`, and `.git/`.
-- **`off`** — nothing is enforced locally, not even root containment. In exchange, every call to one of
-  this project's tools goes through an explicit approval dialog instead — see below.
-
-### `src/permissionGate.ts`: this project's own approval gate
-
-Rather than depend on a separate permission-managing extension being installed *and* configured, this
-project builds its own decision system directly on Pi's `ExtensionAPI`: `pi.on("tool_call", ...)` fires
-before any tool executes and can block it, and `ctx.ui.confirm(...)` shows a real yes/no dialog. No other
-extension is required.
-
-- **`on`** — the gate does nothing; `sandbox.ts` already fully enforces containment locally, so there's
-  nothing left to ask about.
-- **`off`** — every call to one of this project's 12 tools is intercepted before it runs and requires an
-  explicit approval (one-shot — declining or approving a call isn't remembered for next time). Declining
-  blocks the call with a reason the model sees. In a non-interactive context with no dialog available, the
-  call is blocked automatically rather than silently let through.
-
-An earlier version of this file tried to cooperate with the separate
-[`@gotgenes/pi-permission-system`](https://pi.dev/packages/@gotgenes/pi-permission-system) extension so
-that `"on"` could auto-suppress a second prompt from it. That relied on a `registerAuthorizer` hook that
-doesn't exist on the package's actual public API, so the integration silently never worked — this file
-replaces it with something that does.
-
-## Install in a project
+You need [Pi](https://pi.dev) installed. Then, from your project:
 
 ```bash
 pi install git:github.com/wedgeCountry/pi-small-models
 ```
 
-## Development
+Start Pi as usual. The `bash` tool is gone, and the tools below are available to the model.
+
+## What the model gets
+
+**Files and folders**
+
+| Tool     | What it does |
+|----------|--------------|
+| `read`   | Show a file with line numbers (up to 2000 lines per call) |
+| `peek`   | Show just the outline of a file: classes and function signatures, or the headings of a Markdown file |
+| `write`  | Create a file or replace its whole contents |
+| `edit`   | Replace one piece of text in a file |
+| `insert` | Insert text after a given line |
+| `list`   | List a folder |
+| `mkdir`  | Create a folder (and any missing parents) |
+| `copy`   | Copy a file or folder |
+| `move`   | Move or rename a file or folder |
+| `remove` | Delete a file or folder |
+| `lstat`  | Show file details (size, type, dates) |
+
+**Searching**
+
+| Tool          | What it does |
+|---------------|--------------|
+| `find`        | Find files by glob pattern |
+| `search`      | Find files by name, with simpler defaults than `find` |
+| `grep`        | Search file contents |
+| `find_usages` | Find where a class or function is used (Python, TypeScript/JavaScript, C#) |
+
+**Git** (read-only)
+
+| Tool         | What it does |
+|--------------|--------------|
+| `git_status` | Current branch and changed files |
+| `git_diff`   | Unstaged changes, optionally for one path |
+| `git_log`    | Recent commits with author, date and changed files |
+
+**Build and dependencies**
+
+| Tool           | What it does |
+|----------------|--------------|
+| `ts_check`     | Type-check a TypeScript project (`tsc --noEmit`) |
+| `npm_list`     | List installed npm packages |
+| `dotnet_build` | Build a .NET project or solution |
+| `dotnet_list`  | List NuGet packages, optionally outdated ones |
+
+`read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
+
+### `peek` in more detail
+
+`peek` is meant for models with a small context window: instead of reading a whole file, the model sees
+its shape first and then reads only the part it needs. It works for Python, TypeScript/JavaScript, C# and
+Markdown. By default it shows only public members; it can also include protected or private members and
+doc comments.
+
+## Safety: the sandbox
+
+By default the model is kept inside your project folder. It can't read or change anything outside it,
+and it can't touch sensitive files such as `.env`, `.ssh/` or the `.git/` folder.
+
+If you need the model to go beyond that, type `/toggle-sandbox` in Pi to switch the sandbox off. Pi
+will then ask you to approve **every** tool call before it runs. Type `/toggle-sandbox` again to switch
+it back on. Every new session starts with the sandbox on.
+
+## Hiding files from the model
+
+`find`, `grep` and `list` already skip folders like `node_modules`, `.git`, `dist`, `build`, `bin` and
+`obj`. To hide more:
+
+- **For one project:** add glob patterns, one per line, to a `.piignore` file in the project root.
+- **For all projects:** type `/ignore <pattern>` in Pi. Type `/ignore` on its own to see what is
+  currently ignored.
+
+## Working on this project
+
+### 1. Set up Node.js
+
+The project needs **Node.js 24** or newer. Check what you have:
 
 ```bash
-npm test           # node --test src/tests/**/*.test.ts
-npx tsc --noEmit   # type-check only, no build step
+node --version
 ```
 
-See `doc/architecture.md` for a short human-facing overview, `CLAUDE.md` for the full architecture writeup,
-and the per-directory `README.md` files under `src/`, `src/tools/`, `src/tool_definitions/`, and
-`tests` for the shape of individual tools.
+If that prints an older version, or nothing, install Node 24 with a version manager so you can switch
+versions per project.
+
+**Linux and macOS** — with [nvm](https://github.com/nvm-sh/nvm):
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+# open a new terminal, then:
+nvm install 24
+nvm use 24
+```
+
+**Windows** — with [fnm](https://github.com/Schniz/fnm) (in PowerShell):
+
+```powershell
+winget install Schniz.fnm
+fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
+fnm install 24
+fnm use 24
+```
+
+To make fnm load in every new PowerShell window, add the `fnm env ...` line to your PowerShell profile
+(`notepad $PROFILE`).
+
+If you'd rather not use a version manager, the installer from [nodejs.org](https://nodejs.org) works
+too — pick the 24.x LTS version.
+
+### 2. Install dependencies
+
+```bash
+git clone https://github.com/wedgeCountry/pi-small-models.git
+cd pi-small-models
+npm install
+```
+
+There is no build step: Pi runs the TypeScript source directly.
+
+### 3. Run the tests and type check
+
+```bash
+npm test           # all tests
+npx tsc --noEmit   # type check
+```
+
+To run a single test file:
+
+```bash
+npx tsx --test tests/grep.test.ts
+```
+
+Some tests create symlinks. On Windows these are skipped unless Developer Mode is on or you run as
+administrator; that's expected.
+
+### Where to look next
+
+- [`doc/architecture.md`](doc/architecture.md) — how the project is put together
+- [`doc/tool-pattern.md`](doc/tool-pattern.md) — how to add a new tool
+- `README.md` files in `src/`, `src/tools/`, `src/tool_definitions/` and `tests/`
+
+## License
+
+See [LICENSE](LICENSE).

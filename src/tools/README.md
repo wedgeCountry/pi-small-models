@@ -21,7 +21,7 @@ which walk a directory tree rather than resolving a single path, additionally fi
 through `isEntrySandboxSafe(base, entryPath, mode, isSymlink)`.
 
 Every file also exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`,
-`removePath`, `copyFile`, `moveFile`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`,
+`removePath`, `copyFile`, `moveFile`, `lstatPath`, `insertText`, `readFile`, `peekFile`, `writeFile`, `gitStatus`,
 `gitDiff`) that does the real work independent of `ExtensionAPI` — the tests in `../../tests` call these
 directly instead of going through the tool wrapper.
 
@@ -44,3 +44,9 @@ status/diff to, since with no `path` there's no caller-supplied path to validate
 `find`, `grep`, `edit`, `read`, and `write` share names with Pi's built-in tools, so registering them here
 replaces the built-ins (per Pi's tool registry). `mkdir`, `remove`, `lstat`, `insert`, `git_status`, and
 `git_diff` have no built-in name collision.
+
+`peek.ts` never reads files itself: it calls `read.ts`'s `readProjectFile(root, target, {uncapped: true})`, the same sandboxed entry point `read`'s `execute()` uses, so the two tools can't diverge on sandboxing. It then delegates to `previewManagers/`: `registry.ts` maps file extensions to one `PreviewManager` per
+language (`python.ts`, `typescript.ts`, `csharp.ts`, `markdown.ts`). Each manager's behavior is driven by the
+regex table exported at the top of its file; TypeScript and C# share `braceEngine.ts`, a small
+string/comment-aware brace and statement tracker. No user-supplied regex is involved, so (unlike `grep`) no
+worker thread is needed.

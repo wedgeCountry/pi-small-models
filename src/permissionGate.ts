@@ -45,6 +45,7 @@ const GATED_TOOL_NAMES = new Set([
   "copy",
   "move",
   "lstat",
+  "peek",
   "insert",
   "git_status",
   "git_diff",
@@ -73,6 +74,8 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
     case "mkdir":
     case "lstat":
       return `${toolName} ${path}`;
+    case "peek":
+      return `peek ${path}`;
     case "remove":
       return `remove ${path}${recursive}`;
     case "copy":

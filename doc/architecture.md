@@ -8,7 +8,8 @@ to duplicate it.
 
 A [Pi coding agent](https://pi.dev) extension that disables Pi's built-in `bash` tool and replaces it with
 structured, single-purpose filesystem tools — `find`, `grep`, `list`, `edit`, `mkdir`, `remove`, `lstat`,
-`insert`, `read`, `write`, plus read-only `git_status`/`git_diff`. The premise: smaller/weaker models do
+`insert`, `read`, `write`, plus read-only `git_status`/`git_diff` and `peek` (a structural outline of a code
+or Markdown file: signatures without bodies, or the heading table of contents). The premise: smaller/weaker models do
 better with constrained, structured tools than with a raw shell.
 
 No build step — everything runs directly from TypeScript source via Node 24's native type-stripping.
@@ -19,6 +20,14 @@ Each tool is split into a static definition (`src/tool_definitions/<tool>.ts` �
 and an implementation (`src/tools/<tool>.ts` — the `pi.registerTool()` wrapper plus a plain, independently
 testable async function). `find`/`grep`/`edit`/`read`/`write` share names with Pi's built-ins and replace
 them automatically; the rest are new tools with no built-in equivalent.
+
+## Peek and PreviewManagers
+
+`peek` picks a PreviewManager by file extension (`src/tools/previewManagers/registry.ts`) — Python,
+TypeScript/JavaScript, C# and Markdown. Each manager is driven by a regex table at the top of its file, so what
+peek shows for a language is changed there. Python is indentation-based; TypeScript and C# share a small
+brace-tracking scanner (`braceEngine.ts`). A `visibility` parameter (public/protected/private, inclusive) and
+`includeDocs` control how much is shown; Markdown takes `maxDepth` instead.
 
 ## Sandboxing
 
