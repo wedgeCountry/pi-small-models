@@ -1,6 +1,7 @@
 import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
 import {registerCopyTool} from "./src/tools/copy.ts";
 import {registerDotnetBuildTool} from "./src/tools/dotnet_build.ts";
+import {registerDotnetLibTool} from "./src/tools/dotnet_lib.ts";
 import {registerDotnetListTool} from "./src/tools/dotnet_list.ts";
 import {registerEditTool} from "./src/tools/edit.ts";
 import {registerFindTool} from "./src/tools/find.ts";
@@ -16,10 +17,13 @@ import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerMoveTool} from "./src/tools/move.ts";
 import {registerNpmListTool} from "./src/tools/npm_list.ts";
 import {registerPeekTool} from "./src/tools/peek.ts";
+import {registerPyLibTool} from "./src/tools/py_lib.ts";
+import {registerPyListTool} from "./src/tools/py_list.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerSearchTool} from "./src/tools/search.ts";
 import {registerTsCheckTool} from "./src/tools/ts_check.ts";
+import {registerTsLibTool} from "./src/tools/ts_lib.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {cycleSandboxState, setSandboxState, type SandboxState} from "./src/sandbox.ts";
 import {gateToolCall} from "./src/permissionGate.ts";
@@ -39,6 +43,7 @@ const DISABLED_TOOLS = new Set(["bash"]);
 export default function (pi: ExtensionAPI) {
   registerCopyTool(pi);
   registerDotnetBuildTool(pi);
+  registerDotnetLibTool(pi);
   registerDotnetListTool(pi);
   registerEditTool(pi);
   registerFindTool(pi);
@@ -54,10 +59,13 @@ export default function (pi: ExtensionAPI) {
   registerMoveTool(pi);
   registerNpmListTool(pi);
   registerPeekTool(pi);
+  registerPyLibTool(pi);
+  registerPyListTool(pi);
   registerReadTool(pi);
   registerRemoveTool(pi);
   registerSearchTool(pi);
   registerTsCheckTool(pi);
+  registerTsLibTool(pi);
   registerWriteTool(pi);
 
   pi.registerCommand("toggle-sandbox", {

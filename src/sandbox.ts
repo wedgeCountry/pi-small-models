@@ -170,6 +170,52 @@ export function resolveSandboxPath(root: string, target: string, mode: SandboxMo
   return resolved;
 }
 
+function isInsideRelative(relative: string): boolean {
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+/**
+ * The read-only exception to root containment used by the library tools (`ts_lib`, `py_lib`,
+ * `dotnet_lib`): installed packages often live *outside* the project root (the NuGet cache in
+ * `~/.nuget/packages`, a Python interpreter's `site-packages`, a hoisted `node_modules` in a parent
+ * workspace), so `resolveSandboxPath` would reject them.
+ *
+ * The rule that keeps this safe: **the model never supplies these paths.** A library tool takes a
+ * package *name*, derives `libRoots` from package-manager metadata (`project.assets.json`'s
+ * `packageFolders`, the interpreter's `sys.path`, Node's `node_modules` lookup chain), and every
+ * file it reads must resolve — symlinks followed — beneath one of those roots. The usual
+ * read-mode restricted globs (credentials, `.git/**`) still apply, matched relative to the root.
+ *
+ * Throws on a violation. With the sandbox `"off"` it only resolves the path, like
+ * `resolveSandboxPath` does (`permissionGate.ts` asks for approval instead).
+ */
+export function resolveLibraryPath(libRoots: readonly string[], target: string): string {
+  const resolved = path.resolve(target);
+  if (sandboxState === "off") return resolved;
+
+  const realResolved = realpathWithMissingSuffix(resolved);
+  for (const root of libRoots) {
+    const rootAbs = path.resolve(root);
+    const realRoot = realpathWithMissingSuffix(rootAbs);
+    if (!isInsideRelative(path.relative(realRoot, realResolved))) continue;
+    if (matchesRestrictedGlob(rootAbs, resolved, "read")) {
+      throw new Error(`Library file "${target}" is restricted by the sandbox (see src/sandbox.ts)`);
+    }
+    return resolved;
+  }
+  throw new Error(`Library file "${target}" is outside the installed-package locations this tool may read`);
+}
+
+/** Non-throwing form of `resolveLibraryPath`. */
+export function isLibraryPathSafe(libRoots: readonly string[], target: string): boolean {
+  try {
+    resolveLibraryPath(libRoots, target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Filter predicate for entries discovered while walking `base` (a directory
  * already validated via `resolveSandboxPath`) — the mode-aware replacement

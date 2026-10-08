@@ -63,6 +63,22 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | `npm_list`     | List installed npm packages |
 | `dotnet_build` | Build a .NET project or solution |
 | `dotnet_list`  | List NuGet packages, optionally outdated ones |
+| `py_list`      | List installed Python packages (the project's `.venv` if there is one) |
+
+**Library APIs** (look up what an installed package really offers, in the installed version)
+
+| Tool         | What it does |
+|--------------|--------------|
+| `ts_lib`     | npm package: exports, signatures and JSDoc, read from its type declarations |
+| `py_lib`     | Python package: modules, signatures and docstrings, read from source/stubs (never imported) |
+| `dotnet_lib` | NuGet package or framework namespace: types and members with docs, read from its XML documentation |
+
+All three work the same way: `package` alone gives an overview, `symbol="Type.member"` gives exact
+signatures and docs, and `query="text"` searches names. `module` picks a subpath export, submodule or
+namespace. They only read files of installed packages found through the package manager's own metadata
+(`node_modules`, the Python interpreter's `sys.path`, `obj/project.assets.json`), so they also work for
+packages stored outside the project folder, such as the NuGet cache. `dotnet_lib` needs a restored
+project, and its signatures show parameter types and names but not return types.
 
 `read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
 

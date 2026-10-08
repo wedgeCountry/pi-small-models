@@ -1,13 +1,10 @@
-import { execFile as execFileCb } from "node:child_process";
-import { promisify } from "node:util";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TS_CHECK_TOOL_DEFINITION } from "../tool_definitions/ts_check.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
-
-const execFile = promisify(execFileCb);
+import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
 
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — type errors can produce substantial output
 
@@ -56,21 +53,18 @@ export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<T
 
   let stdout: string;
   let stderr: string;
-  let exitCode = 0;
-  
+  let exitCode: number;
+
   try {
-    const result = await execFile("npx", ["tsc", ...args], { 
-      cwd, 
-      signal: opts.signal, 
+    // tsc exits non-zero when there are type errors; runCommand still returns its output then.
+    ({ stdout, stderr, exitCode } = await runCommand("npx", ["tsc", ...args], {
+      cwd,
+      signal: opts.signal,
       maxBuffer: MAX_BUFFER,
-      reject: false // Don't throw on non-zero exit — tsc returns non-zero when there are type errors
-    });
-    stdout = result.stdout;
-    stderr = result.stderr;
-    exitCode = result.status ?? 0;
+    }));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+    if ((err as Error).name === "AbortError") throw err;
+    if (err instanceof CommandNotFoundError) {
       return {
         success: false,
         output: "TypeScript (tsc) is not installed or not on PATH. Run 'npm install typescript' first.",
@@ -79,7 +73,7 @@ export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<T
     }
     return {
       success: false,
-      output: `TypeScript type check failed: ${describeError(err)}`,
+      output: `TypeScript type check failed: ${describeCommandError(err)}`,
       exitCode: -1,
     };
   }
@@ -89,11 +83,6 @@ export async function tsCheck(cwd: string, opts: TsCheckOptions = {}): Promise<T
   const success = exitCode === 0;
 
   return { success, output, exitCode };
-}
-
-function describeError(err: unknown): string {
-  const e = err as NodeJS.ErrnoException & { stderr?: string };
-  return e.stderr?.trim() || e.message || String(err);
 }
 
 export function registerTsCheckTool(pi: ExtensionAPI) {

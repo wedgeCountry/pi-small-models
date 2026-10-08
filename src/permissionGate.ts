@@ -50,6 +50,12 @@ const GATED_TOOL_NAMES = new Set([
   "git_status",
   "git_diff",
   "git_log",
+  // Library tools read installed packages outside the project root (see resolveLibraryPath in
+  // sandbox.ts) and py_lib/py_list run the project's Python interpreter.
+  "ts_lib",
+  "py_lib",
+  "py_list",
+  "dotnet_lib",
 ]);
 
 function str(input: Record<string, unknown>, key: string): string | undefined {
@@ -109,6 +115,20 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
     case "git_log": {
       const scope = str(input, "path");
       return scope ? `git_log (${scope})` : "git_log";
+    }
+    case "ts_lib":
+    case "py_lib":
+    case "dotnet_lib": {
+      const pkg = str(input, "package") ?? "?";
+      const module = str(input, "module");
+      const symbol = str(input, "symbol");
+      const query = str(input, "query");
+      const detail = symbol ? ` symbol ${symbol}` : query ? ` search "${query}"` : "";
+      return `${toolName} ${pkg}${module ? ` (${module})` : ""}${detail} — reads installed package files`;
+    }
+    case "py_list": {
+      const pkg = str(input, "package");
+      return `py_list${pkg ? ` ${pkg}` : ""} — runs the project's Python interpreter`;
     }
     default:
       return toolName;

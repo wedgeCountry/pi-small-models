@@ -1,13 +1,10 @@
-import { execFile as execFileCb } from "node:child_process";
-import { promisify } from "node:util";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DOTNET_LIST_TOOL_DEFINITION } from "../tool_definitions/dotnet_list.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
-
-const execFile = promisify(execFileCb);
+import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
 
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — package lists can be substantial for large solutions
 
@@ -74,30 +71,22 @@ export async function dotnetList(cwd: string, opts: DotnetListOptions = {}): Pro
 
   let stdout: string;
   let stderr: string;
-  let exitCode = 0;
-  
+  let exitCode: number;
+
   try {
-    const result = await execFile("dotnet", args, { 
-      cwd, 
-      signal: opts.signal, 
+    ({ stdout, stderr, exitCode } = await runCommand("dotnet", args, {
+      cwd,
+      signal: opts.signal,
       maxBuffer: MAX_BUFFER,
-      reject: false // Don't throw on non-zero exit — we want to report failures gracefully
-    });
-    stdout = result.stdout;
-    stderr = result.stderr;
-    exitCode = result.status ?? 0;
+    }));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return {
-        success: false,
-        output: "dotnet is not installed or not on PATH",
-        exitCode: -1,
-      };
+    if ((err as Error).name === "AbortError") throw err;
+    if (err instanceof CommandNotFoundError) {
+      return { success: false, output: err.message, exitCode: -1 };
     }
     return {
       success: false,
-      output: `dotnet package list failed: ${describeError(err)}`,
+      output: `dotnet package list failed: ${describeCommandError(err)}`,
       exitCode: -1,
     };
   }
@@ -106,11 +95,6 @@ export async function dotnetList(cwd: string, opts: DotnetListOptions = {}): Pro
   const success = exitCode === 0;
 
   return { success, output, exitCode };
-}
-
-function describeError(err: unknown): string {
-  const e = err as NodeJS.ErrnoException & { stderr?: string };
-  return e.stderr?.trim() || e.message || String(err);
 }
 
 export function registerDotnetListTool(pi: ExtensionAPI) {

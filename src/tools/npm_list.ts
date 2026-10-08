@@ -1,12 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { NPM_LIST_TOOL_DEFINITION } from "../tool_definitions/npm_list.ts";
 import { resolveSandboxPath } from "../sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
-
-const execFileAsync = promisify(execFile);
+import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
 
 export interface NpmListOptions {
   depth?: number;
@@ -37,42 +34,30 @@ export async function npmList(base: string, opts: NpmListOptions = {}): Promise<
 
   let stdout: string;
   let stderr: string;
+  let exitCode: number;
 
   try {
-    const result = await execFileAsync("npm", args, {
-      cwd: base,
-      encoding: "utf8",
-      signal: opts.signal,
-      reject: false, // Don't throw on non-zero exit — npm list returns non-zero for missing deps
-    });
-    stdout = result.stdout ?? "";
-    stderr = result.stderr ?? "";
-  } catch (err: any) {
-    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return {
-        output: "npm is not installed or not on PATH",
-        truncated: false,
-      };
+    // `npm list` exits non-zero on missing/invalid/extraneous deps, but still prints the tree.
+    ({ stdout, stderr, exitCode } = await runCommand("npm", args, { cwd: base, signal: opts.signal }));
+  } catch (err) {
+    if ((err as Error).name === "AbortError") throw err;
+    if (err instanceof CommandNotFoundError) {
+      return { output: err.message, truncated: false };
     }
-    return {
-      output: `npm list failed: ${describeError(err)}`,
-      truncated: false,
-    };
+    return { output: `npm list failed: ${describeCommandError(err)}`, truncated: false };
   }
 
-  const output = stdout.trim() || (stderr ? stderr.trim() : "No packages found.");
+  // On a non-zero exit, stderr names the problem (e.g. "missing: foo@^1.0.0") — keep it.
+  const output =
+    [stdout.trim(), exitCode !== 0 ? stderr.trim() : ""].filter(Boolean).join("\n\n") ||
+    stderr.trim() ||
+    "No packages found.";
   const truncated = output.length > 50000; // Cap at ~50KB similar to read tool
 
   return {
     output: truncated ? output.slice(0, 50000) + "\n... (output truncated)" : output,
     truncated,
   };
-}
-
-function describeError(err: unknown): string {
-  const e = err as NodeJS.ErrnoException & { stderr?: string };
-  return e.stderr?.trim() || e.message || String(err);
 }
 
 export function registerNpmListTool(pi: ExtensionAPI) {

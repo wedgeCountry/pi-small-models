@@ -29,6 +29,15 @@ peek shows for a language is changed there. Python is indentation-based; TypeScr
 brace-tracking scanner (`braceEngine.ts`). A `visibility` parameter (public/protected/private, inclusive) and
 `includeDocs` control how much is shown; Markdown takes `maxDepth` instead.
 
+## Library tools
+
+`ts_lib`, `py_lib` and `dotnet_lib` describe installed packages. Each one locates the package and
+extracts a flat list of API entries (`src/tools/libInfo/`); shared code in `query.ts`/`format.ts` turns
+that into the same overview / search / symbol views for all three. TypeScript uses the TypeScript
+compiler API, Python runs a small stdlib-only helper script (`py_libinfo.py`) in the project's
+interpreter that reads source with `ast`, and .NET reads the XML documentation files next to the
+package's assemblies. `py_list` lists Python packages through the same helper.
+
 ## Sandboxing
 
 Two layers, both under `src/`:
@@ -38,6 +47,9 @@ Two layers, both under `src/`:
 - **`sandbox.ts`** — wraps that with a toggleable, mode-aware restricted-path layer on top (blocking things
   like `.ssh/`, `.env`, and — in edit mode — `.git/`), togglable via `/toggle-sandbox`. Turning it off
   hands enforcement to an optional cooperating permission-system extension instead.
+- **`resolveLibraryPath`** (also in `sandbox.ts`) — the one read-only exception to root containment, for
+  the library tools: files of installed packages may live outside the project, but only under roots
+  derived from package-manager metadata, never paths the model supplies.
 
 ## Everything else
 
