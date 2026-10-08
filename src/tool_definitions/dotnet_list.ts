@@ -3,17 +3,10 @@ import { Type } from "typebox";
 export const DOTNET_LIST_TOOL_DEFINITION = {
   name: "dotnet_list",
   label: "Dotnet List",
-  description: "List NuGet package references for a .NET project or solution using `dotnet package list`. Use to check installed packages, verify versions, or find outdated/vulnerable dependencies.",
-  promptSnippet: "dotnet_list: list NuGet packages for a .NET project (bash is disabled)",
+  description: "List NuGet package references for a .NET project or solution.",
   promptGuidelines: [
-    "Use dotnet_list to see what NuGet packages are referenced in a .NET project or solution.",
-    "Use dotnet_list to verify package versions or check for outdated/vulnerable packages.",
-    "Use dotnet_list to debug 'package not found' or version conflict errors.",
-    "Specify a project (.csproj, .fsproj, .vbproj) or solution (.sln) file to list packages for a specific project.",
-    "Omit path to list packages for the project in the current directory.",
-    "Use --outdated to find newer versions of packages.",
-    "Use --include-transitive to show transitive dependencies.",
-    "Use dotnet_list instead of a bash `dotnet package list` command — bash is disabled in this project.",
+    "Use to check installed packages, verify versions, or find outdated/vulnerable dependencies.",
+      "Use dotnet_list instead of a bash `dotnet package list` command — bash is disabled in this project.",
   ],
   parameters: Type.Object({
     path: Type.Optional(
