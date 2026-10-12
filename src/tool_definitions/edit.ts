@@ -5,18 +5,17 @@ export const EDIT_TOOL_DEFINITION = {
   label: "Edit",
   description: "Edit a file by replacing text blocks.",
   promptGuidelines: [
-      "OldText must match exactly one location in the file's current contents."
+      "OldText must match exactly one location in the file's current contents. You must not include line numbers, but only the plain text!"
   ],
   parameters: Type.Object({
     path: Type.String({ description: "Path to the file to edit, relative to the project root." }),
-    oldText: Type.Optional(
-      Type.String({
+    oldText: Type.String({
         minLength: 1,
-        description: "Exact text to replace. Must match exactly one location in the file, unless allowMultipleMatches is set. Omit this and newText when using edits instead.",
-      })
+        description: "Exact text to replace. Must match exactly the content in the file. Do not use line numbers!",
+      }
     ),
-    newText: Type.Optional(
-      Type.String({ description: "Text to replace oldText with. Required alongside oldText; omit when using edits." })
+    newText:
+        Type.String({ description: "Text to replace oldText with. Do not use line numbers!" }
     ),
     allowMultipleMatches: Type.Optional(
       Type.Boolean({
