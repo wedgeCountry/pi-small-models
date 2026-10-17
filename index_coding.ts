@@ -33,9 +33,15 @@ export default function (pi: ExtensionAPI) {
   //registerTsCheckTool(tools);
   //registerTsLibTool(tools);
 
+  pi.on("before_agent_start", (event) => {
+    const opts = event.systemPromptOptions;
+    opts.appendSystemPrompt = "You do not have tools to build or execute code, run tests or check syntax. Solve all problems using the tools you have available. To build, execute or test code tell the user to do so in the summary. ";
+  });
+
   pi.on("session_start", (_event) => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
   });
 
   pi.on("tool_call", createPermissionGate(gatedTools));
+
 }
