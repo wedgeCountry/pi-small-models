@@ -30,7 +30,7 @@ test("respects the glob filter", async (t) => {
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await grepFiles(new Sandbox(dir), ".", "needle", { glob: "**/*.ts" });
+  const result = await grepFiles(new Sandbox(dir), ".", "needle", { pattern: "**/*.ts" });
   assert.equal(result.matchCount, 1);
   assert.equal(result.lines[0]?.file, "a.ts");
 });
@@ -157,7 +157,7 @@ test("excludes a sandbox-restricted file even when explicitly globbed for", asyn
   const dir = await makeFixture({ ".env": "SECRET=needle", "a.txt": "needle" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await grepFiles(new Sandbox(dir), ".", "needle", { glob: ".env" });
+  const result = await grepFiles(new Sandbox(dir), ".", "needle", { pattern: ".env" });
   assert.equal(result.matchCount, 0);
   assert.equal(result.filesScanned, 0);
 });
@@ -167,9 +167,9 @@ test("an unenforced sandbox lets the worker read what an enforced one hides", as
   const dir = await makeFixture({ ".env": "SECRET=needle" });
   t.after(() => cleanupFixture(dir));
 
-  const restricted = await grepFiles(new Sandbox(dir), ".", "needle", { glob: ".env" });
+  const restricted = await grepFiles(new Sandbox(dir), ".", "needle", { pattern: ".env" });
   assert.equal(restricted.matchCount, 0);
 
-  const unlocked = await grepFiles(new Sandbox(dir, false), ".", "needle", { glob: ".env" });
+  const unlocked = await grepFiles(new Sandbox(dir, false), ".", "needle", { pattern: ".env" });
   assert.equal(unlocked.matchCount, 1);
 });

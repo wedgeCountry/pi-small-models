@@ -11,7 +11,7 @@ import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
 export interface GrepOptions {
-  glob?: string;
+  pattern?: string;
   ignoreCase?: boolean;
   maxResults?: number;
   contextLines?: number;
@@ -67,12 +67,12 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
   if (!baseStat.isDirectory()) {
     throw new Error(
       `grep path "${base}" is a file, not a directory. "path" must name a directory to search within; ` +
-        `to search a single file, keep "path" pointed at its containing directory and pass the filename via "glob" instead, ` +
-        `e.g. { path: ".", glob: "main.py" }.`
+        `to search a single file, keep "path" pointed at its containing directory and pass the filename via "pattern" instead, ` +
+        `e.g. { path: ".", pattern: "main.py" }.`
     );
   }
 
-  const entries = await fg(opts.glob ?? "**/*", {
+  const entries = await fg(pattern ?? "**/*", {
     cwd: base,
     ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
     onlyFiles: true,
@@ -186,15 +186,14 @@ export function registerGrepTool(pi: ToolRegistry) {
     renderCall(args, theme) {
       let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.pattern ?? ""}/`)}`;
       text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-      if (args.glob) text += theme.fg("toolOutput", ` (${args.glob})`);
+      if (args.pattern) text += theme.fg("toolOutput", ` (${args.pattern})`);
       if (args.ignoreCase) text += theme.fg("toolOutput", " -i");
       if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` limit ${args.maxResults}`);
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await grepFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {
-        glob: params.glob,
+      const result = await grepFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern ?? "**/*", {
         ignoreCase: params.ignoreCase,
         maxResults: params.maxResults,
         contextLines: params.contextLines,
