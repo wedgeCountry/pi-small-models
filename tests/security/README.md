@@ -20,7 +20,7 @@ same way the existing dotnet/symlink tests do. Payloads are benign — the "expl
 | `sec_c1_python_exec.test.ts` | C1 | A `.pth` file, and a replaced `.venv/bin/python3`, planted with `write`/`copy` must not execute when `py_list`/`py_lib` run |
 | `sec_c2_ts_check_exec.test.ts` | C2 | `ts_check` must not run a model-writable `node_modules/.bin/tsc` |
 | `sec_c3_option_injection.test.ts` | C3 | `Sandbox.relative()` must not return an option-shaped (`-…`) scope path |
-| `sec_h1_agent_config.test.ts` | H1 | `.pi/**`, `.agents/**`, `AGENTS.md`, `CLAUDE.md`, `.piignore` must not be writable |
+| `sec_h1_agent_config.test.ts` | H1 | `.pi/**`, `.agents/**`, `AGENTS.md`, `../../AGENTS.md`, `.piignore` must not be writable |
 | `sec_h2_copy_move_bypass.test.ts` | H2 | Copying/moving a parent dir, or recursively removing one, must not expose/relocate/delete a protected file |
 | `sec_h3_denylist_gaps.test.ts` | H3 | Common credential files must be restricted; `$HOME` as root must be refused |
 | `sec_h4_gitdiff_failopen.test.ts` | H4 | `git_diff` must hide a tracked `.env` even under `diff.mnemonicPrefix=true` |
