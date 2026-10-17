@@ -6,15 +6,10 @@ import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { peekFile, renderPeekResult } from "./peek.ts";
 import type { PeekVisibility } from "./previewManagers/types.ts";
+import { PEEK_EXTENSIONS } from "./previewManagers/registry.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
-
-/**
- * List of extensions that support the 'peek' functionality.
- * NOTE: This list must be maintained and updated if new supported extensions are added.
- */
-const PEEK_EXTENSIONS: Set<string> = new Set([".ts", ".js", ".json", ".css", ".html", ".md"]);
 
 export interface ReadOptions {
   offset?: number;
@@ -134,9 +129,11 @@ export function registerReadTool(pi: ToolRegistry) {
       const path = params.path ?? "";
       const extension = getExtension(path);
       
-      // Implement the core logic change here:
-      // Use peek functionality only if extension is supported AND user explicitly requested peek=true
-      const usePeek = PEEK_EXTENSIONS.has(extension) && params.peek !== undefined && params.peek;
+      // Use peek functionality only when offset and limit are not set
+      // If user provides offset or limit, they want to see specific content, not an outline
+      const usePeek = PEEK_EXTENSIONS.includes(extension) &&
+                      params.offset === undefined &&
+                      params.limit === undefined;
       
       if (usePeek) {
         // Use peek functionality
@@ -158,7 +155,10 @@ export function registerReadTool(pi: ToolRegistry) {
         };
       }
       
-      // Fallback/Standard read for unsupported extensions or explicit peek=false
+      // Fallback/Standard read for:
+      // - unsupported extensions
+      // - when offset or limit are provided (user wants specific content, not outline)
+      // - explicit peek=false
       const result = await readFile(sandboxFor(ctx.cwd), params.path, { 
           offset: params.offset, 
           limit: params.limit, 
