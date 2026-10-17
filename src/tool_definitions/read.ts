@@ -10,5 +10,11 @@ export const READ_TOOL_DEFINITION = {
       Type.Integer({ minimum: 1, description: "1-indexed line number to start reading from. Defaults to 1." })
     ),
     limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines to read." })),
+    peek: Type.Optional(
+      Type.Boolean({ 
+        description: "If true, show a compact outline of the file instead of its contents. Defaults to true.",
+        default: true,
+      })
+    ),
   }),
 };

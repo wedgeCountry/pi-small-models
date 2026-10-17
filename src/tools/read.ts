@@ -4,6 +4,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
+import { peekFile, renderPeekResult } from "./peek.ts";
+import type { PeekVisibility } from "./previewManagers/types.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -12,6 +14,7 @@ export interface ReadOptions {
   offset?: number;
   limit?: number;
   signal?: AbortSignal;
+  peek?: boolean;
   /**
    * Internal only — never exposed as a tool parameter. Skips the DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES
    * output caps so another tool built on top of read (`peek`, which needs the whole file to
@@ -98,14 +101,46 @@ export function registerReadTool(pi: ToolRegistry) {
     prepareArguments: withConciseValidationErrors(READ_TOOL_DEFINITION.name, READ_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
-      if (args.offset !== undefined || args.limit !== undefined) {
-        const start = args.offset ?? 1;
-        const end = args.limit !== undefined ? start + args.limit - 1 : undefined;
-        text += theme.fg("toolOutput", `:${start}${end !== undefined ? `-${end}` : "+"}`);
+      const flags: string[] = [];
+      if (args.peek !== undefined) {
+        flags.push(args.peek ? "peek" : "no-peek");
+      } else {
+        flags.push("peek");
+      }
+      if (args.offset !== undefined) {
+        flags.push(`offset ${args.offset}`);
+      }
+      if (args.limit !== undefined) {
+        flags.push(`limit ${args.limit}`);
+      }
+      if (flags.length > 0) {
+        text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
       }
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const usePeek = params.peek !== undefined ? params.peek : true;
+      
+      if (usePeek) {
+        const visibility: PeekVisibility = "public";
+        const result = await peekFile(sandboxFor(ctx.cwd), params.path, {
+          visibility,
+          includeDocs: false,
+          maxDepth: 6,
+          signal,
+        });
+
+        return {
+          content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
+          details: {
+            language: result.language,
+            shownLines: result.lines.length,
+            totalLines: result.totalLines,
+            truncated: result.truncated,
+          },
+        };
+      }
+
       const result = await readFile(sandboxFor(ctx.cwd), params.path, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
