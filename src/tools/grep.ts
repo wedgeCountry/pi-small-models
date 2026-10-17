@@ -38,7 +38,7 @@ export interface GrepResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000;
-const WORKER_URL = new URL("./grepWorker.mjs", import.meta.url);
+const WORKER_URL = new URL("../backend/grepWorker.mjs", import.meta.url);
 
 /** Searches file contents under `target` (resolved through `sb`) for a regex/plain-text pattern. */
 export async function grepFiles(sb: Sandbox, target: string, pattern: string, opts: GrepOptions = {}): Promise<GrepResult> {
