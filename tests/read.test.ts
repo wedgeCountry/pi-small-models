@@ -192,3 +192,23 @@ test("read without offset/limit on supported extension uses peek mode", async (t
   assert.ok(peekResult.lines.length > 0, "peekFile should return outline entries");
   assert.equal(peekResult.totalLines, 300, "peekFile should report total lines");
 });
+
+
+test("read with peek=false on supported extension uses standard read mode", async (t) => {
+  // This test verifies the fix: when peek=false is explicitly set,
+  // the read tool should use standard read mode (not peek), even on supported extensions
+  
+  // Create a Python file with 300 lines (Python is in PEEK_EXTENSIONS)
+  const lines = Array.from({ length: 300 }, (_, i) => `line${i + 1}`);
+  const dir = await makeFixture({ "api.py": lines.join("\n") });
+  t.after(() => cleanupFixture(dir));
+
+  // When peek=false is explicitly set, standard read should be used
+  // This should return the actual file content, not a peek outline
+  const result = await readFile(new Sandbox(dir), path.join(dir, "api.py"), { peek: false });
+  assert.equal(result.lines.length, 300, "Should return all 300 lines");
+  assert.equal(result.totalLines, 300);
+  assert.equal(result.truncated, false, "Should not be truncated since file < DEFAULT_MAX_LINES");
+  assert.equal(result.lines[0]!.text, "line1", "First line should be actual content");
+  assert.equal(result.lines[299]!.text, "line300", "Last line should be actual content");
+});

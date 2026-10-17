@@ -129,9 +129,12 @@ export function registerReadTool(pi: ToolRegistry) {
       const path = params.path ?? "";
       const extension = getExtension(path);
       
-      // Use peek functionality only when offset and limit are not set
-      // If user provides offset or limit, they want to see specific content, not an outline
-      const usePeek = PEEK_EXTENSIONS.includes(extension) &&
+      // Use peek functionality only when:
+      // - peek is not explicitly false
+      // - extension is in PEEK_EXTENSIONS
+      // - offset and limit are not set (user wants specific content, not outline)
+      const usePeek = (params.peek ?? true) &&
+                      PEEK_EXTENSIONS.includes(extension) &&
                       params.offset === undefined &&
                       params.limit === undefined;
       
