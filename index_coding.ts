@@ -20,18 +20,18 @@ const DISABLED_TOOLS = new Set(["bash"]);
 export default function (pi: ExtensionAPI) {
   // Every tool registered through `tools` is gated: with the sandbox off, it asks before running.
   const {registry: tools, gatedTools} = createGatedRegistry(pi);
-  registerDotnetBuildTool(tools);
-  registerDotnetLibTool(tools);
-  registerDotnetListTool(tools);
+  //registerDotnetBuildTool(tools);
+  //registerDotnetLibTool(tools);
+  //registerDotnetListTool(tools);
   registerFindUsagesTool(tools);
   registerGitDiffTool(tools);
   registerGitLogTool(tools);
   registerGitStatusTool(tools);
-  registerNpmListTool(tools);
-  registerPyLibTool(tools);
-  registerPyListTool(tools);
-  registerTsCheckTool(tools);
-  registerTsLibTool(tools);
+  //registerNpmListTool(tools);
+  //registerPyLibTool(tools);
+  //registerPyListTool(tools);
+  //registerTsCheckTool(tools);
+  //registerTsLibTool(tools);
 
   pi.on("session_start", (_event) => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
