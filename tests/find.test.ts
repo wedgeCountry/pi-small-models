@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { findFiles } from "../src/tools/find.ts";
-import { DEFAULT_IGNORE_GLOBS } from "../src/ignore.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../src/commands/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 
@@ -112,4 +112,52 @@ test("omits a symlink that points outside the base directory", async (t) => {
 
   const result = await findFiles(new Sandbox(dir), ".", "**/*");
   assert.deepEqual(result.matches, ["real.txt"]);
+});
+
+test("plain filename pattern searches recursively", async (t) => {
+  const dir = await makeFixture({
+    "tool-pattern.md": "",
+    "doc/tool-pattern.md": "",
+    "src/nested/tool-pattern.md": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(new Sandbox(dir), ".", "tool-pattern.md");
+  assert.deepEqual(result.matches.sort(), ["doc/tool-pattern.md", "src/nested/tool-pattern.md", "tool-pattern.md"]);
+});
+
+test("glob patterns are not modified", async (t) => {
+  const dir = await makeFixture({
+    "index.ts": "",
+    "util.ts": "",
+    "src/nested.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(new Sandbox(dir), ".", "*.ts");
+  assert.deepEqual(result.matches.sort(), ["index.ts", "util.ts"]);
+});
+
+test("path-separator patterns are not modified", async (t) => {
+  const dir = await makeFixture({
+    "src/index.ts": "",
+    "src/util.ts": "",
+    "tests/test.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(new Sandbox(dir), ".", "src/*.ts");
+  assert.deepEqual(result.matches.sort(), ["src/index.ts", "src/util.ts"]);
+});
+
+test("explicit recursive glob pattern still works", async (t) => {
+  const dir = await makeFixture({
+    "src/index.ts": "",
+    "src/util.ts": "",
+    "tests/test.ts": "",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await findFiles(new Sandbox(dir), ".", "**/*.ts");
+  assert.deepEqual(result.matches.sort(), ["src/index.ts", "src/util.ts", "tests/test.ts"]);
 });

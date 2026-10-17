@@ -1,13 +1,13 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import micromatch from "micromatch";
-import { DEFAULT_IGNORE_NAMES, getEffectiveIgnoreGlobs } from "../ignore.ts";
+import { DEFAULT_IGNORE_NAMES, getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface ListOptions {
   recursive?: boolean;

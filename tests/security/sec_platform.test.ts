@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
-import { npmList } from "../../src/tools/npm_list.ts";
+import { npmList } from "../../coding/tools/npm_list.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
 test("L2: npm_list must not let a `-`-prefixed package become an npm option", async (t) => {

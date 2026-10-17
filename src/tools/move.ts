@@ -3,10 +3,10 @@ import * as path from "node:path";
 import { MOVE_TOOL_DEFINITION } from "../tool_definitions/move.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { withFileMutationQueue } from "../mutationQueue.ts";
+import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface MoveOptions {
   recursive?: boolean;

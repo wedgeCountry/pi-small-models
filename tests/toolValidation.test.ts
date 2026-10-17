@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Type } from "typebox";
-import { withConciseValidationErrors } from "../src/toolValidation.ts";
+import { withConciseValidationErrors } from "../src/backend/toolValidation.ts";
 
 const SCHEMA = Type.Object({
   path: Type.String(),

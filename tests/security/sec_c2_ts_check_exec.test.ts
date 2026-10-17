@@ -18,7 +18,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
-import { tsCheck } from "../../src/tools/ts_check.ts";
+import { tsCheck } from "../../coding/tools/ts_check.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
 test("C2: ts_check must not execute a project-local node_modules/.bin/tsc the model could write", async (t) => {

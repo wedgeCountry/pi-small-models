@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
-import { dotnetBuild } from "../../src/tools/dotnet_build.ts";
+import { dotnetBuild } from "../../coding/tools/dotnet_build.ts";
 import { findUsages } from "../../src/tools/find_usages.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 

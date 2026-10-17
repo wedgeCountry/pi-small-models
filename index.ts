@@ -20,7 +20,7 @@ import {
   getGlobalIgnorePath,
   getLocalIgnorePath,
   readIgnoreFile,
-} from "./src/ignore.ts";
+} from "./src/commands/ignore.ts";
 
 const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 

@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Sandbox } from "../../sandbox/sandbox.ts";
-import { runCommand, CommandNotFoundError, describeCommandError } from "../../runCommand.ts";
+import { runCommand, CommandNotFoundError, describeCommandError } from "../../commands/runCommand.ts";
 import type { ApiEntry, LibExtraction, LibraryInfo } from "./types.ts";
 import { displayPath, isFile } from "./paths.ts";
 

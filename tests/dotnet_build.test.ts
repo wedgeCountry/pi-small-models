@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dotnetBuild } from "../src/tools/dotnet_build.ts";
+import { dotnetBuild } from "../coding/tools/dotnet_build.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 

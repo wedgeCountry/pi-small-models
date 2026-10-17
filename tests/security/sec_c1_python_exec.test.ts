@@ -21,7 +21,7 @@ import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
 import { writeFile } from "../../src/tools/write.ts";
 import { copyFile } from "../../src/tools/copy.ts";
-import { pyList } from "../../src/tools/py_list.ts";
+import { pyList } from "../../coding/tools/py_list.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
 function makeVenv(root: string, t: { skip(msg: string): void }): { site: string } | undefined {

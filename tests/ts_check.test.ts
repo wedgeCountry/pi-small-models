@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tsCheck } from "../src/tools/ts_check.ts";
+import { tsCheck } from "../coding/tools/ts_check.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 

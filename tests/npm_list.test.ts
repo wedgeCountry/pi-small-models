@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { npmList } from "../src/tools/npm_list.ts";
+import { npmList } from "../coding/tools/npm_list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 

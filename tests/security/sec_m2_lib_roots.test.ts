@@ -16,7 +16,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
-import { pyLib } from "../../src/tools/py_lib.ts";
+import { pyLib } from "../../coding/tools/py_lib.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
 test("M2: py_lib must not read source from a directory added via a model-written .pth path entry", async (t) => {

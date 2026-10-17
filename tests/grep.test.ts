@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { grepFiles } from "../src/tools/grep.ts";
-import { DEFAULT_IGNORE_GLOBS } from "../src/ignore.ts";
+import { DEFAULT_IGNORE_GLOBS } from "../src/commands/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 

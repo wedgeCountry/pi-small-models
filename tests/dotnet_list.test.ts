@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dotnetList } from "../src/tools/dotnet_list.ts";
+import { dotnetList } from "../coding/tools/dotnet_list.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 
@@ -53,7 +53,7 @@ test("accepts includePrerelease option", async (t) => {
   assert.ok(typeof result.output === "string");
 });
 
-test("accepts deprecated option", async (t) => {
+test("accepts coding option", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   t.after(() => cleanupFixture(dir));
 

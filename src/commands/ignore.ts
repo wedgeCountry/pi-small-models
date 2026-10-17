@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { withFileMutationQueue } from "./mutationQueue.ts";
+import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 
 export const DEFAULT_IGNORE_GLOBS = [
   "**/node_modules/**",

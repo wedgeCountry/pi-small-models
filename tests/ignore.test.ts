@@ -12,7 +12,7 @@ import {
   getLocalIgnorePath,
   loadCustomIgnoreGlobs,
   readIgnoreFile,
-} from "../src/ignore.ts";
+} from "../src/commands/ignore.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 
 test("getLocalIgnorePath / getGlobalIgnorePath join the filename onto the given root", async () => {

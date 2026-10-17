@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import micromatch from "micromatch";
-import { resolveSafePath, isEntryWithinBase, realpathWithMissingSuffix } from "./pathSafety.ts";
+import { resolveSafePath, isEntryWithinBase, realpathWithMissingSuffix } from "./sandbox/pathSafety.ts";
 
 /**
  * `sandbox.ts` is the *only* file outside `pathSafety.ts` itself that imports
