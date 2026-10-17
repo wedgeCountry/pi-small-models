@@ -22,9 +22,9 @@ export type SandboxMode = "read" | "edit";
  *   confirmation prompts — "yolo inside the project dir".
  * - `"off"` — nothing is enforced locally, including root-containment. In
  *   exchange, every call to one of this project's own tools is instead
- *   routed through `permissionGate.ts`'s `tool_call` handler, which requires
+ *   routed through `sandbox/permissionGate.ts`'s `tool_call` handler, which requires
  *   an explicit `ctx.ui.confirm()` approval before the call is allowed to
- *   run. See `permissionGate.ts`.
+ *   run. See `sandbox/permissionGate.ts`.
  */
 export type SandboxState = "on" | "off";
 
@@ -150,7 +150,7 @@ function matchesRestrictedGlob(anchor: string, resolved: string, mode: SandboxMo
  *
  * - `"off"`: skips `resolveSafePath` entirely and just lexically resolves
  *   the path, so a target outside the project root is allowed through —
- *   `permissionGate.ts` requires an explicit per-call approval instead. See
+ *   `sandbox/permissionGate.ts` requires an explicit per-call approval instead. See
  *   the `SandboxState` doc comment.
  * - `"on"`: both `resolveSafePath`'s root-containment and the mode-specific
  *   restricted-glob check run.
@@ -187,7 +187,7 @@ function isInsideRelative(relative: string): boolean {
  * read-mode restricted globs (credentials, `.git/**`) still apply, matched relative to the root.
  *
  * Throws on a violation. With the sandbox `"off"` it only resolves the path, like
- * `resolveSandboxPath` does (`permissionGate.ts` asks for approval instead).
+ * `resolveSandboxPath` does (`sandbox/permissionGate.ts` asks for approval instead).
  */
 export function resolveLibraryPath(libRoots: readonly string[], target: string): string {
   const resolved = path.resolve(target);
