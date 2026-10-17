@@ -1,12 +1,12 @@
 import fg from "fast-glob";
 import type {Readable} from "node:stream";
-import {DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs} from "../ignore.ts";
+import {DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs} from "../commands/ignore.ts";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
-import {oneLine, callName} from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import {oneLine, callName} from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -21,13 +21,25 @@ export interface FindResult {
   truncated: boolean;
 }
 
+/**
+ * If the pattern is a plain filename (no path separators, no glob characters),
+ */
+function ensureRecursivePattern(pattern: string): string {
+  // If pattern already contains path separators or glob special chars, leave as-is
+  if (pattern.includes("/") || pattern.includes("\\") || pattern.includes("*") || pattern.includes("?") || pattern.includes("[")) {
+    return pattern;
+  }
+  return `**/${pattern}`;
+}
+
 /** Finds files/directories under `target` (resolved through `sb`) matching a glob pattern. */
 export async function findFiles(sb: Sandbox, target: string, pattern: string, opts: FindOptions = {}): Promise<FindResult> {
   const base = sb.resolve(target);
   const max = opts.maxResults ?? 200;
   opts.signal?.throwIfAborted();
 
-  const entries = await streamGlob(base, pattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
+  const effectivePattern = ensureRecursivePattern(pattern);
+  const entries = await streamGlob(base, effectivePattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
   // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
   // symlinked entry itself still comes back, so every entry goes through the sandbox's filter.
   const allowed = sb.entryFilter(base);
