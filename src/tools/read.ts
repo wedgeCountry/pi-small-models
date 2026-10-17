@@ -10,6 +10,12 @@ import type { PeekVisibility } from "./previewManagers/types.ts";
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
 
+/**
+ * List of extensions that support the 'peek' functionality.
+ * NOTE: This list must be maintained and updated if new supported extensions are added.
+ */
+const PEEK_EXTENSIONS: Set<string> = new Set([".ts", ".js", ".json", ".css", ".html", ".md"]);
+
 export interface ReadOptions {
   offset?: number;
   limit?: number;
@@ -75,21 +81,20 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     throw new Error(`Offset ${offset} is beyond end of file (${totalLines} line(s) total)`);
   }
 
-  const startIndex = offset - 1;
-  let endIndex = opts.limit !== undefined ? Math.min(startIndex + opts.limit, totalLines) : totalLines;
+  let endIndex = opts.limit !== undefined ? Math.min(offset + opts.limit - 1, totalLines) : totalLines;
 
   // Cap by line count.
-  if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
+  if (!opts.uncapped) endIndex = Math.min(endIndex, Math.min(offset + DEFAULT_MAX_LINES - 1, totalLines));
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
-  let selected = allLines.slice(startIndex, endIndex);
+  let selected = allLines.slice(offset - 1, endIndex);
   while (!opts.uncapped && selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
     selected = selected.slice(0, -1);
   }
-  endIndex = startIndex + selected.length;
+  endIndex = offset - 1 + selected.length;
 
   return {
-    lines: selected.map((text, i) => ({ line: startIndex + i + 1, text })),
+    lines: selected.map((text, i) => ({ line: offset - 1 + i + 1, text })),
     totalLines,
     truncated: endIndex < totalLines,
   };
@@ -102,26 +107,39 @@ export function registerReadTool(pi: ToolRegistry) {
     renderCall(args, theme) {
       let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
       const flags: string[] = [];
-      if (args.peek !== undefined) {
+      
+      // New logic for rendering: Peek flag should be displayed if supported.
+      const isPeekSupported = PEEK_EXTENSIONS.has(getExtension(args.path || ""));
+      
+      if (isPeekSupported) {
         flags.push(args.peek ? "peek" : "no-peek");
       } else {
-        flags.push("peek");
+        // If not supported, always use standard read mode
+        flags.push("no-peek");
       }
+      
       if (args.offset !== undefined) {
         flags.push(`offset ${args.offset}`);
       }
       if (args.limit !== undefined) {
         flags.push(`limit ${args.limit}`);
       }
+      
       if (flags.length > 0) {
         text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
       }
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const usePeek = params.peek !== undefined ? params.peek : true;
+      const path = params.path ?? "";
+      const extension = getExtension(path);
+      
+      // Implement the core logic change here:
+      // Use peek functionality only if extension is supported AND user explicitly requested peek=true
+      const usePeek = PEEK_EXTENSIONS.has(extension) && params.peek !== undefined && params.peek;
       
       if (usePeek) {
+        // Use peek functionality
         const visibility: PeekVisibility = "public";
         const result = await peekFile(sandboxFor(ctx.cwd), params.path, {
           visibility,
@@ -129,7 +147,6 @@ export function registerReadTool(pi: ToolRegistry) {
           maxDepth: 6,
           signal,
         });
-
         return {
           content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
           details: {
@@ -140,8 +157,13 @@ export function registerReadTool(pi: ToolRegistry) {
           },
         };
       }
-
-      const result = await readFile(sandboxFor(ctx.cwd), params.path, { offset: params.offset, limit: params.limit, signal });
+      
+      // Fallback/Standard read for unsupported extensions or explicit peek=false
+      const result = await readFile(sandboxFor(ctx.cwd), params.path, { 
+          offset: params.offset, 
+          limit: params.limit, 
+          signal: signal 
+      });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
       if (result.truncated) {
@@ -155,4 +177,15 @@ export function registerReadTool(pi: ToolRegistry) {
       };
     },
   });
+}
+
+/**
+ * Helper function to get the file extension from a path.
+ */
+function getExtension(path: string): string {
+  const parts = path.split('.');
+  if (parts.length < 2) return "";
+  // Join the parts back together to handle names like 'archive.tar.gz'
+  const lastDotIndex = Math.max(path.lastIndexOf('.'));
+  return lastDotIndex === -1 ? "" : path.substring(lastDotIndex);
 }

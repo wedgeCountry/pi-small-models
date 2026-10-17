@@ -3,7 +3,7 @@ import { Type } from "typebox";
 export const READ_TOOL_DEFINITION = {
   name: "read",
   label: "Read",
-  description: "Read a text file's contents, numbered by line.",
+  description: "Read a text file's contents, numbered by line. If you need to see the implementation details, use peek=false",
   parameters: Type.Object({
     path: Type.String({ description: "Path to the file to read, relative to the project root." }),
     offset: Type.Optional(
