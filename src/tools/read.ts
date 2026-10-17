@@ -7,9 +7,23 @@ import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { peekFile, renderPeekResult } from "./peek.ts";
 import type { PeekVisibility } from "./previewManagers/types.ts";
 import { PEEK_EXTENSIONS } from "./previewManagers/registry.ts";
+import { createReadTool, type ReadOperations } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+
+const IMAGE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".webp",
+  ".svg",
+  ".ico",
+  ".tiff",
+  ".avif",
+]);
 
 export interface ReadOptions {
   offset?: number;
@@ -58,6 +72,25 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     throw new Error(`limit must be a positive integer, got ${opts.limit}`);
   }
 
+  // Handle images using SDK read tool
+  if (IMAGE_EXTENSIONS.has(getExtension(filePath || ""))) {
+    if (opts.offset !== undefined || opts.limit !== undefined) {
+      throw new Error(`offset and limit are not allowed for image files`);
+    }
+
+    // Create SDK read tool with custom operations that use our sandbox
+    const sdkRead = createReadTool(sb.root, {
+      autoResizeImages: true
+    });
+
+    let signal = opts.signal;
+    const sdkResult = await sdkRead.execute(filePath, signal ?? default); // TODO fix signal
+
+    // TODO Convert to promise
+    return sdkResult;
+  }
+
+
   let buffer: Buffer;
   try {
     // fs.readFile natively honors `signal`, unlike fs.rm/fs.mkdir — no manual abort plumbing
@@ -102,9 +135,15 @@ export function registerReadTool(pi: ToolRegistry) {
     renderCall(args, theme) {
       let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
       const flags: string[] = [];
+      const extension = getExtension(args.path || "");
+      
+      // For images, just show the path
+      if (IMAGE_EXTENSIONS.has(extension)) {
+        return oneLine(text);
+      }
       
       // New logic for rendering: Peek flag should be displayed if supported.
-      const isPeekSupported = PEEK_EXTENSIONS.has(getExtension(args.path || ""));
+      const isPeekSupported = PEEK_EXTENSIONS.has(extension);
       
       if (isPeekSupported) {
         flags.push(args.peek ? "peek" : "no-peek");
@@ -128,7 +167,7 @@ export function registerReadTool(pi: ToolRegistry) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const path = params.path ?? "";
       const extension = getExtension(path);
-      
+
       // Use peek functionality only when:
       // - peek is not explicitly false
       // - extension is in PEEK_EXTENSIONS
@@ -136,7 +175,8 @@ export function registerReadTool(pi: ToolRegistry) {
       const usePeek = (params.peek ?? true) &&
                       PEEK_EXTENSIONS.includes(extension) &&
                       params.offset === undefined &&
-                      params.limit === undefined;
+                      params.limit === undefined &&
+                      !IMAGE_EXTENSIONS.has(extension);
       
       if (usePeek) {
         // Use peek functionality
