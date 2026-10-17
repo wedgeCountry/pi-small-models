@@ -54,43 +54,51 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
     throw new Error(`Invalid pattern: ${(err as Error).message}`);
   }
 
-  // `base` is meant to be a directory that fast-glob walks with `cwd`, not the
-  // file being searched — that's what `glob` is for. Passing a file path here
-  // used to surface as a raw `ENOTDIR: not a directory, scandir '<path>'` from
-  // fast-glob/Node once it tried to readdir a non-directory; catch it earlier
-  // with a message that says what went wrong and how to fix it.
+  // Check if the target exists and determine if it's a file or directory
   let baseStat;
   try {
     baseStat = await fs.stat(base);
   } catch {
     throw new Error(`grep path "${base}" does not exist.`);
   }
-  if (!baseStat.isDirectory()) {
-    throw new Error(
-      `grep path "${base}" is a file, not a directory. "path" must name a directory to search within; ` +
-        `to search a single file, keep "path" pointed at its containing directory and pass the filename via "glob" instead, ` +
-        `e.g. { path: ".", glob: "main.py" }.`
-    );
+
+  let files: string[];
+  let actualBase: string;
+  
+  if (baseStat.isFile()) {
+    // If target is a file, use its directory as the base and the filename as the relative path
+    // Note: glob option is ignored when searching a single file
+    actualBase = path.dirname(base);
+    const filename = path.basename(base);
+    const allowed = sb.entryFilter(actualBase);
+    if (!allowed(filename, baseStat.isSymbolicLink())) {
+      throw new Error(`grep path "${base}" is not allowed by the sandbox.`);
+    }
+    files = [filename];
+  } else if (baseStat.isDirectory()) {
+    // If target is a directory, use fast-glob to find files
+    actualBase = base;
+    const entries = await fg(opts.glob ?? "**/*", {
+      cwd: base,
+      ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
+      onlyFiles: true,
+      dot: false,
+      followSymbolicLinks: false,
+      objectMode: true,
+    });
+    // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
+    // symlinked file still comes back, so every entry goes through the sandbox's filter here. This is
+    // the only check: the worker reads exactly the files it is handed and knows no rules.
+    const allowed = sb.entryFilter(base);
+    files = entries
+      .filter((e) => allowed(e.path, e.dirent.isSymbolicLink()))
+      .map((e) => e.path)
+      .sort((a, b) => a.localeCompare(b));
+  } else {
+    throw new Error(`grep path "${base}" is not a file or directory.`);
   }
 
-  const entries = await fg(opts.glob ?? "**/*", {
-    cwd: base,
-    ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
-    onlyFiles: true,
-    dot: false,
-    followSymbolicLinks: false,
-    objectMode: true,
-  });
-  // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
-  // symlinked file still comes back, so every entry goes through the sandbox's filter here. This is
-  // the only check: the worker reads exactly the files it is handed and knows no rules.
-  const allowed = sb.entryFilter(base);
-  const files = entries
-    .filter((e) => allowed(e.path, e.dirent.isSymbolicLink()))
-    .map((e) => e.path)
-    .sort((a, b) => a.localeCompare(b));
-
-  return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
+  return scanInWorker({ base: actualBase, files, pattern, flags, max, context }, timeoutMs, opts.signal);
 }
 
 interface ScanInput {

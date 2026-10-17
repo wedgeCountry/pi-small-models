@@ -89,14 +89,13 @@ test("honors custom ignoreGlobs (e.g. from /ignore) on top of the hardcoded defa
   assert.equal(result.lines[0]?.file, "src/a.ts");
 });
 
-test("rejects a path that names a file instead of a directory", async (t) => {
+test("accepts a path that names a file and searches within it (legacy test)", async (t) => {
   const dir = await makeFixture({ "main.py": "print((1))\n" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(
-    () => grepFiles(new Sandbox(dir), path.join(dir, "main.py"), "\\)\\)"),
-    /is a file, not a directory/
-  );
+  const result = await grepFiles(new Sandbox(dir), path.join(dir, "main.py"), "\\)\\)");
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.lines[0]?.file, "main.py");
 });
 
 test("rejects a path that does not exist", async (t) => {
@@ -172,4 +171,14 @@ test("an unenforced sandbox lets the worker read what an enforced one hides", as
 
   const unlocked = await grepFiles(new Sandbox(dir, false), ".", "needle", { glob: ".env" });
   assert.equal(unlocked.matchCount, 1);
+});
+
+
+test("accepts a path that names a file and searches within it", async (t) => {
+  const dir = await makeFixture({ "main.py": "print((1))\nprint((2))\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(new Sandbox(dir), path.join(dir, "main.py"), "\(\(1\)\)");
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.lines[0]?.file, "main.py");
 });
