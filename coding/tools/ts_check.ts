@@ -1,9 +1,9 @@
 import { TS_CHECK_TOOL_DEFINITION } from "../tool_definitions/ts_check.ts";
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
-import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
+import { runCommand, CommandNotFoundError, describeCommandError } from "../../src/commands/runCommand.ts";
 
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — type errors can produce substantial output
 

@@ -1,10 +1,10 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { DOTNET_BUILD_TOOL_DEFINITION } from "../tool_definitions/dotnet_build.ts";
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 

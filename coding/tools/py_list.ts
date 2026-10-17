@@ -1,9 +1,9 @@
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
 import { PY_LIST_TOOL_DEFINITION } from "../tool_definitions/py_list.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
-import { pyListPackages, type PyHelperOptions, type PyListResult } from "./libInfo/pythonLib.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
+import { pyListPackages, type PyHelperOptions, type PyListResult } from "../../src/tools/libInfo/pythonLib.ts";
 
 export interface PyListOptions extends PyHelperOptions {
   package?: string;

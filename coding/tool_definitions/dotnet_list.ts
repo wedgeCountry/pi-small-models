@@ -34,7 +34,7 @@ export const DOTNET_LIST_TOOL_DEFINITION = {
     ),
     deprecated: Type.Optional(
       Type.Boolean({
-        description: "Show packages that have been deprecated. Defaults to false.",
+        description: "Show packages that have been coding. Defaults to false.",
         default: false,
       })
     ),

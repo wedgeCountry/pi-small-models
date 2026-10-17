@@ -1,9 +1,9 @@
 import { DOTNET_LIST_TOOL_DEFINITION } from "../tool_definitions/dotnet_list.ts";
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
-import { runCommand, CommandNotFoundError, describeCommandError } from "../runCommand.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
+import { runCommand, CommandNotFoundError, describeCommandError } from "../../src/commands/runCommand.ts";
 
 const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — package lists can be substantial for large solutions
 
@@ -16,7 +16,7 @@ export interface DotnetListOptions {
   includeTransitive?: boolean;
   /** Include prerelease versions when checking for updates. */
   includePrerelease?: boolean;
-  /** Show deprecated packages. */
+  /** Show coding packages. */
   deprecated?: boolean;
   /** Show packages with known vulnerabilities. */
   vulnerable?: boolean;
@@ -58,7 +58,7 @@ export async function dotnetList(sb: Sandbox, opts: DotnetListOptions = {}): Pro
   }
   
   if (opts.deprecated) {
-    args.push("--deprecated");
+    args.push("--coding");
   }
   
   if (opts.vulnerable) {
@@ -116,7 +116,7 @@ export function registerDotnetListTool(pi: ToolRegistry) {
         text += theme.fg("toolOutput", " --include-prerelease");
       }
       if (args.deprecated) {
-        text += theme.fg("toolOutput", " --deprecated");
+        text += theme.fg("toolOutput", " --coding");
       }
       if (args.vulnerable) {
         text += theme.fg("toolOutput", " --vulnerable");

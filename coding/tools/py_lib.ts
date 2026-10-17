@@ -1,11 +1,11 @@
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
 import { PY_LIB_TOOL_DEFINITION } from "../tool_definitions/py_lib.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
-import { extractPyLibrary, type PyHelperOptions } from "./libInfo/pythonLib.ts";
-import { renderLibrary, type LibRenderResult } from "./libInfo/format.ts";
-import type { LibQueryOptions } from "./libInfo/types.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
+import { extractPyLibrary, type PyHelperOptions } from "../../src/tools/libInfo/pythonLib.ts";
+import { renderLibrary, type LibRenderResult } from "../../src/tools/libInfo/format.ts";
+import type { LibQueryOptions } from "../../src/tools/libInfo/types.ts";
 
 export interface PyLibToolOptions extends LibQueryOptions, PyHelperOptions {
   module?: string;

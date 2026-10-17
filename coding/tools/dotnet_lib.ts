@@ -1,11 +1,11 @@
-import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import type { ToolRegistry } from "../../src/sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../../src/sandbox/sandbox.ts";
 import { DOTNET_LIB_TOOL_DEFINITION } from "../tool_definitions/dotnet_lib.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
-import { extractDotnetLibrary, type DotnetLibOptions } from "./libInfo/dotnetLib.ts";
-import { renderLibrary, type LibRenderResult } from "./libInfo/format.ts";
-import type { LibQueryOptions } from "./libInfo/types.ts";
+import { oneLine, callName } from "../../src/backend/renderCall.ts";
+import { withConciseValidationErrors } from "../../src/backend/toolValidation.ts";
+import { extractDotnetLibrary, type DotnetLibOptions } from "../../src/tools/libInfo/dotnetLib.ts";
+import { renderLibrary, type LibRenderResult } from "../../src/tools/libInfo/format.ts";
+import type { LibQueryOptions } from "../../src/tools/libInfo/types.ts";
 
 export interface DotnetLibToolOptions extends LibQueryOptions, DotnetLibOptions {}
 
