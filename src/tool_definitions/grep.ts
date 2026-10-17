@@ -3,12 +3,15 @@ import { Type } from "typebox";
 export const GREP_TOOL_DEFINITION = {
   name: "grep",
   label: "Grep",
-  description: "Search file contents for a grep pattern within the project.",
+  description: "Search file contents for a regex within the project.",
   parameters: Type.Object({
+    regex: Type.String({
+      description: "Regex to search for within file contents, e.g. \"foo\\s*=\\s*\\d+\"."
+    }),
     path: Type.Optional(
       Type.String({ description: 'Base directory to search from, relative to the project root. Defaults to ".".' })
     ),
-    pattern: Type.Optional(
+    glob: Type.Optional(
       Type.String({ description: 'Glob to restrict which files are searched, e.g. "**/*.ts". Defaults to all files.' })
     ),
     ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive match.", default: false })),

@@ -1,7 +1,7 @@
 /**
  * Pentest — Finding H5 (High, functional): grep is unusable for its intended small-model user.
  *
- * (a) The grep tool schema never declares `pattern`, so the model is never told the parameter
+ * (a) The grep tool schema never declares `regex`, so the model is never told the parameter
  *     exists, and a call without it builds `new RegExp(undefined)` which matches every line.
  * (b) `scanInWorker` arms a 1 s "startup" timer that is only cleared when the whole scan finishes,
  *     so any scan longer than 1 s fails with "Worker failed to initialize within 1 second" — the
@@ -18,11 +18,11 @@ import { grepFiles } from "../../src/tools/grep.ts";
 import { GREP_TOOL_DEFINITION } from "../../src/tool_definitions/grep.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
-test("H5a: the grep tool schema must declare a `pattern` parameter", () => {
+test("H5a: the grep tool schema must declare a `regex` parameter", () => {
   const props = Object.keys((GREP_TOOL_DEFINITION.parameters as { properties: Record<string, unknown> }).properties);
   assert.ok(
-    props.includes("pattern"),
-    `SECURITY/UX: grep's schema has no "pattern" field (properties: ${props.join(", ")}), so the model cannot search and an empty call matches every line`
+    props.includes("regex"),
+    `SECURITY/UX: grep's schema has no "regex" field (properties: ${props.join(", ")}), so the model cannot search and an empty call matches every line`
   );
 });
 
