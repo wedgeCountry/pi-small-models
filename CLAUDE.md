@@ -11,10 +11,17 @@ No build step: runs directly via Node 24's native TypeScript type-stripping.
 ## Structure
 
 Each tool (`find`, `grep`, `list`, `edit`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `read`, `peek`, `write`, `git_status`, `git_diff`, `git_log`) is split into:
+
+- `src/` — source code
 - `src/tool_definitions/<tool>.ts` — tool definition (schema, prompts)
 - `src/tools/<tool>.ts` — implementation with `execute()` and exported async function
+- `src/sandbox` — sandbox definition
+- `tests/` — test code
 
 `index.ts` registers all tools, disables `bash`, and resets sandbox on `session_start`.
+
+--> call the list tool to get a comprehensive list
+
 
 ## Sandboxing
 
