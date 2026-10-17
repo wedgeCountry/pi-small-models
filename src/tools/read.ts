@@ -83,11 +83,23 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
       autoResizeImages: true
     });
 
-    let signal = opts.signal;
-    const sdkResult = await sdkRead.execute(filePath, signal ?? default); // TODO fix signal
+    // Call execute with proper parameters
+    const sdkResult = await sdkRead.execute(
+      "", // toolCallId (not used)
+      { path: filePath }, // parameters
+      opts.signal, // signal
+      undefined, // onUpdate (not needed)
+    );
 
-    // TODO Convert to promise
-    return sdkResult;
+    // Convert SDK result to ReadResult
+    // For images, we return a single line indicating it's an image
+    // since readFile is designed for text-based line content
+    const textContent = (sdkResult.content.find((c: any) => c.type === "text") as { text: string } | undefined)?.text || `[Image file: ${filePath}]`;
+    return {
+      lines: [{ line: 1, text: textContent }],
+      totalLines: 1,
+      truncated: false,
+    };
   }
 
 
@@ -143,7 +155,7 @@ export function registerReadTool(pi: ToolRegistry) {
       }
       
       // New logic for rendering: Peek flag should be displayed if supported.
-      const isPeekSupported = PEEK_EXTENSIONS.has(extension);
+      const isPeekSupported = PEEK_EXTENSIONS.includes(extension);
       
       if (isPeekSupported) {
         flags.push(args.peek ? "peek" : "no-peek");
