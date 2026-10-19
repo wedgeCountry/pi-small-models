@@ -113,6 +113,61 @@ export class Sandbox {
       );
     }
 
+    // Prevent control characters in paths that could be used to create
+    // visually similar or hidden directory names (e.g., .git\u0001, .git\t)
+    if (/[\x00-\x1F\x7F]/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains control characters which are not allowed in sandboxed paths`
+      );
+    }
+
+    // Prevent paths that contain restricted directory names with whitespace
+    // This catches attempts like ".git /file", ".git\t/file", "node_modules /file", etc. which could bypass the restriction
+    if (/\s/.test(target)) {
+      // Split by any whitespace and check each segment
+      const segments = target.split(/\s+/);
+      for (const segment of segments) {
+        if (segment === ".git" || segment === ".venv" || segment === "node_modules" || 
+            segment === "bower_components" || segment === "jspm_packages") {
+          throw new SandboxError(
+            "restricted",
+            `Path "${target}" contains a restricted directory name with whitespace`
+          );
+        }
+      }
+    }
+
+    // Prevent paths that use other Unicode whitespace characters that could bypass restrictions
+    // This catches attempts with various Unicode space characters
+    if (/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains Unicode whitespace characters which are not allowed in sandboxed paths`
+      );
+    }
+
+    // Prevent paths that use Unicode lookalike characters for dots or slashes
+    // This catches attempts to use characters that look like . or / but are different Unicode characters
+    if (/[\u2024\u2219\u2981\uFF0E\uFF61]/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains Unicode lookalike characters which are not allowed in sandboxed paths`
+      );
+    }
+    // Additional targeted check for specific path variations that could bypass RESTRICTED_GLOBS
+    // This catches patterns like .git., .git..., ..git, .venv., node_modules., etc. that might not be caught by globs
+    const pathVariationPattern = /(\.git\.+|\.\.+git|\.venv\.+|\.\.+venv|node_modules\.+|\.\.+node_modules|bower_components\.+|jspm_packages\.+)/;
+    if (pathVariationPattern.test(target)) {
+      throw new SandboxError(
+        "restricted",
+        `Path "${target}" contains a variation of a restricted directory name`
+      );
+    }
+
+
+
+
     // Decode URL-encoded characters to prevent bypass via encoding
     // This handles %2e (.), %2f (/), %5c (\), etc.
     try {
@@ -134,24 +189,10 @@ export class Sandbox {
       );
     }
 
-    // Normalize backslashes to forward slashes FIRST, before any path resolution
+    // Normalize backslashes to forward slashes for consistent path handling
     // This ensures that path traversal using backslashes (e.g., "..\..\file") 
     // gets properly detected regardless of the host platform
     let normalizedTarget = target.replace(/\\/g, '/');
-
-    // Check for path traversal sequences in the normalized target
-    // This catches attempts like "../file", "..\..\file", etc.
-    // We need to check if the normalized path contains ".." as a path component
-    // Split by path separator and check for ".." components
-    const pathParts = normalizedTarget.split('/').filter(part => part !== '');
-    for (const part of pathParts) {
-      if (part === '..') {
-        throw new SandboxError(
-          "outside-root",
-          `Path "${target}" contains parent directory traversal (..) which is not allowed`
-        );
-      }
-    }
 
     // Prevent using home directory as project root
     if (this.root === os.homedir()) {

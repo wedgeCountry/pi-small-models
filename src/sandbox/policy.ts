@@ -31,7 +31,19 @@ export const RESTRICTED_GLOBS: readonly string[] = [
   "**/id_ecdsa",
   "**/id_ed25519",
   "**/.git/**",
+  "**/.git",
+  "**/.git*",
+  "**/.git.*",
+  "**/..git/**",
+  "**/..git",
   "**/.git-credentials",
+  "**/.venv/**",
+  "**/.venv",
+  "**/node_modules/**",
+  "**/node_modules",
+  "**/.node-repl-history",
+  "**/bower_components/**",
+  "**/jspm_packages/**",
   "**/.pypirc",
   "**/.yarnrc.yml",
   "**/server.pem",
@@ -47,9 +59,11 @@ export const RESTRICTED_GLOBS: readonly string[] = [
 ];
 
 // Windows and default macOS filesystems ignore case (".SSH" is ".ssh"); Linux does not.
+// However, for security, we enforce case-insensitive matching on all platforms
+// to prevent bypasses like .GIT, .Git, etc. on Linux.
 const MATCH_OPTIONS = {
   dot: true,
-  nocase: process.platform === "win32" || process.platform === "darwin",
+  nocase: true,  // Always case-insensitive for security
 };
 
 /** True if `relPath` (relative to a root, any separator) falls under a protected pattern. */
