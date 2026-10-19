@@ -3,8 +3,8 @@ import { PEEK_TOOL_DEFINITION } from "../tool_definitions/peek.ts";
 import { readFile } from "./read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
 
@@ -45,7 +45,7 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
   if (!manager) {
     throw new Error(
       `peek does not support "${ext || path.basename(target)}" files. Supported extensions: ` +
-        `${PEEK_EXTENSIONS.join(", ")}. Use read to view this file instead.`
+        `${PEEK_EXTENSIONS.join(", ")}. Use read with peek=false to view this file instead.`
     );
   }
 

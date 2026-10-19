@@ -2,9 +2,9 @@ import * as fs from "node:fs/promises";
 import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { withFileMutationQueue } from "../mutationQueue.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { withFileMutationQueue } from "../backend/mutationQueue.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;

@@ -2,15 +2,16 @@ import fg from "fast-glob";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Worker } from "node:worker_threads";
-import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
+import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox, type SandboxState, getSandboxState } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface GrepOptions {
+  /** Glob restricting which files are searched. Defaults to all files. */
   glob?: string;
   ignoreCase?: boolean;
   maxResults?: number;
@@ -37,7 +38,7 @@ export interface GrepResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000;
-const WORKER_URL = new URL("./grepWorker.mjs", import.meta.url);
+const WORKER_URL = new URL("../backend/grepWorker.mjs", import.meta.url);
 
 /** Searches file contents under `target` (resolved through `sb`) for a regex/plain-text pattern. */
 export async function grepFiles(sb: Sandbox, target: string, pattern: string, opts: GrepOptions = {}): Promise<GrepResult> {
@@ -89,7 +90,7 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
     .map((e) => e.path)
     .sort((a, b) => a.localeCompare(b));
 
-  return scanInWorker({ root: sb.root, base, files, pattern, flags, max, context, sandboxState: getSandboxState() }, timeoutMs, opts.signal);
+  return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
 }
 
 interface ScanInput {
@@ -177,7 +178,7 @@ export function registerGrepTool(pi: ToolRegistry) {
     ...GREP_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(GREP_TOOL_DEFINITION.name, GREP_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
-      let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.pattern ?? ""}/`)}`;
+      let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.regex ?? ""}/`)}`;
       text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
       if (args.glob) text += theme.fg("toolOutput", ` (${args.glob})`);
       if (args.ignoreCase) text += theme.fg("toolOutput", " -i");

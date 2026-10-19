@@ -34,7 +34,7 @@ lock). `moveFile` tries `fs.rename` first and falls back to `fs.cp` + removing t
 (cross-filesystem moves). Both reuse `remove.ts`'s exported `removeRecursively` rather than duplicating its
 signal-aware recursive-delete walk.
 
-`grep.ts` is the exception: its actual scanning loop runs off the main thread in `grepWorker.mjs`, since a
+`grep.ts` is the exception: its actual scanning loop runs off the main thread in `../backend/grepWorker.mjs`, since a
 runaway regex can only be stopped by killing the thread it runs on, not by checking an `AbortSignal`. The
 worker knows no sandbox rules: it reads only the files the main thread's `entryFilter` approved.
 

@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
 import { findFiles } from "../../src/tools/find.ts";
 import { listDir } from "../../src/tools/list.ts";
-import { runCommand } from "../../src/runCommand.ts";
+import { runCommand } from "../../src/commands/runCommand.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
 
 test("M4a: find must reject an absolute glob pattern instead of walking from it", async () => {

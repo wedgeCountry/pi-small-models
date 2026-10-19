@@ -3,8 +3,8 @@ import { promisify } from "node:util";
 import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 const execFile = promisify(execFileCb);
 

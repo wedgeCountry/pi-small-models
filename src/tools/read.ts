@@ -3,11 +3,28 @@ import * as path from "node:path";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { peekFile, renderPeekResult } from "./peek.ts";
+import type { PeekVisibility } from "./previewManagers/types.ts";
+import { PEEK_EXTENSIONS } from "./previewManagers/registry.ts";
+import { createReadTool, type ReadOperations } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+
+const IMAGE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".webp",
+  ".svg",
+  ".ico",
+  ".tiff",
+  ".avif",
+]);
 
 export interface ReadOptions {
   offset?: number;
@@ -55,6 +72,37 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     throw new Error(`limit must be a positive integer, got ${opts.limit}`);
   }
 
+  // Handle images using SDK read tool
+  if (IMAGE_EXTENSIONS.has(getExtension(filePath || ""))) {
+    if (opts.offset !== undefined || opts.limit !== undefined) {
+      throw new Error(`offset and limit are not allowed for image files`);
+    }
+
+    // Create SDK read tool with custom operations that use our sandbox
+    const sdkRead = createReadTool(sb.root, {
+      autoResizeImages: true
+    });
+
+    // Call execute with proper parameters
+    const sdkResult = await sdkRead.execute(
+      "", // toolCallId (not used)
+      { path: filePath }, // parameters
+      opts.signal, // signal
+      undefined, // onUpdate (not needed)
+    );
+
+    // Convert SDK result to ReadResult
+    // For images, we return a single line indicating it's an image
+    // since readFile is designed for text-based line content
+    const textContent = (sdkResult.content.find((c: any) => c.type === "text") as { text: string } | undefined)?.text || `[Image file: ${filePath}]`;
+    return {
+      lines: [{ line: 1, text: textContent }],
+      totalLines: 1,
+      truncated: false,
+    };
+  }
+
+
   let buffer: Buffer;
   try {
     // fs.readFile natively honors `signal`, unlike fs.rm/fs.mkdir — no manual abort plumbing
@@ -84,7 +132,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  while (!opts.uncapped && selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
     selected = selected.slice(0, -1);
   }
   endIndex = startIndex + selected.length;
@@ -124,4 +172,15 @@ export function registerReadTool(pi: ToolRegistry) {
       };
     },
   });
+}
+
+/**
+ * Helper function to get the file extension from a path.
+ */
+function getExtension(path: string): string {
+  const parts = path.split('.');
+  if (parts.length < 2) return "";
+  // Join the parts back together to handle names like 'archive.tar.gz'
+  const lastDotIndex = Math.max(path.lastIndexOf('.'));
+  return lastDotIndex === -1 ? "" : path.substring(lastDotIndex);
 }

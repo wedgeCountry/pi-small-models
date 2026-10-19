@@ -3,9 +3,9 @@ import { SEARCH_TOOL_DEFINITION } from "../tool_definitions/search.ts";
 import { findFiles } from "./find.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { getEffectiveIgnoreGlobs } from "../ignore.ts";
-import { oneLine, callName } from "../renderCall.ts";
-import { withConciseValidationErrors } from "../toolValidation.ts";
+import { getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
 export interface SearchOptions {
   maxResults?: number;

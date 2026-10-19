@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as os from "node:os";
-import { runCommand, CommandNotFoundError } from "../src/runCommand.ts";
+import { runCommand, CommandNotFoundError } from "../src/commands/runCommand.ts";
 
 const cwd = os.tmpdir();
 

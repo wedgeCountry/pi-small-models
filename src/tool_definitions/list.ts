@@ -4,10 +4,6 @@ export const LIST_TOOL_DEFINITION = {
   name: "list",
   label: "List",
   description: "List files and directories within the project.",
-  promptSnippet: "list: list directory contents (bash is disabled)",
-  promptGuidelines: [
-    "Use list to see the files and subdirectories inside a directory.",
-  ],
   parameters: Type.Object({
     path: Type.Optional(
       Type.String({ description: 'Directory to list, relative to the project root. Defaults to ".".' })

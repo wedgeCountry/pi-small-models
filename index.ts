@@ -24,7 +24,7 @@ import {
   getGlobalIgnorePath,
   getLocalIgnorePath,
   readIgnoreFile,
-} from "./src/ignore.ts";
+} from "./src/commands/ignore.ts";
 
 const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 
@@ -48,10 +48,10 @@ export default function (pi: ExtensionAPI) {
   registerLstatTool(tools);
   registerMkdirTool(tools);
   registerMoveTool(tools);
-  registerPeekTool(tools);
+  // registerPeekTool(tools); // contained in read
   registerReadTool(tools);
   registerRemoveTool(tools);
-  registerSearchTool(tools);
+  // registerSearchTool(tools); // deactivated, ambiguous to grep and find
   registerWriteTool(tools);
 
   pi.registerCommand("toggle-sandbox", {
