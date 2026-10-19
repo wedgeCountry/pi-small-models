@@ -9,6 +9,8 @@ export interface RunCommandOptions {
   /** Defaults to 10MB. */
   maxBuffer?: number;
   env?: NodeJS.ProcessEnv;
+  /** Defaults to 30 seconds. */
+  timeoutMs?: number;
 }
 
 export interface RunCommandResult {
@@ -37,6 +39,7 @@ export class CommandNotFoundError extends Error {
  *
  * - An already-aborted or aborted-in-flight `signal` rejects with the `AbortError`.
  * - A missing executable rejects with `CommandNotFoundError`.
+ * - A timeout rejects with an error.
  * - Anything else (e.g. maxBuffer exceeded) is rethrown unchanged.
  */
 export async function runCommand(
@@ -45,25 +48,36 @@ export async function runCommand(
   opts: RunCommandOptions
 ): Promise<RunCommandResult> {
   opts.signal?.throwIfAborted();
-  try {
-    const { stdout, stderr } = await execFile(command, args as string[], {
-      cwd: opts.cwd,
-      signal: opts.signal,
-      maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
-      encoding: "utf8",
-      env: opts.env,
-      windowsHide: true,
-    });
-    return { stdout, stderr, exitCode: 0 };
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException & { code?: unknown; stdout?: string; stderr?: string };
-    if (e.name === "AbortError") throw err;
-    if (e.code === "ENOENT") throw new CommandNotFoundError(command);
-    if (typeof e.code === "number") {
-      return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", exitCode: e.code };
-    }
-    throw err;
-  }
+  const timeoutMs = opts.timeoutMs ?? 1000;
+  
+  return Promise.race([
+    (async () => {
+      try {
+        const { stdout, stderr } = await execFile(command, args as string[], {
+          cwd: opts.cwd,
+          signal: opts.signal,
+          maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
+          encoding: "utf8",
+          env: opts.env,
+          windowsHide: true,
+        });
+        return { stdout, stderr, exitCode: 0 };
+      } catch (err) {
+        const e = err as NodeJS.ErrnoException & { code?: unknown; stdout?: string; stderr?: string };
+        if (e.name === "AbortError") throw err;
+        if (e.code === "ENOENT") throw new CommandNotFoundError(command);
+        if (typeof e.code === "number") {
+          return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", exitCode: e.code };
+        }
+        throw err;
+      }
+    })(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
 }
 
 /** Best human-readable description of an unexpected `runCommand` failure. */

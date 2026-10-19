@@ -1,4 +1,5 @@
 import fg from "fast-glob";
+import * as path from "node:path";
 import type {Readable} from "node:stream";
 import {DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs} from "../ignore.ts";
 import {getAgentDir} from "@earendil-works/pi-coding-agent";
@@ -26,6 +27,11 @@ export async function findFiles(sb: Sandbox, target: string, pattern: string, op
   const base = sb.resolve(target);
   const max = opts.maxResults ?? 200;
   opts.signal?.throwIfAborted();
+
+  // Reject absolute patterns to prevent walking outside the project tree
+  if (path.isAbsolute(pattern)) {
+    throw new Error(`find does not accept absolute patterns like "${pattern}"`);
+  }
 
   const entries = await streamGlob(base, pattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
   // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
@@ -55,7 +61,7 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
       cwd: base,
       ignore: ignoreGlobs,
       onlyFiles: false,
-      dot: false,
+      dot: true,
       followSymbolicLinks: false,
       objectMode: true,
     }) as unknown as Readable;

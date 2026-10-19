@@ -3,7 +3,7 @@
  *
  * `copyFile`/`moveFile` only check the top-level source and destination, then hand the whole tree
  * to `fs.cp` / `fs.rename`. A protected pattern that depends on a parent name (e.g.
- * `**/.config/gcloud/**`) stops matching once the parent is copied or renamed, so the restricted
+ * #`.config/gcloud`) stops matching once the parent is copied or renamed, so the restricted
  * file becomes readable at its new location. The same missing content check lets a recursive
  * remove/move delete or relocate a nested `.git` directory.
  *

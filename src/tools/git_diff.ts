@@ -29,10 +29,11 @@ export interface GitDiffResult {
 }
 
 // Matches the "diff --git a/<path> b/<path>" line git prints at the start of each file's section —
-// the boundary `filterRestrictedDiffChunks` splits on. Doesn't attempt to un-escape quoted paths
+// the boundary `filterRestrictedDiffChunks` splits on. Also handles mnemonicPrefix mode which uses
+// "i/" and "w/" instead of "a/" and "b/". Doesn't attempt to un-escape quoted paths
 // (core.quotepath's handling of spaces/unicode/etc.) — same level of pragmatic parsing `gitStatus`
 // already applies to its own "-> " rename-arrow splitting.
-const DIFF_FILE_HEADER_RE = /^diff --git a\/(.+) b\/(.+)$/;
+const DIFF_FILE_HEADER_RE = /^diff --git [ai]\/(.+) [bw]\/(.+)$/;
 
 /**
  * Splits `diffText` into per-file sections on its `diff --git a/<path> b/<path>` headers and drops
@@ -74,8 +75,8 @@ function filterRestrictedDiffChunks(sb: Sandbox, diffText: string): string {
  */
 export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<GitDiffResult> {
   const args = ["diff"];
-  const scope = opts.path ? sb.relative(opts.path) : "";
-  if (scope) args.push("--", scope);
+  const scope = opts.path ? sb.relative(opts.path) : ".";
+  args.push("--", scope);
 
   let stdout: string;
   try {

@@ -44,8 +44,8 @@ export interface GitStatusResult {
  */
 export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promise<GitStatusResult> {
   const args = ["status", "--porcelain=v1", "--branch"];
-  const scope = opts.path ? sb.relative(opts.path) : "";
-  if (scope) args.push("--", scope);
+  const scope = opts.path ? sb.relative(opts.path) : ".";
+  args.push("--", scope);
 
   let stdout: string;
   try {

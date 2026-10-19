@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
@@ -61,7 +62,10 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     buffer = await fs.readFile(filePath, { signal: opts.signal });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
+    // Use relative path to avoid exposing absolute host path
+    const relPath = path.relative(sb.root, filePath);
+    const errMsg = (err as NodeJS.ErrnoException).message.replace(filePath, relPath);
+    throw new Error(`Could not read file "${relPath}": ${errMsg}`);
   }
 
   const allLines = buffer.toString("utf8").split(/\r\n|\n/);
@@ -80,7 +84,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
     selected = selected.slice(0, -1);
   }
   endIndex = startIndex + selected.length;

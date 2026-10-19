@@ -10,6 +10,7 @@ import { withConciseValidationErrors } from "../toolValidation.ts";
 export interface SearchOptions {
   maxResults?: number;
   signal?: AbortSignal;
+  ignoreGlobs?: string[];
 }
 
 export interface SearchResult {
@@ -31,6 +32,7 @@ export async function searchFiles(
   return findFiles(sb, target, pattern, {
     maxResults: opts.maxResults,
     signal: opts.signal,
+    ignoreGlobs: opts.ignoreGlobs,
   });
 }
 

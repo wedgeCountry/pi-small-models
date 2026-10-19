@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -71,6 +71,11 @@ export async function removePath(sb: Sandbox, target: string, opts: RemoveOption
     opts.signal?.throwIfAborted();
 
     if (stat.isDirectory()) {
+      // Check if removing a directory would delete restricted files
+      const hasRestricted = await sb.hasRestrictedDescendant(targetPath);
+      if (hasRestricted) {
+        throw new SandboxError("restricted", `Cannot remove "${target}": directory contains restricted files`);
+      }
       await removeRecursively(targetPath, opts.signal);
     } else {
       await fs.unlink(targetPath);

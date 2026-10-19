@@ -10,7 +10,7 @@ export const GIT_LOG_TOOL_DEFINITION = {
       Type.Integer({
         minimum: 1,
         maximum: 50,
-        description: "Maximum number of commits to return. Defaults to 1, capped at 50.",
+        description: "Maximum number of commits to return. Defaults to 10, capped at 50.",
       })
     ),
     path: Type.Optional(

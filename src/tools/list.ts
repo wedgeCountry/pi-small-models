@@ -42,7 +42,7 @@ export interface ListResult {
 export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {}): Promise<ListResult> {
   const base = sb.resolve(target);
   const allowed = sb.entryFilter(base);
-  const maxDepth = opts.recursive ? (opts.maxDepth ?? 3) : 0;
+  const maxDepth = opts.recursive ? Math.min(opts.maxDepth ?? 3, 15) : 0;
   const max = opts.maxResults ?? 200;
   const entries: ListEntry[] = [];
 

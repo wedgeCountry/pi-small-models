@@ -9,7 +9,7 @@ import { withConciseValidationErrors } from "../toolValidation.ts";
 const execFile = promisify(execFileCb);
 
 const MAX_BUFFER = 20 * 1024 * 1024; // 20MB
-const DEFAULT_MAX_COUNT = 1;
+const DEFAULT_MAX_COUNT = 10;
 const MAX_COUNT_CEILING = 50;
 
 export interface GitLogOptions {
@@ -51,8 +51,8 @@ export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<Git
     `--format=${RECORD_SEP}%H${FIELD_SEP}%an${FIELD_SEP}%aI${FIELD_SEP}%s`,
     "--name-only",
   ];
-  const scope = opts.path ? sb.relative(opts.path) : "";
-  if (scope) args.push("--", scope);
+  const scope = opts.path ? sb.relative(opts.path) : ".";
+  args.push("--", scope);
 
   let stdout: string;
   try {

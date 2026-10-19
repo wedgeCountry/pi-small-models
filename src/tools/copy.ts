@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { COPY_TOOL_DEFINITION } from "../tool_definitions/copy.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
@@ -51,6 +51,14 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
 
   if (sourceStat.isDirectory() && !opts.recursive) {
     throw new Error(`"${sourcePath}" is a directory; set recursive to true to copy it`);
+  }
+
+  // Check if copying a directory would expose restricted files
+  if (sourceStat.isDirectory() && opts.recursive) {
+    const hasRestricted = await sb.hasRestrictedDescendant(sourcePath);
+    if (hasRestricted) {
+      throw new SandboxError("restricted", `Cannot copy "${source}": directory contains restricted files that would be exposed`);
+    }
   }
 
   await withFileMutationQueue(destPath, async () => {

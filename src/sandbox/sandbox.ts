@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import { promises as fsPromises } from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { isInside, isRestricted } from "./policy.ts";
 
@@ -39,6 +41,11 @@ export class Sandbox {
     const resolved = path.resolve(this.root, target || ".");
     if (!this.enforced) return resolved;
 
+    // Refuse to operate if the root is the user's home directory
+    if (this.root === os.homedir()) {
+      throw new SandboxError("outside-root", `Path "${target}" is the user's home directory, which cannot be used as a project root`);
+    }
+
     const lexical = path.relative(this.root, resolved);
     const real = path.relative(this.realRoot(), realpathWithMissingSuffix(resolved));
     if (!isInside(lexical) || !isInside(real)) {
@@ -52,7 +59,13 @@ export class Sandbox {
 
   /** Like `resolve`, but relative to the root ("" for the root itself), for programs run in the root. */
   relative(target: string): string {
-    return path.relative(this.root, this.resolve(target));
+    const resolved = this.resolve(target);
+    let rel = path.relative(this.root, resolved);
+    // Prevent option injection: if the relative path starts with "-", prefix it with "./"
+    if (rel.startsWith("-")) {
+      rel = `./${rel}`;
+    }
+    return rel;
   }
 
   /**
@@ -81,6 +94,82 @@ export class Sandbox {
   /** True if a root-relative path reported by another program (e.g. git) may be shown. */
   allowsReported(relPath: string): boolean {
     return !this.enforced || !isRestricted(relPath);
+  }
+
+  /**
+   * Checks if a directory contains any restricted entries by walking its contents.
+   * Used by copy/move to prevent exposing restricted files through directory operations.
+   * This checks paths relative to the root, so a restricted file like .config/gcloud/credentials.db
+   * will be caught even if we're copying the .config directory itself.
+   */
+  async hasRestrictedDescendant(dirPath: string): Promise<boolean> {
+    if (!this.enforced) return false;
+    
+    // Use real paths to handle symlinks in the directory path itself
+    const realDirPath = realpathWithMissingSuffix(dirPath);
+    const relFromRoot = path.relative(this.realRoot(), realDirPath);
+    
+    // Also check the directory itself
+    if (isRestricted(relFromRoot)) {
+      return true;
+    }
+    
+    const walk = async (dir: string, relFromRoot: string): Promise<boolean> => {
+      const entries = await fsPromises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const entryRelFromRoot = relFromRoot ? `${relFromRoot}/${entry.name}` : entry.name;
+        
+        // Check if this entry is restricted (by lexical path relative to root)
+        if (isRestricted(entryRelFromRoot)) {
+          return true;
+        }
+        
+        // Also check the real path of this entry
+        const fullPath = path.join(dir, entry.name);
+        try {
+          const realPath = realpathWithMissingSuffix(fullPath);
+          const realRelFromRoot = path.relative(this.realRoot(), realPath);
+          if (isRestricted(realRelFromRoot)) {
+            return true;
+          }
+        } catch {
+          // Path doesn't exist yet or is broken symlink, skip
+        }
+        
+        // If it's a directory, recurse using the real path
+        if (entry.isDirectory()) {
+          try {
+            const realFullPath = realpathWithMissingSuffix(fullPath);
+            const realEntryRelFromRoot = path.relative(this.realRoot(), realFullPath);
+            if (await walk(realFullPath, realEntryRelFromRoot)) {
+              return true;
+            }
+          } catch {
+            // Can't resolve real path, use lexical path
+            if (await walk(fullPath, entryRelFromRoot)) {
+              return true;
+            }
+          }
+        } else if (entry.isSymbolicLink()) {
+          // For symlinks to directories, recurse into the target
+          try {
+            const realPath = await fsPromises.realpath(fullPath);
+            const stat = await fsPromises.stat(realPath);
+            if (stat.isDirectory()) {
+              const realRelFromRoot = path.relative(this.realRoot(), realPath);
+              if (await walk(realPath, realRelFromRoot)) {
+                return true;
+              }
+            }
+          } catch {
+            // Broken symlink, skip
+          }
+        }
+      }
+      return false;
+    };
+    
+    return walk(realDirPath, relFromRoot);
   }
 
   private realRoot(): string {

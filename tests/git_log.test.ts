@@ -31,14 +31,15 @@ test("returns the latest commit first with its changed files", async (t) => {
   assert.match(commits[0]!.hash, /^[0-9a-f]{40}$/);
 });
 
-test("defaults to only the latest commit", async (t) => {
+test("defaults to the latest 10 commits", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
   await commit(dir, "b.txt", "x\n", "add b");
 
   const { commits } = await gitLog(new Sandbox(dir));
-  assert.deepEqual(commits.map((c) => c.subject), ["add b"]);
+  // With default of 10, should return both commits (initial + add b)
+  assert.deepEqual(commits.map((c) => c.subject), ["add b", "initial"]);
 });
 
 test("returns multiple commits newest first when maxCount allows", async (t) => {

@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { MOVE_TOOL_DEFINITION } from "../tool_definitions/move.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../renderCall.ts";
@@ -69,6 +69,14 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 
       if (sourceStat.isDirectory() && !opts.recursive) {
         throw new Error(`"${sourcePath}" is a directory; set recursive to true to move it`);
+      }
+
+      // Check if moving a directory would expose restricted files
+      if (sourceStat.isDirectory() && opts.recursive) {
+        const hasRestricted = await sb.hasRestrictedDescendant(sourcePath);
+        if (hasRestricted) {
+          throw new SandboxError("restricted", `Cannot move "${source}": directory contains restricted files that would be exposed`);
+        }
       }
 
       const destExists = await pathExists(destPath);

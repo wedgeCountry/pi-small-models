@@ -63,17 +63,17 @@ async function detectLanguage(base: string, ignoreGlobs: string[], signal?: Abor
 
   const detected: FindUsagesLanguage[] = [];
   if (hasCSharpMarkers) detected.push("csharp");
-  if (hasVenv) detected.push("python");
   if (hasNodeModules) detected.push("typescript");
+  if (hasVenv) detected.push("python");
 
-  if (detected.length !== 1) {
-    const reason =
-      detected.length === 0
-        ? "found none of: a .sln/.csproj file, a .venv folder, a node_modules folder"
-        : `found markers for multiple languages (${detected.join(", ")})`;
-    throw new Error(`find_usages could not auto-detect a language under "${base}" (${reason}) — specify "language" explicitly.`);
+  if (detected.length === 0) {
+    throw new Error(
+      `find_usages could not auto-detect a language under "${base}" (found none of: a .sln/.csproj file, a node_modules folder, a .venv folder) — specify "language" explicitly.`
+    );
   }
 
+  // If multiple language markers are found, pick the first one (in priority order: csharp, typescript, python)
+  // This allows the tool to work in mixed-language projects
   return detected[0]!;
 }
 

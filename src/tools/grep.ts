@@ -76,7 +76,7 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
     cwd: base,
     ignore: opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS,
     onlyFiles: true,
-    dot: false,
+    dot: true,
     followSymbolicLinks: false,
     objectMode: true,
   });
@@ -120,7 +120,6 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      clearTimeout(startupTimeout);
       signal?.removeEventListener("abort", onAbort);
       fn();
     };
@@ -137,15 +136,7 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
       });
     }, timeoutMs);
 
-    // Startup timeout: if worker doesn't send anything in 1 second, something is wrong
-    const startupTimeout = setTimeout(() => {
-      if (!settled) {
-        finish(() => {
-          if (worker) worker.terminate();
-          reject(new Error("Worker failed to initialize within 1 second"));
-        });
-      }
-    }, 1000);
+
 
     const onAbort = () => {
       finish(() => {

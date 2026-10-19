@@ -64,11 +64,18 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
 
   switch (toolName) {
     case "read":
-    case "write":
     case "edit":
     case "mkdir":
     case "lstat":
       return `${toolName} ${path}`;
+    case "write": {
+      const content = str(input, "content") ?? "";
+      if (content) {
+        const preview = content.length > 50 ? content.slice(0, 50) + "..." : content;
+        return `${toolName} ${path} (${preview})`;
+      }
+      return `${toolName} ${path}`;
+    }
     case "peek":
       return `peek ${path}`;
     case "remove":
