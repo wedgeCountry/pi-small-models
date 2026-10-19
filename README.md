@@ -27,7 +27,6 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | Tool     | What it does |
 |----------|--------------|
 | `read`   | Show a file with line numbers (up to 2000 lines per call) |
-| `peek`   | Show just the outline of a file: classes and function signatures, or the headings of a Markdown file |
 | `write`  | Create a file or replace its whole contents |
 | `edit`   | Replace one piece of text in a file |
 | `insert` | Insert text after a given line |
@@ -43,7 +42,6 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | Tool          | What it does |
 |---------------|--------------|
 | `find`        | Find files by glob pattern |
-| `search`      | Find files by name, with simpler defaults than `find` |
 | `grep`        | Search file contents |
 | `find_usages` | Find where a class or function is used (Python, TypeScript/JavaScript, C#) |
 
@@ -54,15 +52,6 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | `git_status` | Current branch and changed files |
 | `git_diff`   | Unstaged changes, optionally for one path |
 | `git_log`    | Recent commits with author, date and changed files |
-
-**Build and dependencies**
-
-| Tool           | What it does |
-|----------------|--------------|
-| `ts_check`     | Type-check a TypeScript project (`tsc --noEmit`) |
-| `npm_list`     | List installed npm packages |
-| `dotnet_build` | Build a .NET project or solution |
-| `dotnet_list`  | List NuGet packages, optionally outdated ones |
 
 `read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
 
@@ -83,75 +72,6 @@ it back on. Every new session starts with the sandbox on.
 - **For one project:** add glob patterns, one per line, to a `.piignore` file in the project root.
 - **For all projects:** type `/ignore <pattern>` in Pi. Type `/ignore` on its own to see what is
   currently ignored.
-
-## Working on this project
-
-### 1. Set up Node.js
-
-The project needs **Node.js 24** or newer. Check what you have:
-
-```bash
-node --version
-```
-
-If that prints an older version, or nothing, install Node 24 with a version manager so you can switch
-versions per project.
-
-**Linux and macOS** — with [nvm](https://github.com/nvm-sh/nvm):
-
-```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-# open a new terminal, then:
-nvm install 24
-nvm use 24
-# inside the project:
-npm install
-npm test
-```
-
-**Windows** — with [fnm](https://github.com/Schniz/fnm) (in PowerShell):
-
-```powershell
-winget install Schniz.fnm
-fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
-fnm install 24
-fnm use 24
-# inside the project:
-fnm install
-fnm test
-```
-
-To make fnm load in every new PowerShell window, add the `fnm env ...` line to your PowerShell profile
-(`notepad $PROFILE`).
-
-If you'd rather not use a version manager, the installer from [nodejs.org](https://nodejs.org) works
-too — pick the 24.x LTS version.
-
-### 2. Install dependencies
-
-```bash
-git clone https://github.com/wedgeCountry/pi-small-models.git
-cd pi-small-models
-npm install
-```
-
-There is no build step: Pi runs the TypeScript source directly.
-
-### 3. Run the tests and type check
-
-```bash
-npm test           # all tests
-npx tsc --noEmit   # type check
-```
-
-To run a single test file:
-
-```bash
-npx tsx --test tests/grep.test.ts
-```
-
-Some tests create symlinks. On Windows these are skipped unless Developer Mode is on or you run as
-administrator; that's expected.
 
 ### Where to look next
 

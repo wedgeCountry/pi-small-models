@@ -20,7 +20,7 @@ export async function myPlainFunction(sb: Sandbox, target: string, opts: MyOptio
 ```
 
 Every file exports a plain async function (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`,
-`removePath`, `copyFile`, `moveFile`, `lstatPath`, `insertText`, `readFile`, `peekFile`, `writeFile`, `gitStatus`,
+`removePath`, `copyFile`, `moveFile`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`,
 `gitDiff`, …) that takes a `Sandbox` first and does the real work independent of Pi. Tool code never checks
 paths itself: it asks the sandbox (`../sandbox/sandbox.ts`). A model-supplied path goes through `sb.resolve`;
 a path handed to a child process through `sb.relative`; entries a directory walk discovers through
@@ -47,8 +47,3 @@ no injection surface) with `cwd` pinned to the project root. An optional `path` 
 replaces the built-ins (per Pi's tool registry). `mkdir`, `remove`, `lstat`, `insert`, `git_status`, and
 `git_diff` have no built-in name collision.
 
-`peek.ts` never reads files itself: it calls `read.ts`'s `readFile(sb, target, {uncapped: true})`, the same function `read`'s `execute()` uses, so the two tools can't diverge on sandboxing. It then delegates to `previewManagers/`: `registry.ts` maps file extensions to one `PreviewManager` per
-language (`python.ts`, `typescript.ts`, `csharp.ts`, `markdown.ts`). Each manager's behavior is driven by the
-regex table exported at the top of its file; TypeScript and C# share `braceEngine.ts`, a small
-string/comment-aware brace and statement tracker. No user-supplied regex is involved, so (unlike `grep`) no
-worker thread is needed.

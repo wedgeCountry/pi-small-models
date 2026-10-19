@@ -3,7 +3,7 @@
 Implementation of the Pi extension registered in `../index.ts`.
 
 - `tool_definitions/` — static `*_TOOL_DEFINITION` objects (name, description, `parameters` schema) shown to the model. See its own `README.md`.
-- `tools/` — `pi.registerTool({...})` calls that pair each definition with an `execute()`, plus a plain async function per tool (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`, `removePath`, `lstatPath`, `insertText`, `readFile`, `peekFile`, `writeFile`, `gitStatus`, `gitDiff`) that the tests call directly. Also holds `grepWorker.mjs`, the off-main-thread scan loop `grep.ts` delegates to, and `previewManagers/`, the per-language outliners behind `peek`. See its own `README.md`.
+- `tools/` — `pi.registerTool({...})` calls that pair each definition with an `execute()`, plus a plain async function per tool (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`, `removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`) that the tests call directly. See its own `README.md`.
 - `sandbox/` — the sandbox every tool goes through:
   - `policy.ts` — the protected patterns (`RESTRICTED_GLOBS`) and two pure checks, `isRestricted` and `isInside`.
   - `sandbox.ts` — `Sandbox`, an unchangeable per-call object (`sandboxFor(ctx.cwd)`) with `resolve`, `relative`, `entryFilter`, and `allowsReported`; plus the `on`/`off` switch (`getSandboxState`/`setSandboxState`) and `SandboxError`.

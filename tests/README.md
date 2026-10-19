@@ -18,6 +18,3 @@ when that fails — expected on Windows without Developer Mode or admin privileg
 covers the confirmation gate and the gated registry; `index.test.ts` loads the extension against a fake Pi and
 checks that every registered tool is gated and that `/toggle-sandbox` and `session_start` drive the switch.
 
-`peek.test.ts` covers `peekFile` itself (extension dispatch, defaults, errors, truncation, rendering);
-`peek_python.test.ts`, `peek_typescript.test.ts`, `peek_csharp.test.ts` and `peek_markdown.test.ts` call each
-PreviewManager's `preview()` directly on inline sources and assert the exact outline lines.

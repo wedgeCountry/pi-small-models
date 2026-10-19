@@ -27,9 +27,9 @@ same way the existing dotnet/symlink tests do. Payloads are benign — the "expl
 | `sec_m3_permission_gate.test.ts` | M3 | The approval dialog must describe mutations/executions; executing tools must be gated with the sandbox on |
 | `sec_m4_resource_limits.test.ts` | M4 | `find` must reject absolute globs; `list` must clamp depth; a slow child must time out |
 | `sec_m6_output_caps.test.ts` | M6 | `read` must cap a single very long line at the byte limit |
-| `sec_misc_defects.test.ts` | L9, D3 | `dotnet_build` must honour an already-aborted signal; `find_usages` auto must handle multi-language repos |
-| `sec_platform.test.ts` | L2, M5 | `npm_list` must not let a `-`-prefixed package become an option; must start on Windows (skips off-Windows) |
-| `sec_correctness.test.ts` | D1, D2, D5 | `search` must honour custom ignores; `git_log` default should be 10; `find` must see non-protected dotfiles |
+| `sec_misc_defects.test.ts` | L9, D3 | `find_usages` auto must handle multi-language repos |
+| `sec_platform.test.ts` | L2, M5 | must start on Windows (skips off-Windows) |
+| `sec_correctness.test.ts` | D1, D2, D5 | `git_log` default should be 10; `find` must see non-protected dotfiles |
 | `sec_low_hardening.test.ts` | L3 (+L1/L4/L6 documented skips) | Read errors must not echo absolute host paths; three hardening items left as reviewer placeholders |
 
 Finding IDs match the review document. `D*` are the correctness defects listed there.
