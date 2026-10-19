@@ -44,8 +44,8 @@ export async function findFiles(sb: Sandbox, target: string, pattern: string, op
     throw new Error(`find does not accept absolute patterns like "${pattern}"`);
   }
 
-  const entries = await streamGlob(base, pattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
   const effectivePattern = ensureRecursivePattern(pattern);
+  const entries = await streamGlob(base, effectivePattern, opts.ignoreGlobs ?? DEFAULT_IGNORE_GLOBS, opts.signal);
   // followSymbolicLinks: false only stops fast-glob from descending into a symlinked directory; a
   // symlinked entry itself still comes back, so every entry goes through the sandbox's filter.
   const allowed = sb.entryFilter(base);

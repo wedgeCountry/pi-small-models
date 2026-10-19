@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { REMOVE_TOOL_DEFINITION } from "../tool_definitions/remove.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import {sandboxFor, type Sandbox, SandboxError} from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";

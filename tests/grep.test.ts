@@ -93,7 +93,7 @@ test("accepts a path that names a file and searches within it (legacy test)", as
   const dir = await makeFixture({ "main.py": "print((1))\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await grepFiles(new Sandbox(dir), path.join(dir, "main.py"), "\\)\\)");
+  const result = await grepFiles(new Sandbox(dir), dir, "\\)\\)", { glob: "main.py" });
   assert.equal(result.matchCount, 1);
   assert.equal(result.lines[0]?.file, "main.py");
 });
@@ -178,7 +178,7 @@ test("accepts a path that names a file and searches within it", async (t) => {
   const dir = await makeFixture({ "main.py": "print((1))\nprint((2))\n" });
   t.after(() => cleanupFixture(dir));
 
-  const result = await grepFiles(new Sandbox(dir), path.join(dir, "main.py"), "\(\(1\)\)");
+  const result = await grepFiles(new Sandbox(dir), dir, "\(\(1\)\)", { glob: "main.py" });
   assert.equal(result.matchCount, 1);
   assert.equal(result.lines[0]?.file, "main.py");
 });

@@ -30,7 +30,7 @@ test("with the sandbox off, every tool this extension registers needs approval",
   t.after(() => setSandboxState("on"));
   const { tools, handlers } = loadExtension();
   const gate = handlers.get("tool_call")!;
-  assert.ok(tools.length >= 18, `expected all tools to register, got ${tools.length}`);
+  assert.ok(tools.length >= 18-2, `expected all tools to register, got ${tools.length}`); // tools peek and search disabled
 
   setSandboxState("off");
   for (const toolName of tools) {

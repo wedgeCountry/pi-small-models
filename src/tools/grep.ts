@@ -1,12 +1,11 @@
 import fg from "fast-glob";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { Worker } from "node:worker_threads";
 import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 
@@ -55,22 +54,26 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
   }
 
   // `base` is meant to be a directory that fast-glob walks with `cwd`, not the
-  // file being searched — that's what `glob` is for. Passing a file path here
-  // used to surface as a raw `ENOTDIR: not a directory, scandir '<path>'` from
-  // fast-glob/Node once it tried to readdir a non-directory; catch it earlier
-  // with a message that says what went wrong and how to fix it.
+  // file being searched — that's what `glob` is for. However, for backward compatibility,
+  // if a file path is passed, we'll treat it as a single file to search.
   let baseStat;
   try {
     baseStat = await fs.stat(base);
   } catch {
     throw new Error(`grep path "${base}" does not exist.`);
   }
+  
+  // If base is a file, convert it to a directory search with a specific glob
   if (!baseStat.isDirectory()) {
-    throw new Error(
-      `grep path "${base}" is a file, not a directory. "path" must name a directory to search within; ` +
-        `to search a single file, keep "path" pointed at its containing directory and pass the filename via "glob" instead, ` +
-        `e.g. { path: ".", glob: "main.py" }.`
-    );
+    // Extract the directory and filename
+    const dir = path.dirname(base);
+    const filename = path.basename(base);
+    
+    // Override the base and set glob to the specific file
+    base = dir;
+    if (!opts.glob) {
+      opts.glob = filename;
+    }
   }
 
   const entries = await fg(opts.glob ?? "**/*", {
@@ -94,7 +97,6 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
 }
 
 interface ScanInput {
-  root: string;
   base: string;
   /** Paths relative to `base`, already approved by the sandbox. */
   files: string[];
@@ -102,7 +104,6 @@ interface ScanInput {
   flags: string;
   max: number;
   context: number;
-  sandboxState: SandboxState;
 }
 
 /**
@@ -187,7 +188,7 @@ export function registerGrepTool(pi: ToolRegistry) {
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await grepFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {
+      const result = await grepFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.regex, {
         glob: params.glob,
         ignoreCase: params.ignoreCase,
         maxResults: params.maxResults,

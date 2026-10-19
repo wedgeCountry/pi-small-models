@@ -5,10 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
-import { peekFile, renderPeekResult } from "./peek.ts";
-import type { PeekVisibility } from "./previewManagers/types.ts";
-import { PEEK_EXTENSIONS } from "./previewManagers/registry.ts";
-import { createReadTool, type ReadOperations } from "@earendil-works/pi-coding-agent";
+import { createReadTool } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -132,7 +129,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
     selected = selected.slice(0, -1);
   }
   endIndex = startIndex + selected.length;

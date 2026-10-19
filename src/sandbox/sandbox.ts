@@ -196,9 +196,15 @@ export class Sandbox {
   async hasRestrictedDescendant(dirPath: string): Promise<boolean> {
     if (!this.enforced) return false;
 
+    // Convert absolute path to relative path if needed
+    let relativePath = dirPath;
+    if (path.isAbsolute(dirPath)) {
+      relativePath = path.relative(this.root, dirPath);
+    }
+
     // First check the directory itself using resolve
     try {
-      this.resolve(dirPath);
+      this.resolve(relativePath);
     } catch (err) {
       if (err instanceof SandboxError) {
         return true; // Directory itself is restricted or outside root
