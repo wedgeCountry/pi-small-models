@@ -99,7 +99,6 @@ export const RESTRICTED_GLOBS: readonly string[] = [
   "**/.pi/**",
   "**/.piignore",
   "**/AGENTS.md",
-  "**/CLAUDE.md",
   "**/.agents/**",
 ];
 

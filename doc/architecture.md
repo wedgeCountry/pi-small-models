@@ -1,7 +1,7 @@
 # Architecture
 
 A high-level overview for humans reading the repo. For the full, current detail (exact file names,
-edge cases, rationale) see [`CLAUDE.md`](../CLAUDE.md) — this doc intentionally stays short and doesn't try
+edge cases, rationale) see [`AGENTS.md`](../AGENTS.md) — this doc intentionally stays short and doesn't try
 to duplicate it.
 
 ## What this is
@@ -59,4 +59,4 @@ Two slash commands are registered: `/toggle-sandbox` (toggles sandbox enforcemen
 
 Design choices (simplified `edit` API, capped/truncated result shapes, line-ending preservation),
 cancellation handling, the grep worker thread, shared infra (`ignore.ts`, `mutationQueue.ts`), and the
-testing pattern are all documented in `CLAUDE.md`.
+testing pattern are all documented in `AGENTS.md`.
