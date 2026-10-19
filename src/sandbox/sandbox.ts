@@ -206,33 +206,46 @@ export class Sandbox {
       throw err;
     }
 
-    // Walk the directory tree using a filter that leverages our existing validation
+    // Walk the directory tree
     return this.walkDirectoryForRestricted(dirPath);
   }
 
   /**
    * Recursively walk a directory to check for restricted entries.
-   * Uses the sandbox's own entryFilter for consistent validation.
+   * Uses the same validation logic as entryFilter for consistency.
    */
   private async walkDirectoryForRestricted(dir: string): Promise<boolean> {
-    // Create a filter for this directory using our existing entryFilter method
-    const filter = this.entryFilter(dir);
-    
     const entries = await fsPromises.readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       const entryPath = entry.name;
+      const fullPath = path.join(dir, entryPath);
       const isSymlink = entry.isSymbolicLink();
       
-      // Use our existing filter to check if entry is allowed
-      // If filter returns false, the entry is restricted
-      if (!filter(entryPath, isSymlink)) {
+      // Check if this entry is restricted using the same logic as entryFilter
+      // First check lexical path
+      const lexicalRelative = path.relative(this.root, fullPath);
+      if (isRestricted(lexicalRelative)) {
         return true;
+      }
+      
+      // Check real path
+      try {
+        const realPath = resolveRealPathWithFallback(fullPath);
+        const realRelative = path.relative(this.getRealRoot(), realPath);
+        if (isRestricted(realRelative)) {
+          return true;
+        }
+        // Also check if real path is outside root
+        if (!isInside(realRelative)) {
+          return true;
+        }
+      } catch {
+        // Path doesn't exist or can't be resolved, skip
+        continue;
       }
 
       // For directories and symlinks to directories, recurse
-      const fullPath = path.join(dir, entryPath);
-      
       if (entry.isDirectory()) {
         if (await this.walkDirectoryForRestricted(fullPath)) {
           return true;
