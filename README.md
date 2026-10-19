@@ -79,6 +79,10 @@ it back on. Every new session starts with the sandbox on.
 - [`doc/tool-pattern.md`](doc/tool-pattern.md) — how to add a new tool
 - `README.md` files in `src/`, `src/tools/`, `src/tool_definitions/` and `tests/`
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for details on the sandbox model and known vulnerabilities.
+
 ## License
 
 See [LICENSE](LICENSE).
