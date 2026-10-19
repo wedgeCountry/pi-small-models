@@ -1,6 +1,6 @@
 {
   "name": "pi-small-models",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pi extension that disables bash and provides structured find/grep/list tools for smaller/weaker models.",
   "type": "module",
   "keywords": [
