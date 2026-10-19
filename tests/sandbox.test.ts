@@ -229,7 +229,6 @@ test("B6: an unenforced sandbox checks nothing", () => {
   assert.equal(off.resolve(".git/config"), path.join(root, ".git", "config"));
   assert.equal(off.entryFilter(root)(".ssh/id_rsa", true), true);
   assert.equal(off.allowsReported(".env"), true);
-  assert.equal(off.resolveLibraryFile([], "/anywhere/x.py"), path.resolve("/anywhere/x.py"));
 });
 
 // --- B7: error messages ----------------------------------------------------------------------
@@ -241,32 +240,4 @@ test("B7: errors say which check failed", () => {
 
 test("B7: escaping the root wins over a protected name", () => {
   assert.equal(rejection(() => sandbox.resolve("../elsewhere/.env")), "outside-root");
-});
-
-// --- B8: installed-package locations ---------------------------------------------------------
-
-test("B8: resolveLibraryFile allows files under a library root and rejects everything else", async (t) => {
-  const dir = await makeFixture({ "libs/pkg/a.py": "", "libs/pkg/.env": "SECRET=1", "elsewhere/b.py": "" });
-  t.after(() => cleanupFixture(dir));
-  const sb = new Sandbox(path.join(dir, "project"));
-  const roots = [path.join(dir, "libs")];
-
-  assert.equal(sb.resolveLibraryFile(roots, path.join(dir, "libs/pkg/a.py")), path.join(dir, "libs/pkg/a.py"));
-  assert.throws(
-    () => sb.resolveLibraryFile(roots, path.join(dir, "elsewhere/b.py")),
-    /Library file ".*b\.py" is outside the installed-package locations this tool may read/
-  );
-  assert.throws(() => sb.resolveLibraryFile(roots, path.join(dir, "libs/../elsewhere/b.py")), /outside/);
-  assert.throws(() => sb.resolveLibraryFile(roots, path.join(dir, "libs/pkg/.env")), /Library file .* is restricted by the sandbox/);
-  assert.equal(sb.allowsLibraryFile(roots, path.join(dir, "libs/pkg/a.py")), true);
-  assert.equal(sb.allowsLibraryFile(roots, path.join(dir, "elsewhere/b.py")), false);
-});
-
-test("B8: a symlink inside a library root that escapes it is rejected", async (t) => {
-  const dir = await makeFixture({ "libs/.keep": "", "elsewhere/b.py": "" });
-  t.after(() => cleanupFixture(dir));
-  if (!(await trySymlink(t, path.join(dir, "elsewhere"), path.join(dir, "libs/escape")))) return;
-
-  const sb = new Sandbox(dir);
-  assert.equal(sb.allowsLibraryFile([path.join(dir, "libs")], path.join(dir, "libs/escape/b.py")), false);
 });

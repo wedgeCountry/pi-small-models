@@ -29,15 +29,6 @@ peek shows for a language is changed there. Python is indentation-based; TypeScr
 brace-tracking scanner (`braceEngine.ts`). A `visibility` parameter (public/protected/private, inclusive) and
 `includeDocs` control how much is shown; Markdown takes `maxDepth` instead.
 
-## Library tools
-
-`ts_lib`, `py_lib` and `dotnet_lib` describe installed packages. Each one locates the package and
-extracts a flat list of API entries (`src/tools/libInfo/`); shared code in `query.ts`/`format.ts` turns
-that into the same overview / search / symbol views for all three. TypeScript uses the TypeScript
-compiler API, Python runs a small stdlib-only helper script (`py_libinfo.py`) in the project's
-interpreter that reads source with `ast`, and .NET reads the XML documentation files next to the
-package's assemblies. `py_list` lists Python packages through the same helper.
-
 ## Sandboxing
 
 Everything lives in `src/sandbox/`:
@@ -46,9 +37,7 @@ Everything lives in `src/sandbox/`:
   glob list, plus the pure checks `isRestricted` and `isInside`.
 - **`sandbox.ts`** — `Sandbox`, one unchangeable object per tool call (`sandboxFor(ctx.cwd)`). Tools never
   check paths themselves; they ask it to `resolve` a path the model gave, filter what a directory walk found
-  (`entryFilter`), filter paths git reports (`allowsReported`), or resolve a file inside an installed package
-  (`resolveLibraryFile` — the one read-only exception to root containment, limited to roots derived from
-  package-manager metadata). Every check runs on the path as given and on its real, symlink-resolved path.
+  (`entryFilter`), or filter paths git reports (`allowsReported`). Every check runs on the path as given and on its real, symlink-resolved path.
 - **`permissionGate.ts`** — `/toggle-sandbox off` turns the checks off; in exchange every tool registered
   through the gated registry asks for confirmation before each call (blocked without a UI).
 

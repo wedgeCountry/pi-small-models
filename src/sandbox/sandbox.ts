@@ -6,8 +6,7 @@ import { isInside, isRestricted } from "./policy.ts";
  * The sandbox every tool goes through. A `Sandbox` is an unchangeable snapshot for one tool call:
  * a project root plus whether rules are enforced. Tools never check paths themselves — they ask
  * the sandbox to resolve a path the model gave (`resolve`), to filter what a directory walk found
- * (`entryFilter`), to filter paths another program reported (`allowsReported`), or to resolve a
- * file inside an installed package (`resolveLibraryFile`).
+ * (`entryFilter`), or to filter paths another program reported (`allowsReported`).
  *
  * When enforced, a path must stay inside its root and must not match `policy.ts`'s protected
  * patterns. Both are checked on the path as given and on its real, symlink-resolved location, so a
@@ -19,7 +18,7 @@ export type SandboxState = "on" | "off";
 
 export class SandboxError extends Error {
   constructor(
-    readonly reason: "outside-root" | "outside-libraries" | "restricted",
+    readonly reason: "outside-root" | "restricted",
     message: string
   ) {
     super(message);
@@ -82,41 +81,6 @@ export class Sandbox {
   /** True if a root-relative path reported by another program (e.g. git) may be shown. */
   allowsReported(relPath: string): boolean {
     return !this.enforced || !isRestricted(relPath);
-  }
-
-  /**
-   * Resolves a file inside an installed package. The model never names these files; tools derive
-   * `libRoots` from package-manager metadata. The file must really lie under one of the roots and
-   * must not match a protected pattern relative to it. Read-only use only.
-   */
-  resolveLibraryFile(libRoots: readonly string[], target: string): string {
-    const resolved = path.resolve(target);
-    if (!this.enforced) return resolved;
-
-    const real = realpathWithMissingSuffix(resolved);
-    for (const libRoot of libRoots) {
-      const lexicalRoot = path.resolve(libRoot);
-      const realRelative = path.relative(realpathWithMissingSuffix(lexicalRoot), real);
-      if (!isInside(realRelative)) continue;
-      if (isRestricted(path.relative(lexicalRoot, resolved)) || isRestricted(realRelative)) {
-        throw new SandboxError("restricted", `Library file "${target}" is restricted by the sandbox`);
-      }
-      return resolved;
-    }
-    throw new SandboxError(
-      "outside-libraries",
-      `Library file "${target}" is outside the installed-package locations this tool may read`
-    );
-  }
-
-  /** Non-throwing form of `resolveLibraryFile`. */
-  allowsLibraryFile(libRoots: readonly string[], target: string): boolean {
-    try {
-      this.resolveLibraryFile(libRoots, target);
-      return true;
-    } catch {
-      return false; // unreadable paths are refused rather than risked
-    }
   }
 
   private realRoot(): string {

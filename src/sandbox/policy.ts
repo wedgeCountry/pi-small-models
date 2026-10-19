@@ -5,7 +5,7 @@ import micromatch from "micromatch";
  * What the sandbox protects, as pure functions with no filesystem access. `sandbox.ts` decides
  * which paths to feed in; this file only says yes or no.
  *
- * Patterns are matched against POSIX paths relative to the project root (or a library root), so
+ * Patterns are matched against POSIX paths relative to the project root, so
  * the same list works on every platform. Every pattern starts with `**` so it applies at any depth.
  *
  * - Credential stores a project can contain: SSH keys (in `.ssh/` and loose), cloud CLI

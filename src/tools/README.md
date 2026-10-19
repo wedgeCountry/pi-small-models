@@ -24,8 +24,7 @@ Every file exports a plain async function (`findFiles`, `grepFiles`, `listDir`, 
 `gitDiff`, …) that takes a `Sandbox` first and does the real work independent of Pi. Tool code never checks
 paths itself: it asks the sandbox (`../sandbox/sandbox.ts`). A model-supplied path goes through `sb.resolve`;
 a path handed to a child process through `sb.relative`; entries a directory walk discovers through
-`sb.entryFilter(base)`; paths reported by `git` through `sb.allowsReported`; files inside installed packages
-through `sb.resolveLibraryFile`. Tests call the plain functions with `new Sandbox(fixtureDir)` (or
+`sb.entryFilter(base)`; paths reported by `git` through `sb.allowsReported`. Tests call the plain functions with `new Sandbox(fixtureDir)` (or
 `new Sandbox(dir, false)` for the unenforced case), so they exercise the same path production runs.
 
 `copy.ts`/`move.ts` each take a `source` and `destination`: `copyFile` only ever reads `source` (so only

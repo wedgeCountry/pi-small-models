@@ -105,20 +105,6 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
       const scope = str(input, "path");
       return scope ? `git_log (${scope})` : "git_log";
     }
-    case "ts_lib":
-    case "py_lib":
-    case "dotnet_lib": {
-      const pkg = str(input, "package") ?? "?";
-      const module = str(input, "module");
-      const symbol = str(input, "symbol");
-      const query = str(input, "query");
-      const detail = symbol ? ` symbol ${symbol}` : query ? ` search "${query}"` : "";
-      return `${toolName} ${pkg}${module ? ` (${module})` : ""}${detail} — reads installed package files`;
-    }
-    case "py_list": {
-      const pkg = str(input, "package");
-      return `py_list${pkg ? ` ${pkg}` : ""} — runs the project's Python interpreter`;
-    }
     default:
       return toolName;
   }

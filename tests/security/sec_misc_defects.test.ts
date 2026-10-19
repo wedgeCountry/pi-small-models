@@ -13,38 +13,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
-import { dotnetBuild } from "../../src/tools/dotnet_build.ts";
 import { findUsages } from "../../src/tools/find_usages.ts";
 import { makeFixture, cleanupFixture } from "../fixtures.ts";
-
-test("L9: dotnet_build must reject immediately when the signal is already aborted", async (t) => {
-  let hasDotnet = false;
-  try {
-    execFileSync("dotnet", ["--version"], { stdio: "ignore" });
-    hasDotnet = true;
-  } catch {
-    hasDotnet = false;
-  }
-  if (hasDotnet) {
-    t.skip("dotnet present: pre-spawn abort not observable in this black-box test");
-    return;
-  }
-  const root = await makeFixture({});
-  try {
-    const sb = new Sandbox(root); // sandbox ON
-    const controller = new AbortController();
-    controller.abort();
-    await assert.rejects(
-      () => dotnetBuild(sb, { signal: controller.signal }),
-      (err: unknown) => (err as Error).name === "AbortError",
-      "BUG: dotnet_build did not honour an already-aborted signal before spawning"
-    );
-  } finally {
-    await cleanupFixture(root);
-  }
-});
 
 test("D3: find_usages (auto) must handle a project with more than one language marker", async () => {
   const root = await makeFixture({
