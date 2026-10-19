@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isEntrySandboxSafe, type SandboxState } from "../sandbox.ts";
+import { isEntrySandboxSafe, type SandboxState } from "../sandbox/sandbox.ts";
 
 interface GrepLine {
   file: string;
@@ -16,6 +16,7 @@ interface GrepWorkerFile {
 }
 
 interface GrepWorkerInput {
+  root: string;
   base: string;
   files: GrepWorkerFile[];
   pattern: string;
@@ -37,7 +38,7 @@ interface GrepWorkerOutput {
 // backtracking) can only hang this worker, which the caller then terminates,
 // rather than freezing the whole extension process.
 async function run(): Promise<void> {
-  const { base, files, pattern, flags, max, context, sandboxState } = workerData as GrepWorkerInput;
+  const { root, base, files, pattern, flags, max, context, sandboxState } = workerData as GrepWorkerInput;
   const regex = new RegExp(pattern, flags);
 
   const lines: GrepLine[] = [];
@@ -49,7 +50,7 @@ async function run(): Promise<void> {
     // Re-verify independently of the main thread's own pre-filter (see the comment on
     // `scanInWorker` in grep.ts for why) — `sandboxState` is passed in explicitly since this
     // worker's own import of sandbox.ts has its own separate module state, not the main thread's.
-    if (!isEntrySandboxSafe(base, file.path, "read", file.isSymlink, sandboxState)) continue;
+    if (!isEntrySandboxSafe(root, base, file.path, file.isSymlink, sandboxState)) continue;
 
     let content: string;
     try {

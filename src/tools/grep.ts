@@ -6,7 +6,7 @@ import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../ignore.ts";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { sandboxFor, type Sandbox, type SandboxState, getSandboxState } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../renderCall.ts";
 import { withConciseValidationErrors } from "../toolValidation.ts";
 
@@ -89,10 +89,11 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
     .map((e) => e.path)
     .sort((a, b) => a.localeCompare(b));
 
-  return scanInWorker({ base, files, pattern, flags, max, context }, timeoutMs, opts.signal);
+  return scanInWorker({ root: sb.root, base, files, pattern, flags, max, context, sandboxState: getSandboxState() }, timeoutMs, opts.signal);
 }
 
 interface ScanInput {
+  root: string;
   base: string;
   /** Paths relative to `base`, already approved by the sandbox. */
   files: string[];
@@ -100,6 +101,7 @@ interface ScanInput {
   flags: string;
   max: number;
   context: number;
+  sandboxState: SandboxState;
 }
 
 /**

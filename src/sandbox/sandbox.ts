@@ -220,3 +220,24 @@ function realpathOrUndefined(target: string): string | undefined {
     return undefined;
   }
 }
+
+/**
+ * Standalone function for checking if an entry is sandbox-safe, used by grepWorker.
+ * Creates a temporary Sandbox instance to reuse its entryFilter logic.
+ * The root is passed explicitly, and stateOverride determines if enforcement is active.
+ */
+export function isEntrySandboxSafe(
+  root: string,
+  base: string,
+  entryPath: string,
+  isSymlink: boolean,
+  stateOverride?: SandboxState
+): boolean {
+  // Create a sandbox instance with the appropriate enforcement state
+  const sb = new Sandbox(root, (stateOverride ?? state) === "on");
+  
+  // Use the sandbox's entryFilter to check the entry
+  // base is relative to root, entryPath is relative to base
+  const filter = sb.entryFilter(base);
+  return filter(entryPath, isSymlink);
+}
