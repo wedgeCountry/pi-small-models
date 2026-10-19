@@ -10,12 +10,13 @@ import { Sandbox } from "../src/sandbox/sandbox.ts";
 // The file contains Unicode escape sequences, but when copied, they might be interpreted as actual Unicode
 test("reproduces sandbox.ts Unicode escape sequence issue", async (t) => {
   // Create a file with the exact content from sandbox.ts line 152
+  // Use string concatenation to create literal escape sequences in the file
   const fileContent = `    // Prevent paths that use Unicode lookalike characters for dots or slashes
     // This catches attempts to use characters that look like . or / but are different Unicode characters
-    if (/[\u2024\u2219\u2981\uFF0E\uFF61]/.test(target)) {
+    if (/[` + '\\u2024\\u2219\\u2981\\uFF0E\\uFF61' + `]/.test(target)) {
       throw new SandboxError(
         "outside-root",
-        \`Path "\${target}" contains Unicode lookalike characters which are not allowed in sandboxed paths\`
+        'Path "' + 'target' + '" contains Unicode lookalike characters which are not allowed in sandboxed paths'
       );
     }
 `;
@@ -39,12 +40,13 @@ test("reproduces sandbox.ts Unicode escape sequence issue", async (t) => {
 
 test("edits sandbox.ts Unicode escape sequences correctly with escape sequences", async (t) => {
   // Create a file with the exact content from sandbox.ts line 152
+  // Use string concatenation to create literal escape sequences in the file
   const fileContent = `    // Prevent paths that use Unicode lookalike characters for dots or slashes
     // This catches attempts to use characters that look like . or / but are different Unicode characters
-    if (/[\u2024\u2219\u2981\uFF0E\uFF61]/.test(target)) {
+    if (/[` + '\\u2024\\u2219\\u2981\\uFF0E\\uFF61' + `]/.test(target)) {
       throw new SandboxError(
         "outside-root",
-        \`Path "\${target}" contains Unicode lookalike characters which are not allowed in sandboxed paths\`
+        'Path "' + 'target' + '" contains Unicode lookalike characters which are not allowed in sandboxed paths'
       );
     }
 `;
@@ -66,7 +68,7 @@ test("edits sandbox.ts Unicode escape sequences correctly with escape sequences"
     if (/[REPLACED]/.test(target)) {
       throw new SandboxError(
         "outside-root",
-        \`Path "\${target}" contains Unicode lookalike characters which are not allowed in sandboxed paths\`
+        'Path "' + 'target' + '" contains Unicode lookalike characters which are not allowed in sandboxed paths'
       );
     }
 `);
@@ -75,7 +77,7 @@ test("edits sandbox.ts Unicode escape sequences correctly with escape sequences"
 test("demonstrates the Unicode interpretation issue", async (t) => {
   // This test shows the core issue: when reading the file, the Unicode escape sequences
   // might be interpreted differently than what's actually in the file
-  const fileContent = `    if (/[\u2024\u2219\u2981\uFF0E\uFF61]/.test(target)) {`;
+  const fileContent = `    if (/[` + '\\u2024\\u2219\\u2981\\uFF0E\\uFF61' + `]/.test(target)) {`;
   
   const dir = await makeFixture({ "test.txt": fileContent });
   t.after(() => cleanupFixture(dir));
@@ -87,7 +89,7 @@ test("demonstrates the Unicode interpretation issue", async (t) => {
   console.log("Actual file content:", JSON.stringify(actualContent));
   
   // What the user might be trying to match
-  const userOldText = `    if (/[\u2024\u2219\u2981\uFF0E\uFF61]/.test(target)) {`;
+  const userOldText = `    if (/[\\u2024\\u2219\\u2981\\uFF0E\\uFF61]/.test(target)) {`;
   console.log("User oldText:", JSON.stringify(userOldText));
   
   // Check if they match

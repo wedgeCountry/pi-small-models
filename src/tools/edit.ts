@@ -30,14 +30,7 @@ function normalizeToLF(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-/** Normalizes Unicode escape sequences to actual Unicode characters for consistent matching. */
-function normalizeUnicodeEscapes(text: string): string {
-  // This regex matches Unicode escape sequences like \u2024, \u2219, etc.
-  // and replaces them with the actual Unicode characters
-  return text.replace(/\\u([0-9A-Fa-f]{4})/g, (_, codePoint) => {
-    return String.fromCharCode(parseInt(codePoint, 16));
-  });
-}
+
 
 /** Reintroduces `\r\n` line endings into LF-normalized text, if `ending` calls for it. */
 function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
@@ -123,48 +116,12 @@ export async function editFile(
     const lfOldText = normalizeToLF(oldText);
     const lfNewText = normalizeToLF(newText);
     
-    // First try exact matching (most common case)
-    let updated: string;
-    try {
-      updated = applyOneEdit(
-        lfContent,
-        { oldText: lfOldText, newText: lfNewText, allowMultipleMatches: opts.allowMultipleMatches },
-        `oldText in "${filePath}"`
-      );
-    } catch (error) {
-      // If exact matching fails, try with Unicode escape sequence normalization
-      // This handles the case where file contains \u2024 but user provides actual Unicode character ⋅
-      const normalizedContent = normalizeUnicodeEscapes(lfContent);
-      const normalizedOldText = normalizeUnicodeEscapes(lfOldText);
-      const normalizedNewText = normalizeUnicodeEscapes(lfNewText);
-      
-      if (normalizedOldText.length === 0) {
-        throw new Error(
-          `oldText in "${filePath}": oldText must not be empty. To insert new text without replacing anything, use the insert tool instead.`
-        );
-      }
-      if (normalizedOldText === normalizedNewText) {
-        throw new Error(`oldText in "${filePath}": oldText and newText must differ`);
-      }
-      
-      // Find the match in the normalized content
-      const matchIndex = normalizedContent.indexOf(normalizedOldText);
-      if (matchIndex === -1) {
-        throw new Error(`oldText in "${filePath}": oldText not found`);
-      }
-      
-      // Check for multiple matches
-      const secondMatchIndex = normalizedContent.indexOf(normalizedOldText, matchIndex + normalizedOldText.length);
-      if (secondMatchIndex !== -1 && !opts.allowMultipleMatches) {
-        throw new Error(`oldText in "${filePath}": oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`);
-      }
-      
-      // Replace in the original LF content at the same position
-      // This preserves the original format (escape sequences vs actual Unicode)
-      const before = lfContent.slice(0, matchIndex);
-      const after = lfContent.slice(matchIndex + lfOldText.length);
-      updated = before + lfNewText + after;
-    }
+    // Apply the edit using LF-normalized content and text
+    const updated = applyOneEdit(
+      lfContent,
+      { oldText: lfOldText, newText: lfNewText, allowMultipleMatches: opts.allowMultipleMatches },
+      `oldText in "${filePath}"`
+    );
     
     await fs.writeFile(filePath, restoreLineEndings(updated, eol), { encoding: "utf8", signal: opts.signal });
   });

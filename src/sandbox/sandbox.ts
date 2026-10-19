@@ -122,6 +122,15 @@ export class Sandbox {
       );
     }
 
+    // Prevent paths that use other Unicode whitespace characters that could bypass restrictions
+    // This catches attempts with various Unicode space characters
+    if (/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains Unicode whitespace characters which are not allowed in sandboxed paths`
+      );
+    }
+
     // Prevent paths that contain restricted directory names with whitespace
     // This catches attempts like ".git /file", ".git\t/file", "node_modules /file", etc. which could bypass the restriction
     if (/\s/.test(target)) {
@@ -136,15 +145,6 @@ export class Sandbox {
           );
         }
       }
-    }
-
-    // Prevent paths that use other Unicode whitespace characters that could bypass restrictions
-    // This catches attempts with various Unicode space characters
-    if (/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/.test(target)) {
-      throw new SandboxError(
-        "outside-root",
-        `Path "${target}" contains Unicode whitespace characters which are not allowed in sandboxed paths`
-      );
     }
 
     // Prevent paths that use Unicode lookalike characters for dots or slashes

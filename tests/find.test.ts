@@ -93,7 +93,8 @@ test("passing ignoreGlobs replaces DEFAULT_IGNORE_GLOBS rather than adding to it
   });
   t.after(() => cleanupFixture(dir));
 
-  const result = await findFiles(new Sandbox(dir), ".", "**/*.ts", { ignoreGlobs: ["**/temp/**"] });
+  // Use unenforced sandbox to test pure ignoreGlobs behavior without sandbox filtering
+  const result = await findFiles(new Sandbox(dir, false), ".", "**/*.ts", { ignoreGlobs: ["**/temp/**"] });
   assert.deepEqual(result.matches.sort(), ["node_modules/dep/index.ts", "src/index.ts"]);
 });
 

@@ -64,7 +64,9 @@ test("policy: isRestricted matches at any depth and leaves ordinary files alone"
 });
 
 test("policy: case sensitivity follows the platform's filesystem", () => {
-  assert.equal(isRestricted(".SSH/config"), CASE_INSENSITIVE);
+  // Security-critical paths must be matched case-insensitively on ALL platforms
+  // to prevent bypasses like .GIT, .Git, NODE_MODULES, etc.
+  assert.equal(isRestricted(".SSH/config"), true);
 });
 
 test("policy: isInside rejects parent escapes and absolute paths", () => {
