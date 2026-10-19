@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import micromatch from "micromatch";
+import picomatch from "picomatch";
 
 /**
  * What the sandbox protects, as pure functions with no filesystem access. `sandbox.ts` decides
@@ -115,7 +115,7 @@ const MATCH_OPTIONS = {
 /** True if `relPath` (relative to a root, any separator) falls under a protected pattern. */
 export function isRestricted(relPath: string): boolean {
   const posix = relPath.split(path.sep).join("/");
-  return posix !== "" && micromatch.isMatch(posix, RESTRICTED_GLOBS as string[], MATCH_OPTIONS);
+  return posix !== "" && picomatch.isMatch(posix, RESTRICTED_GLOBS as string[], MATCH_OPTIONS);
 }
 
 /** True if `relPath` (from `path.relative`) stays inside its root: no `..` escape, not absolute. */

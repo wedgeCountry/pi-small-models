@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import micromatch from "micromatch";
+import picomatch from "picomatch";
 import { DEFAULT_IGNORE_NAMES, getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
@@ -59,7 +59,7 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
       // Skip (don't even disclose the name of) anything the sandbox rejects: a protected entry such
       // as .ssh, or a symlink pointing outside the project.
       if (!allowed(relPath, dirent.isSymbolicLink())) continue;
-      if (opts.ignoreGlobs && micromatch.isMatch(relPath, opts.ignoreGlobs, { dot: true })) continue;
+      if (opts.ignoreGlobs && picomatch.isMatch(relPath, opts.ignoreGlobs, { dot: true })) continue;
       const isDirectory = dirent.isDirectory();
       entries.push({ path: relPath, isDirectory });
       if (isDirectory && depth < maxDepth) {
