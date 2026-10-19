@@ -1,18 +1,25 @@
-# tool_definitions
+# Tool Definitions
 
-One file per tool (`find`, `grep`, `edit`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `read`,
-`write`, `git_status`, `git_diff`), each exporting a plain `*_TOOL_DEFINITION` object:
+Static definition objects for each tool. One file per tool.
+
+## Format
+Each file exports a plain object:
 
 ```typescript
 export const MY_TOOL_DEFINITION = {
   name: "my_tool",
   label: "My Tool",
   description: "What it does",
-  promptSnippet: "my_tool: one-line hint for the system prompt",
+  promptSnippet: "my_tool: one-line hint",
   promptGuidelines: ["Use my_tool when ..."],
   parameters: Type.Object({ ... }),
 };
 ```
 
-No logic lives here — this is just the shape the model sees. The matching file in `../tools/` spreads this
-object into `pi.registerTool({...})` and adds `execute()`. Keep the two files in sync when a parameter changes.
+## Available Tools
+`find`, `grep`, `edit`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `read`, `write`, `git_status`, `git_diff`
+
+## Important
+- No logic here — pure data
+- Keep in sync with corresponding `../tools/` implementation
+- Used by the model to understand tool capabilities

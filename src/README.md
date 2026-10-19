@@ -1,15 +1,20 @@
-# src
+# Source (src)
 
 Implementation of the Pi extension registered in `../index.ts`.
 
-- `tool_definitions/` — static `*_TOOL_DEFINITION` objects (name, description, `parameters` schema) shown to the model. See its own `README.md`.
-- `tools/` — `pi.registerTool({...})` calls that pair each definition with an `execute()`, plus a plain async function per tool (`findFiles`, `grepFiles`, `listDir`, `editFile`, `makeDir`, `removePath`, `lstatPath`, `insertText`, `readFile`, `writeFile`, `gitStatus`, `gitDiff`) that the tests call directly. See its own `README.md`.
-- `sandbox/` — the sandbox every tool goes through:
-  - `policy.ts` — the protected patterns (`RESTRICTED_GLOBS`) and two pure checks, `isRestricted` and `isInside`.
-  - `sandbox.ts` — `Sandbox`, an unchangeable per-call object (`sandboxFor(ctx.cwd)`) with `resolve`, `relative`, `entryFilter`, and `allowsReported`; plus the `on`/`off` switch (`getSandboxState`/`setSandboxState`) and `SandboxError`.
-  - `permissionGate.ts` — `createGatedRegistry` (every tool registered through it is gated) and `createPermissionGate`, the `tool_call` handler that asks before each gated call while the sandbox is off.
-- `commands/ignore.ts` — shared ignore globs/names (`node_modules`, `.git`, `dist`, `build`, `.pi`) used by `find`, `grep`, and `list`.
-- `backend/mutationQueue.ts` — `withFileMutationQueue(filePath, fn)`, serializes `write`/`edit`/`insert`/`remove` calls that target the same file (keyed by its real, symlink-resolved path) so they can't interleave their read-modify-write steps. `read`/`git_status`/`git_diff` are read-only and don't use it.
-- `../tests` — `node --test` suite; one file per tool plus `sandbox.test.ts`, `permissionGate.test.ts` and `index.test.ts`. See its own `README.md`.
+## Directory Structure
 
-See `doc/architecture.md` for a short overview and the root `../AGENTS.md` for the full architecture writeup.
+- **tool_definitions/** – Static tool definition objects (name, description, parameters schema)
+- **tools/** – Tool registration and plain async functions
+- **sandbox/** – Sandbox implementation:
+  - `policy.ts` – Protected patterns and path checks
+  - `sandbox.ts` – `Sandbox` object with `resolve`, `relative`, `entryFilter`, `allowsReported`
+  - `permissionGate.ts` – Gated registry and permission gate handler
+- **commands/ignore.ts** – Shared ignore globs for `find`, `grep`, `list`
+- **backend/mutationQueue.ts** – Serializes file mutations to prevent race conditions
+
+## Tests
+See `../tests/README.md` for test suite details.
+
+## Architecture
+See `doc/architecture.md` for overview or `../AGENTS.md` for full writeup.

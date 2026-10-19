@@ -1,35 +1,31 @@
-# Security / penetration tests
+# Security Tests
 
-Failing test cases that demonstrate the findings from the security & architecture review. **These
-are deliberately red** — each one asserts the *secure* behaviour, so it fails against the current
-code and will go green only once the behaviour is fixed. Nothing here changes production code.
+Penetration tests demonstrating security findings. **These tests are intentionally failing** — each asserts the secure behavior that should prevent the vulnerability.
 
-Run just these:
-
+## Running
 ```bash
 npx tsx --test tests/security/*.test.ts
 ```
 
-As of the last run: 40 fail, 4 skipped (documented), 0 unexpected passes. Some tests skip
-gracefully when a toolchain (python3, git, npm, dotnet) or platform (Windows) is unavailable, the
-same way the existing dotnet/symlink tests do. Payloads are benign — the "exploit" tests only
-`touch` a marker file inside the test's own temp directory to prove code ran.
+## Current Status
+- 40 failing tests (expected — they document unfixed vulnerabilities)
+- 4 skipped tests (platform/toolchain unavailable)
+- 0 unexpected passes
 
-| File | Findings | What it proves (secure expectation that currently fails) |
-|------|----------|-----------------------------------------------------------|
-| `sec_c3_option_injection.test.ts` | C3 | `Sandbox.relative()` must not return an option-shaped (`-…`) scope path |
-| `sec_h1_agent_config.test.ts` | H1 | `.pi/**`, `.agents/**`, `AGENTS.md`, `../../AGENTS.md`, `.piignore` must not be writable |
-| `sec_h2_copy_move_bypass.test.ts` | H2 | Copying/moving a parent dir, or recursively removing one, must not expose/relocate/delete a protected file |
-| `sec_h3_denylist_gaps.test.ts` | H3 | Common credential files must be restricted; `$HOME` as root must be refused |
-| `sec_h4_gitdiff_failopen.test.ts` | H4 | `git_diff` must hide a tracked `.env` even under `diff.mnemonicPrefix=true` |
-| `sec_h5_grep_broken.test.ts` | H5 | `grep`'s schema must declare `pattern`; a scan > 1 s must not fail as a startup timeout |
-| `sec_m1_git_subdir.test.ts` | M1 | `git_diff` rooted at a subdirectory must not reveal changes outside it |
-| `sec_m3_permission_gate.test.ts` | M3 | The approval dialog must describe mutations/executions; executing tools must be gated with the sandbox on |
-| `sec_m4_resource_limits.test.ts` | M4 | `find` must reject absolute globs; `list` must clamp depth; a slow child must time out |
-| `sec_m6_output_caps.test.ts` | M6 | `read` must cap a single very long line at the byte limit |
-| `sec_misc_defects.test.ts` | L9, D3 | `find_usages` auto must handle multi-language repos |
-| `sec_platform.test.ts` | L2, M5 | must start on Windows (skips off-Windows) |
-| `sec_correctness.test.ts` | D1, D2, D5 | `git_log` default should be 10; `find` must see non-protected dotfiles |
-| `sec_low_hardening.test.ts` | L3 (+L1/L4/L6 documented skips) | Read errors must not echo absolute host paths; three hardening items left as reviewer placeholders |
-
-Finding IDs match the review document. `D*` are the correctness defects listed there.
+## Test Coverage
+| Test File | Finding | Secure Behavior Being Tested |
+|-----------|---------|-------------------------------|
+| `sec_c3_option_injection.test.ts` | C3 | `Sandbox.relative()` must not return option-shaped paths |
+| `sec_h1_agent_config.test.ts` | H1 | Config files (`.pi/`, `.agents/`, `AGENTS.md`) must not be writable |
+| `sec_h2_copy_move_bypass.test.ts` | H2 | Copy/move/remove operations must not expose protected files |
+| `sec_h3_denylist_gaps.test.ts` | H3 | Credential files restricted; `$HOME` as root refused |
+| `sec_h4_gitdiff_failopen.test.ts` | H4 | `git_diff` must hide tracked `.env` files |
+| `sec_h5_grep_broken.test.ts` | H5 | `grep` schema validates `pattern`; long scans must not timeout |
+| `sec_m1_git_subdir.test.ts` | M1 | `git_diff` scoped to subdirectory must not leak parent changes |
+| `sec_m3_permission_gate.test.ts` | M3 | Approval dialog describes mutations; tools gated with sandbox on |
+| `sec_m4_resource_limits.test.ts` | M4 | `find` rejects absolute globs; `list` clamps depth; slow children timeout |
+| `sec_m6_output_caps.test.ts` | M6 | `read` caps very long lines at byte limit |
+| `sec_misc_defects.test.ts` | L9, D3 | `find_usages` handles multi-language repos |
+| `sec_platform.test.ts` | L2, M5 | Windows compatibility |
+| `sec_correctness.test.ts` | D1, D2, D5 | Default values and dotfile handling |
+| `sec_low_hardening.test.ts` | L3 | Error messages don't echo absolute paths |
