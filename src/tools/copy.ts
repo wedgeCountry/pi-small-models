@@ -6,21 +6,13 @@ import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { checkAborted, validatePositiveInteger } from "../utils/validation.ts";
+import { pathExists } from "../utils/fsUtils.ts";
 
 export interface CopyOptions {
   recursive?: boolean;
   overwrite?: boolean;
   signal?: AbortSignal;
-}
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await fs.lstat(targetPath);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
 }
 
 /**
@@ -37,20 +29,20 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
   const destPath = sb.resolve(destination);
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
-    throw new Error("Source and destination are the same path");
+    throw new RangeError("Source and destination are the same path");
   }
 
-  opts.signal?.throwIfAborted();
+  checkAborted(opts.signal);
 
   let sourceStat;
   try {
     sourceStat = await fs.lstat(sourcePath);
   } catch (err) {
-    throw new Error(`Could not copy "${sourcePath}": ${(err as Error).message}`);
+    throw new TypeError(`Could not copy "${sourcePath}": ${(err as Error).message}`);
   }
 
   if (sourceStat.isDirectory() && !opts.recursive) {
-    throw new Error(`"${sourcePath}" is a directory; set recursive to true to copy it`);
+    throw new TypeError(`"${sourcePath}" is a directory; set recursive to true to copy it`);
   }
 
   // Check if copying a directory would expose restricted files
@@ -62,29 +54,29 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
   }
 
   await withFileMutationQueue(destPath, async () => {
-    opts.signal?.throwIfAborted();
+    checkAborted(opts.signal);
 
     if (!opts.overwrite && (await pathExists(destPath))) {
-      throw new Error(`"${destPath}" already exists; set overwrite to true to replace it`);
+      throw new TypeError(`"${destPath}" already exists; set overwrite to true to replace it`);
     }
 
     try {
       await fs.mkdir(path.dirname(destPath), { recursive: true });
     } catch (err) {
-      throw new Error(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
+      throw new TypeError(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
     }
 
     // fs.cp doesn't accept a `signal` option (unlike fs.readFile/writeFile), so — same as
     // makeDir and removePath's non-recursive path — the best available is failing fast if
     // already aborted before starting; a large recursive copy can't be interrupted mid-flight.
-    opts.signal?.throwIfAborted();
+    checkAborted(opts.signal);
 
     try {
       // force:true is safe here — the overwrite check above already refused to reach this point
       // if destPath exists and overwrite wasn't set.
       await fs.cp(sourcePath, destPath, { recursive: true, force: true });
     } catch (err) {
-      throw new Error(`Could not copy "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
+      throw new TypeError(`Could not copy "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
     }
   });
 }

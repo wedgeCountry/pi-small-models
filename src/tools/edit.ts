@@ -49,21 +49,21 @@ function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
 function applyOneEdit(content: string, edit: EditSpec, context: string): string {
   const { oldText, newText, allowMultipleMatches } = edit;
   if (oldText.length === 0) {
-    throw new Error(
+    throw new RangeError(
       `${context}: oldText must not be empty. To insert new text without replacing anything, use the insert tool instead.`
     );
   }
   if (oldText === newText) {
-    throw new Error(`${context}: oldText and newText must differ`);
+    throw new RangeError(`${context}: oldText and newText must differ`);
   }
 
   const firstIndex = content.indexOf(oldText);
   if (firstIndex === -1) {
-    throw new Error(`${context}: oldText not found`);
+    throw new RangeError(`${context}: oldText not found`);
   }
   const secondIndex = content.indexOf(oldText, firstIndex + oldText.length);
   if (secondIndex !== -1 && !allowMultipleMatches) {
-    throw new Error(`${context}: oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`);
+    throw new RangeError(`${context}: oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`);
   }
 
   return allowMultipleMatches
@@ -78,7 +78,7 @@ async function readForEdit(filePath: string, signal?: AbortSignal): Promise<stri
     return await fs.readFile(filePath, { encoding: "utf8", signal });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
+    throw new TypeError(`Could not read file "${filePath}": ${(err as Error).message}`);
   }
 }
 
@@ -141,7 +141,7 @@ export function registerEditTool(pi: ToolRegistry) {
       const hasSingle = params.oldText !== undefined || params.newText !== undefined;
 
       if (params.oldText === undefined || params.newText === undefined) {
-        throw new Error("Specify oldText and newText");
+        throw new RangeError("Specify oldText and newText");
       }
       await editFile(sb, params.path, params.oldText, params.newText, {
         allowMultipleMatches: params.allowMultipleMatches,

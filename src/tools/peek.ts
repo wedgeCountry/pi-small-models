@@ -9,8 +9,9 @@ import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.t
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
 
 /** Same caps as `read`, so one peek can't flood a small model's context either. */
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+// Reuse the same constants as read.ts for consistency
+const MAX_READ_LINES = 2000;
+const MAX_READ_BYTES = 50 * 1024; // 50KB
 
 export interface PeekOptions {
   visibility?: PeekVisibility;
@@ -43,7 +44,7 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
   const ext = path.extname(target);
   const manager = previewManagerFor(ext);
   if (!manager) {
-    throw new Error(
+    throw new RangeError(
       `peek does not support "${ext || path.basename(target)}" files. Supported extensions: ` +
         `${PEEK_EXTENSIONS.join(", ")}. Use read with peek=false to view this file instead.`
     );
@@ -51,13 +52,13 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
 
   const maxDepth = opts.maxDepth ?? 6;
   if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > 6) {
-    throw new Error(`maxDepth must be an integer from 1 to 6, got ${opts.maxDepth}`);
+    throw new RangeError(`maxDepth must be an integer from 1 to 6, got ${opts.maxDepth}`);
   }
 
   // `uncapped`: peek has to see the whole file to outline it; its own output is capped below.
   const read = await readFile(sb, target, { uncapped: true, signal: opts.signal });
   const allLines = read.lines.map((l) => l.text);
-  if (allLines.some((l) => l.includes("\0"))) throw new Error(`Could not peek "${target}": it looks like a binary file.`);
+  if (allLines.some((l) => l.includes("\0"))) throw new TypeError(`Could not peek "${target}": it looks like a binary file.`);
   opts.signal?.throwIfAborted();
   let lines = manager.preview(allLines, {
     visibility: opts.visibility ?? "public",
@@ -66,14 +67,14 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
   });
 
   let truncated = false;
-  if (lines.length > DEFAULT_MAX_LINES) {
-    lines = lines.slice(0, DEFAULT_MAX_LINES);
+  if (lines.length > MAX_READ_LINES) {
+    lines = lines.slice(0, MAX_READ_LINES);
     truncated = true;
   }
   let bytes = 0;
   for (let k = 0; k < lines.length; k++) {
     bytes += Buffer.byteLength(lines[k]!.text, "utf8") + 1;
-    if (bytes > DEFAULT_MAX_BYTES && k > 0) {
+    if (bytes > MAX_READ_BYTES && k > 0) {
       lines = lines.slice(0, k);
       truncated = true;
       break;

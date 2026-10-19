@@ -7,21 +7,13 @@ import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { checkAborted } from "../utils/validation.ts";
+import { pathExists } from "../utils/fsUtils.ts";
 
 export interface MoveOptions {
   recursive?: boolean;
   overwrite?: boolean;
   signal?: AbortSignal;
-}
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await fs.lstat(targetPath);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
 }
 
 /**
@@ -45,11 +37,11 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
   const sourcePath = sb.resolve(source);
   const destPath = sb.resolve(destination);
   if (sourcePath === sb.root) {
-    throw new Error("Refusing to move the project root");
+    throw new RangeError("Refusing to move the project root");
   }
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
-    throw new Error("Source and destination are the same path");
+    throw new RangeError("Source and destination are the same path");
   }
 
   const sortedPaths = [sourcePath, destPath].sort();
@@ -58,17 +50,17 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 
   await withFileMutationQueue(first, () =>
     withFileMutationQueue(second, async () => {
-      opts.signal?.throwIfAborted();
+      checkAborted(opts.signal);
 
       let sourceStat;
       try {
         sourceStat = await fs.lstat(sourcePath);
       } catch (err) {
-        throw new Error(`Could not move "${sourcePath}": ${(err as Error).message}`);
+        throw new TypeError(`Could not move "${sourcePath}": ${(err as Error).message}`);
       }
 
       if (sourceStat.isDirectory() && !opts.recursive) {
-        throw new Error(`"${sourcePath}" is a directory; set recursive to true to move it`);
+        throw new TypeError(`"${sourcePath}" is a directory; set recursive to true to move it`);
       }
 
       // Check if moving a directory would expose restricted files
@@ -81,13 +73,13 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 
       const destExists = await pathExists(destPath);
       if (destExists && !opts.overwrite) {
-        throw new Error(`"${destPath}" already exists; set overwrite to true to replace it`);
+        throw new TypeError(`"${destPath}" already exists; set overwrite to true to replace it`);
       }
 
       try {
         await fs.mkdir(path.dirname(destPath), { recursive: true });
       } catch (err) {
-        throw new Error(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
+        throw new TypeError(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
       }
 
       if (destExists) {
@@ -98,7 +90,7 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
         await fs.rename(sourcePath, destPath);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "EXDEV") {
-          throw new Error(`Could not move "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
+          throw new TypeError(`Could not move "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
         }
         // fs.cp doesn't accept a `signal` option, so the EXDEV fallback's copy step can't be
         // interrupted mid-flight; removeRecursively's own signal checks still apply to deleting
@@ -108,7 +100,7 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
           await removeRecursively(sourcePath, opts.signal);
         } catch (fallbackErr) {
           if ((fallbackErr as NodeJS.ErrnoException).name === "AbortError") throw fallbackErr;
-          throw new Error(`Could not move "${sourcePath}" to "${destPath}": ${(fallbackErr as Error).message}`);
+          throw new TypeError(`Could not move "${sourcePath}" to "${destPath}": ${(fallbackErr as Error).message}`);
         }
       }
     })

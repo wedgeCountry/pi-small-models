@@ -67,7 +67,7 @@ async function detectLanguage(base: string, ignoreGlobs: string[], signal?: Abor
   if (hasVenv) detected.push("python");
 
   if (detected.length === 0) {
-    throw new Error(
+    throw new RangeError(
       `find_usages could not auto-detect a language under "${base}" (found none of: a .sln/.csproj file, a node_modules folder, a .venv folder) — specify "language" explicitly.`
     );
   }
@@ -97,7 +97,7 @@ export async function findUsages(
 ): Promise<FindUsagesResult> {
   const base = sb.resolve(target);
   if (!isValidIdentifier(symbol)) {
-    throw new Error(
+    throw new RangeError(
       `find_usages symbol "${symbol}" is not a valid identifier — expected letters, digits, and ` +
         `underscores, not starting with a digit.`
     );
@@ -110,10 +110,10 @@ export async function findUsages(
   try {
     baseStat = await fs.stat(base);
   } catch {
-    throw new Error(`find_usages path "${base}" does not exist.`);
+    throw new RangeError(`find_usages path "${base}" does not exist.`);
   }
   if (!baseStat.isDirectory()) {
-    throw new Error(`find_usages path "${base}" is a file, not a directory. Use "path" to point at a directory.`);
+    throw new RangeError(`find_usages path "${base}" is a file, not a directory. Use "path" to point at a directory.`);
   }
 
   opts.signal?.throwIfAborted();

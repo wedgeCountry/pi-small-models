@@ -41,7 +41,7 @@ export async function findFiles(sb: Sandbox, target: string, pattern: string, op
 
   // Reject absolute patterns to prevent walking outside the project tree
   if (path.isAbsolute(pattern)) {
-    throw new Error(`find does not accept absolute patterns like "${pattern}"`);
+    throw new RangeError(`find does not accept absolute patterns like "${pattern}"`);
   }
 
   const effectivePattern = ensureRecursivePattern(pattern);

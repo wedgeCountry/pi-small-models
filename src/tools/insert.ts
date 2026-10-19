@@ -19,7 +19,7 @@ export interface InsertOptions {
  */
 export async function insertText(sb: Sandbox, target: string, line: number, text: string, opts: InsertOptions = {}): Promise<void> {
   if (!Number.isInteger(line) || line < 0) {
-    throw new Error(`line must be a non-negative integer, got ${line}`);
+    throw new RangeError(`line must be a non-negative integer, got ${line}`);
   }
 
   const filePath = sb.resolve(target);
@@ -32,7 +32,7 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
       content = await fs.readFile(filePath, { encoding: "utf8", signal: opts.signal });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-      throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
+      throw new TypeError(`Could not read file "${filePath}": ${(err as Error).message}`);
     }
 
     // Detect and preserve the file's line ending so the inserted text doesn't end up
@@ -41,7 +41,7 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
     const lines = content.split(/\r\n|\n/);
     if (line > lines.length) {
-      throw new Error(`line ${line} is past the end of "${filePath}" (${lines.length} line(s))`);
+      throw new RangeError(`line ${line} is past the end of "${filePath}" (${lines.length} line(s))`);
     }
 
     lines.splice(line, 0, ...text.split(/\r\n|\n/));

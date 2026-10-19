@@ -77,7 +77,7 @@ function formatConciseValidationError(toolName: string, schema: TSchema, args: u
     lines.push("", `Received argument names: ${argNames.join(", ")}`);
   }
 
-  const record = args as Record<string, unknown>;
+  const record = typeof args === "object" && args !== null && !Array.isArray(args) ? args as Record<string, unknown> : {};
   for (const key of extractNamedArgs(errors, new Set(argNames))) {
     lines.push(`${key}: ${JSON.stringify(record[key])}`);
   }

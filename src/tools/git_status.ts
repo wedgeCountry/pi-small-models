@@ -53,7 +53,7 @@ export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promi
     ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`git status failed: ${describeError(err)}`);
+    throw new TypeError(`git status failed: ${describeError(err)}`);
   }
 
   // Get the relative path from git root to sandbox root

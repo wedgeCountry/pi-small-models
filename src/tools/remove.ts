@@ -53,7 +53,7 @@ export async function removeRecursively(targetPath: string, signal?: AbortSignal
 export async function removePath(sb: Sandbox, target: string, opts: RemoveOptions = {}): Promise<void> {
   const targetPath = sb.resolve(target);
   if (targetPath === sb.root) {
-    throw new Error("Refusing to remove the project root");
+    throw new RangeError("Refusing to remove the project root");
   }
 
   await withFileMutationQueue(targetPath, async () => {
@@ -61,11 +61,11 @@ export async function removePath(sb: Sandbox, target: string, opts: RemoveOption
     try {
       stat = await fs.lstat(targetPath);
     } catch (err) {
-      throw new Error(`Could not remove "${targetPath}": ${(err as Error).message}`);
+      throw new TypeError(`Could not remove "${targetPath}": ${(err as Error).message}`);
     }
 
     if (stat.isDirectory() && !opts.recursive) {
-      throw new Error(`"${targetPath}" is a directory; set recursive to true to remove it`);
+      throw new TypeError(`"${targetPath}" is a directory; set recursive to true to remove it`);
     }
 
     opts.signal?.throwIfAborted();

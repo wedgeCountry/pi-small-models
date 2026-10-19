@@ -20,7 +20,7 @@ export async function lstatPath(sb: Sandbox, target: string): Promise<LstatResul
   try {
     stat = await fs.lstat(targetPath);
   } catch (err) {
-    throw new Error(`Could not stat "${targetPath}": ${(err as Error).message}`);
+    throw new TypeError(`Could not stat "${targetPath}": ${(err as Error).message}`);
   }
 
   return {

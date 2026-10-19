@@ -62,7 +62,7 @@ export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<Git
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
     // A repository with no commits yet makes `git log` exit non-zero; that's just "no history".
     if (/does not have any commits yet/.test(describeError(err))) return { commits: [] };
-    throw new Error(`git log failed: ${describeError(err)}`);
+    throw new TypeError(`git log failed: ${describeError(err)}`);
   }
 
   // Get the relative path from git root to sandbox root

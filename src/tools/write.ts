@@ -30,7 +30,7 @@ export async function writeFile(sb: Sandbox, target: string, content: string, op
     try {
       await fs.mkdir(dir, { recursive: true });
     } catch (err) {
-      throw new Error(`Could not create directory "${dir}": ${(err as Error).message}`);
+      throw new TypeError(`Could not create directory "${dir}": ${(err as Error).message}`);
     }
 
     opts.signal?.throwIfAborted();
@@ -40,7 +40,7 @@ export async function writeFile(sb: Sandbox, target: string, content: string, op
       await fs.writeFile(filePath, content, { encoding: "utf8", signal: opts.signal });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-      throw new Error(`Could not write file "${filePath}": ${(err as Error).message}`);
+      throw new TypeError(`Could not write file "${filePath}": ${(err as Error).message}`);
     }
   });
 }

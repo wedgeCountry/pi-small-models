@@ -13,10 +13,10 @@ const execFile = promisify(execFileCb);
 // that a large but reasonable diff isn't rejected outright by Node's stdout buffering.
 const MAX_BUFFER = 20 * 1024 * 1024; // 20MB
 
-// Same caps as `read`'s DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES, applied here for the same reason: one
+// Same caps as `read`'s MAX_READ_LINES/MAX_READ_BYTES, applied here for the same reason: one
 // call shouldn't be able to flood a small model's context with an enormous diff.
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+const MAX_READ_LINES = 2000;
+const MAX_READ_BYTES = 50 * 1024; // 50KB
 
 export interface GitDiffOptions {
   /** Path (resolved through the sandbox) to scope the diff to. Omit for the whole repository. */
@@ -88,7 +88,7 @@ async function filterRestrictedDiffChunks(sb: Sandbox, diffText: string, gitToSa
 
 /**
  * Runs `git diff` (unstaged changes only) in `cwd` and returns the unified diff text, capped at
- * DEFAULT_MAX_LINES lines / DEFAULT_MAX_BYTES bytes (whichever is hit first) — the same shape of
+ * MAX_READ_LINES lines / MAX_READ_BYTES bytes (whichever is hit first) — the same shape of
  * cap `readFile` applies to file contents.
  */
 export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<GitDiffResult> {
@@ -101,7 +101,7 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
     ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`git diff failed: ${describeError(err)}`);
+    throw new TypeError(`git diff failed: ${describeError(err)}`);
   }
 
   if (stdout === "") return { text: "", truncated: false };
@@ -120,8 +120,8 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
   if (filtered === "") return { text: "", truncated: false };
 
   const allLines = filtered.split(/\r\n|\n/);
-  let selected = allLines.slice(0, Math.min(allLines.length, DEFAULT_MAX_LINES));
-  while (selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  let selected = allLines.slice(0, Math.min(allLines.length, MAX_READ_LINES));
+  while (selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > MAX_READ_BYTES) {
     selected = selected.slice(0, -1);
   }
 

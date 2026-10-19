@@ -5,10 +5,13 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
-import { createReadTool } from "@earendil-works/pi-coding-agent";
+import { createReadTool, type ReadToolResult } from "@earendil-works/pi-coding-agent";
 
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+// Maximum lines to return from a read operation to prevent context flooding
+const MAX_READ_LINES = 2000;
+// Maximum bytes to return from a read operation to prevent context flooding
+// 50KB provides a reasonable balance between context and performance
+const MAX_READ_BYTES = 50 * 1024;
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",
@@ -28,7 +31,7 @@ export interface ReadOptions {
   limit?: number;
   signal?: AbortSignal;
   /**
-   * Internal only — never exposed as a tool parameter. Skips the DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES
+   * Internal only — never exposed as a tool parameter. Skips the MAX_READ_LINES/MAX_READ_BYTES
    * output caps so another tool built on top of read (`peek`, which needs the whole file to
    * outline it) gets every line; that tool applies its own cap to what it returns instead.
    */
@@ -54,7 +57,7 @@ export interface ReadResult {
  * the two tools.
  *
  * `offset` (1-indexed, default 1) and `limit` select a line range. On top of that, output is
- * additionally capped at DEFAULT_MAX_LINES lines / DEFAULT_MAX_BYTES bytes (whichever is hit
+ * additionally capped at MAX_READ_LINES lines / MAX_READ_BYTES bytes (whichever is hit
  * first) so one call can't flood a small model's context with an enormous file; `truncated` is set
  * whenever the returned range stops short of the file's last line — whether that's because a cap
  * kicked in or because the caller's own `limit` did — and the last returned line number tells the
@@ -63,16 +66,16 @@ export interface ReadResult {
 export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = {}): Promise<ReadResult> {
   const filePath = sb.resolve(target);
   if (opts.offset !== undefined && (!Number.isInteger(opts.offset) || opts.offset < 1)) {
-    throw new Error(`offset must be a positive integer, got ${opts.offset}`);
+    throw new RangeError(`offset must be a positive integer, got ${opts.offset}`);
   }
   if (opts.limit !== undefined && (!Number.isInteger(opts.limit) || opts.limit < 1)) {
-    throw new Error(`limit must be a positive integer, got ${opts.limit}`);
+    throw new RangeError(`limit must be a positive integer, got ${opts.limit}`);
   }
 
   // Handle images using SDK read tool
   if (IMAGE_EXTENSIONS.has(getExtension(filePath || ""))) {
     if (opts.offset !== undefined || opts.limit !== undefined) {
-      throw new Error(`offset and limit are not allowed for image files`);
+      throw new RangeError(`offset and limit are not allowed for image files`);
     }
 
     // Create SDK read tool with custom operations that use our sandbox
@@ -91,7 +94,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     // Convert SDK result to ReadResult
     // For images, we return a single line indicating it's an image
     // since readFile is designed for text-based line content
-    const textContent = (sdkResult.content.find((c: any) => c.type === "text") as { text: string } | undefined)?.text || `[Image file: ${filePath}]`;
+    const textContent = sdkResult.content.find((c: ReadToolResult) => c.type === "text")?.text || `[Image file: ${filePath}]`;
     return {
       lines: [{ line: 1, text: textContent }],
       totalLines: 1,
@@ -110,7 +113,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     // Use relative path to avoid exposing absolute host path
     const relPath = path.relative(sb.root, filePath);
     const errMsg = (err as NodeJS.ErrnoException).message.replace(filePath, relPath);
-    throw new Error(`Could not read file "${relPath}": ${errMsg}`);
+    throw new TypeError(`Could not read file "${relPath}": ${errMsg}`);
   }
 
   const allLines = buffer.toString("utf8").split(/\r\n|\n/);
@@ -118,18 +121,18 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
 
   const offset = opts.offset ?? 1;
   if (offset > totalLines) {
-    throw new Error(`Offset ${offset} is beyond end of file (${totalLines} line(s) total)`);
+    throw new RangeError(`Offset ${offset} is beyond end of file (${totalLines} line(s) total)`);
   }
 
   const startIndex = offset - 1;
   let endIndex = opts.limit !== undefined ? Math.min(startIndex + opts.limit, totalLines) : totalLines;
 
   // Cap by line count.
-  if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
+  if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + MAX_READ_LINES);
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
+  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > MAX_READ_BYTES) {
     selected = selected.slice(0, -1);
   }
   endIndex = startIndex + selected.length;

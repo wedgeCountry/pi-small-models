@@ -23,7 +23,7 @@ export async function makeDir(sb: Sandbox, target: string, opts: MakeDirOptions 
   try {
     await fs.mkdir(dirPath, { recursive: true });
   } catch (err) {
-    throw new Error(`Could not create directory "${dirPath}": ${(err as Error).message}`);
+    throw new TypeError(`Could not create directory "${dirPath}": ${(err as Error).message}`);
   }
 }
 
