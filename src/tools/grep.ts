@@ -8,6 +8,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import path from "node:path";
 
 export interface GrepOptions {
   /** Glob restricting which files are searched. Defaults to all files. */
@@ -41,7 +42,7 @@ const WORKER_URL = new URL("../backend/grepWorker.mjs", import.meta.url);
 
 /** Searches file contents under `target` (resolved through `sb`) for a regex/plain-text pattern. */
 export async function grepFiles(sb: Sandbox, target: string, pattern: string, opts: GrepOptions = {}): Promise<GrepResult> {
-  const base = sb.resolve(target);
+  let base = sb.resolve(target);
   const max = opts.maxResults ?? 200;
   const context = opts.contextLines ?? 0;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
