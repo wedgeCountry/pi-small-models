@@ -94,8 +94,9 @@ export class Sandbox {
     }
 
     // Prevent environment variable syntax which could expand to paths outside the sandbox
-    // This catches: $VAR, ${VAR}, %VAR%, ${VAR}/path, $VAR/path, etc.
-    if (/[\$\%][\w\d_]+|\$\{[^}]*\}|%[^%]+%/.test(target)) {
+    // This catches: $VAR, ${VAR}, %VAR%, $VAR/path, ${VAR}/path, %VAR%/path, etc.
+    // The regex now properly handles environment variables followed by path separators
+    if (/[\$\%][\w\d_]+(\/|\\|$)|\$\{[^}]*\}|%[^%]+%/.test(target)) {
       throw new SandboxError(
         "outside-root",
         `Path "${target}" contains environment variable syntax which is not allowed in sandboxed paths`
@@ -103,18 +104,54 @@ export class Sandbox {
     }
 
     // Prevent Unicode path separators and lookalikes that could bypass validation
-    // This catches: full-width slash (／), ellipsis (…), etc.
-    if (/[／…]/.test(target)) {
+    // This catches: full-width slash (／), ellipsis (…), and other lookalikes
+    // Expanded list of problematic Unicode characters that can be used for path traversal
+    if (/[／\u2026\u2215\u2216\u2571\u2993\u2994\u2995\u2996\uFF0F\uFF1F\uFF0E]/.test(target)) {
       throw new SandboxError(
         "outside-root",
         `Path "${target}" contains Unicode characters that are not allowed in sandboxed paths`
       );
     }
 
-    // Normalize backslashes to forward slashes for consistent validation across platforms
-    // This ensures that path traversal using backslashes (e.g., "foo\..\..\file") 
+    // Decode URL-encoded characters to prevent bypass via encoding
+    // This handles %2e (.), %2f (/), %5c (\), etc.
+    try {
+      if (target.includes("%")) {
+        // Check if the string contains URL-encoded characters
+        // We need to decode and check if the decoded version would be blocked
+        const decoded = decodeURIComponent(target);
+        // If decoding changes the string, validate the decoded version
+        if (decoded !== target) {
+          // Recursively validate the decoded path
+          return this.resolve(decoded);
+        }
+      }
+    } catch (e) {
+      // If decodeURIComponent fails (malformed URI), reject the path
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains malformed URL encoding`
+      );
+    }
+
+    // Normalize backslashes to forward slashes FIRST, before any path resolution
+    // This ensures that path traversal using backslashes (e.g., "..\..\file") 
     // gets properly detected regardless of the host platform
-    const normalizedTarget = target.replace(/\\/g, '/');
+    let normalizedTarget = target.replace(/\\/g, '/');
+
+    // Check for path traversal sequences in the normalized target
+    // This catches attempts like "../file", "..\..\file", etc.
+    // We need to check if the normalized path contains ".." as a path component
+    // Split by path separator and check for ".." components
+    const pathParts = normalizedTarget.split('/').filter(part => part !== '');
+    for (const part of pathParts) {
+      if (part === '..') {
+        throw new SandboxError(
+          "outside-root",
+          `Path "${target}" contains parent directory traversal (..) which is not allowed`
+        );
+      }
+    }
 
     // Prevent using home directory as project root
     if (this.root === os.homedir()) {
