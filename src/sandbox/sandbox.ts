@@ -85,6 +85,14 @@ export class Sandbox {
       return path.resolve(this.root, target || ".");
     }
 
+    // Prevent tilde expansion which could escape the sandbox
+    if (target.includes("~")) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains tilde (~) which is not allowed in sandboxed paths`
+      );
+    }
+
     // Prevent using home directory as project root
     if (this.root === os.homedir()) {
       throw new SandboxError(
