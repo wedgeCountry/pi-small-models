@@ -2,13 +2,34 @@
   "name": "pi-small-models",
   "version": "0.1.0",
   "description": "Pi extension that disables bash and provides structured find/grep/list tools for smaller/weaker models.",
-  "private": true,
   "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "sandbox",
+    "filesystem",
+    "tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wedgeCountry/pi-small-models.git"
+  },
+  "author": "Roland Halbig",
+  "license": "MIT",
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/wedgeCountry/pi-small-models/main/assets/cover.png"
   },
+  "files": [
+    "index.ts",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "test:grep": "tsx --test tests/grep.test.ts",
@@ -18,6 +39,10 @@
     "fast-glob": "^3.3.3",
     "picomatch": "^2.3.1",
     "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^1.3.0",

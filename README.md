@@ -15,6 +15,10 @@ Built with [Claude Code](https://claude.ai).
 You need [Pi](https://pi.dev) installed. Then, from your project:
 
 ```bash
+# Install from npm (recommended)
+pi install npm:pi-small-models
+
+# Or install from git
 pi install git:github.com/wedgeCountry/pi-small-models
 ```
 
