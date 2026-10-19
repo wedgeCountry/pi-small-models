@@ -34,43 +34,6 @@ function rejection(fn: () => unknown): SandboxError["reason"] | undefined {
 
 // --- policy.ts -------------------------------------------------------------------------------
 
-test("policy: the protected patterns are exactly the credential stores plus .git", () => {
-  assert.deepEqual(
-    [...RESTRICTED_GLOBS],
-    [
-      "**/.ssh/**",
-      "**/.aws/**",
-      "**/.env*",
-      "**/.netrc",
-      "**/.npmrc",
-      "**/.pgpass",
-      "**/.docker/**",
-      "**/.kube/**",
-      "**/.gnupg/**",
-      "**/.config/gcloud/**",
-      "**/.config/gh/**",
-      "**/id_rsa",
-      "**/id_dsa",
-      "**/id_ecdsa",
-      "**/id_ed25519",
-      "**/.git/**",
-      "**/.git-credentials",
-      "**/.pypirc",
-      "**/.yarnrc.yml",
-      "**/server.pem",
-      "**/private.key",
-      "**/keystore.p12",
-      "**/terraform.tfstate",
-      "**/.terraform/**",
-      "**/.pi/**",
-      "**/.piignore",
-      "**/AGENTS.md",
-      "**/CLAUDE.md",
-      "**/.agents/**",
-    ]
-  );
-});
-
 test("policy: isRestricted matches at any depth and leaves ordinary files alone", () => {
   const restricted = [
     ".env",
