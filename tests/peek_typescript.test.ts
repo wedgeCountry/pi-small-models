@@ -63,7 +63,7 @@ test("class members: public by default, protected and private/# by modifier", ()
   get value(): string { return "x"; }
   protected helper(): () => void { return () => {}; }
   private hidden() {}
-  handler = (e: Event) => { console.log(e); };
+  handler = (e: Event) => { /* handler implementation */ };
 }`;
   assert.deepEqual(peek(src), [
     "1:export class Svc extends Base {",

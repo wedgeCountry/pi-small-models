@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import * as path from "node:path";
 import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
@@ -50,7 +51,7 @@ const DIFF_FILE_HEADER_RE = /^diff --git [ai]\/(.+) [bw]\/(.+)$/;
  * filesystem paths, so failing open to "unfiltered" here is preferable to failing the whole
  * call over output we don't recognize.
  */
-function filterRestrictedDiffChunks(sb: Sandbox, diffText: string): string {
+async function filterRestrictedDiffChunks(sb: Sandbox, diffText: string, gitToSandboxRelative: string): Promise<string> {
   const lines = diffText.split(/\r\n|\n/);
   const chunkStarts: number[] = [];
   lines.forEach((line, i) => {
@@ -63,7 +64,24 @@ function filterRestrictedDiffChunks(sb: Sandbox, diffText: string): string {
     const start = chunkStarts[c]!;
     const end = c + 1 < chunkStarts.length ? chunkStarts[c + 1]! : lines.length;
     const [, aPath, bPath] = lines[start]!.match(DIFF_FILE_HEADER_RE)!;
-    if (sb.allowsReported(aPath!) && sb.allowsReported(bPath!)) kept.push(...lines.slice(start, end));
+    
+    // Check if paths are within sandbox root
+    const aInSandbox = aPath.startsWith(gitToSandboxRelative) || 
+                       path.relative(gitToSandboxRelative, aPath).startsWith("..");
+    const bInSandbox = bPath.startsWith(gitToSandboxRelative) || 
+                       path.relative(gitToSandboxRelative, bPath).startsWith("..");
+    
+    if (!aInSandbox || !bInSandbox) {
+      continue;
+    }
+    
+    // Convert to sandbox-relative paths for allowsReported check
+    const sandboxRelativeA = path.relative(gitToSandboxRelative, aPath);
+    const sandboxRelativeB = path.relative(gitToSandboxRelative, bPath);
+    
+    if (sb.allowsReported(sandboxRelativeA) && sb.allowsReported(sandboxRelativeB)) {
+      kept.push(...lines.slice(start, end));
+    }
   }
   return kept.join("\n");
 }
@@ -88,7 +106,17 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
 
   if (stdout === "") return { text: "", truncated: false };
 
-  const filtered = filterRestrictedDiffChunks(sb, stdout);
+  // Get the relative path from git root to sandbox root
+  let gitToSandboxRelative: string;
+  try {
+    const gitRoot = await execFile("git", ["rev-parse", "--show-toplevel"], { cwd: sb.root, signal: opts.signal });
+    gitToSandboxRelative = path.relative(gitRoot.stdout.trim(), sb.root);
+  } catch {
+    // If we can't determine git root, fall back to filtering by sandbox allowsReported only
+    gitToSandboxRelative = ".";
+  }
+
+  const filtered = await filterRestrictedDiffChunks(sb, stdout, gitToSandboxRelative);
   if (filtered === "") return { text: "", truncated: false };
 
   const allLines = filtered.split(/\r\n|\n/);

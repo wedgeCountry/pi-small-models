@@ -93,11 +93,11 @@ function formatConciseValidationError(toolName: string, schema: TSchema, args: u
  * unchanged, so the success path's behavior is untouched.
  */
 export function withConciseValidationErrors<TParams extends TSchema>(name: string, parameters: TParams) {
-  return (args: unknown) => {
+  return (args: unknown): unknown => {
     const message = formatConciseValidationError(name, parameters, args);
     if (message !== undefined) {
       throw new Error(message);
     }
-    return args as any;
+    return args;
   };
 }

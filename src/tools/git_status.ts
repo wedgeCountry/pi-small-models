@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import * as path from "node:path";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
@@ -55,6 +56,17 @@ export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promi
     throw new Error(`git status failed: ${describeError(err)}`);
   }
 
+  // Get the relative path from git root to sandbox root
+  // This is needed to filter results to only include files within the sandbox
+  let gitToSandboxRelative: string;
+  try {
+    const gitRoot = await execFile("git", ["rev-parse", "--show-toplevel"], { cwd: sb.root, signal: opts.signal });
+    gitToSandboxRelative = path.relative(gitRoot.stdout.trim(), sb.root);
+  } catch {
+    // If we can't determine git root, fall back to filtering by sandbox allowsReported only
+    gitToSandboxRelative = ".";
+  }
+
   let branch: string | null = null;
   let ahead = 0;
   let behind = 0;
@@ -87,11 +99,33 @@ export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promi
     entries.push({ path: rest, indexStatus, worktreeStatus, renamedFrom });
   }
 
-  // git reports every changed path it knows, scoped or not, so protected paths (`.env`, `.ssh/**`,
-  // ...) are filtered out here rather than disclosing that such a file exists or was renamed.
-  const visibleEntries = entries.filter(
-    (e) => sb.allowsReported(e.path) && (e.renamedFrom === undefined || sb.allowsReported(e.renamedFrom))
-  );
+  // Filter entries to only include files within the sandbox root and not restricted
+  const visibleEntries = entries.filter((e) => {
+    // Get the full path relative to git root
+    const fullPath = e.path;
+    const renamedFromFull = e.renamedFrom;
+    
+    // Check if the path is within the sandbox root
+    const pathInSandbox = fullPath.startsWith(gitToSandboxRelative) || 
+                         path.relative(gitToSandboxRelative, fullPath).startsWith("..");
+    const renamedInSandbox = renamedFromFull === undefined || 
+                           renamedFromFull.startsWith(gitToSandboxRelative) ||
+                           path.relative(gitToSandboxRelative, renamedFromFull).startsWith("..");
+    
+    // Also check using allowsReported which handles restricted paths
+    if (!pathInSandbox || !renamedInSandbox) {
+      return false;
+    }
+    
+    // Convert to sandbox-relative path for allowsReported check
+    const sandboxRelativePath = path.relative(gitToSandboxRelative, fullPath);
+    const sandboxRelativeRenamed = renamedFromFull !== undefined 
+      ? path.relative(gitToSandboxRelative, renamedFromFull)
+      : undefined;
+    
+    return sb.allowsReported(sandboxRelativePath) && 
+           (sandboxRelativeRenamed === undefined || sb.allowsReported(sandboxRelativeRenamed));
+  });
 
   return { branch, ahead, behind, entries: visibleEntries };
 }

@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import * as path from "node:path";
 import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
@@ -64,6 +65,15 @@ export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<Git
     throw new Error(`git log failed: ${describeError(err)}`);
   }
 
+  // Get the relative path from git root to sandbox root
+  let gitToSandboxRelative: string;
+  try {
+    const gitRoot = await execFile("git", ["rev-parse", "--show-toplevel"], { cwd: sb.root, signal: opts.signal });
+    gitToSandboxRelative = path.relative(gitRoot.stdout.trim(), sb.root);
+  } catch {
+    gitToSandboxRelative = ".";
+  }
+
   const commits: GitLogCommit[] = [];
   for (const record of stdout.split(RECORD_SEP)) {
     if (record.trim() === "") continue;
@@ -71,7 +81,17 @@ export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<Git
     const [hash = "", author = "", date = "", subject = ""] = header.split(FIELD_SEP);
     const files = rest
       .filter((f) => f !== "")
-      .filter((f) => sb.allowsReported(f));
+      .filter((f) => {
+        // Check if file is within sandbox root
+        const fileInSandbox = f.startsWith(gitToSandboxRelative) || 
+                             path.relative(gitToSandboxRelative, f).startsWith("..");
+        if (!fileInSandbox) {
+          return false;
+        }
+        // Convert to sandbox-relative path for allowsReported check
+        const sandboxRelativePath = path.relative(gitToSandboxRelative, f);
+        return sb.allowsReported(sandboxRelativePath);
+      });
     commits.push({ hash, author, date, subject, files });
   }
   return { commits };

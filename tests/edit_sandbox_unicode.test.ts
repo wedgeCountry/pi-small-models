@@ -86,20 +86,17 @@ test("demonstrates the Unicode interpretation issue", async (t) => {
   
   // Read the actual file content
   const actualContent = await fs.readFile(filePath, "utf8");
-  console.log("Actual file content:", JSON.stringify(actualContent));
   
   // What the user might be trying to match
   const userOldText = `    if (/[\\u2024\\u2219\\u2981\\uFF0E\\uFF61]/.test(target)) {`;
-  console.log("User oldText:", JSON.stringify(userOldText));
   
   // Check if they match
   const normalizedContent = actualContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const normalizedOldText = userOldText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   
-  console.log("Normalized content:", JSON.stringify(normalizedContent));
-  console.log("Normalized oldText:", JSON.stringify(normalizedOldText));
-  console.log("Match:", normalizedContent.includes(normalizedOldText));
+  // Verify the match works as expected
+  assert.ok(normalizedContent.includes(normalizedOldText), "Normalized content should include normalized oldText");
   
-  // This test just logs the information for debugging
-  assert.ok(true, "This test is for debugging the Unicode issue");
+  // This test verifies the Unicode handling
+  assert.ok(true, "Unicode handling test passed");
 });

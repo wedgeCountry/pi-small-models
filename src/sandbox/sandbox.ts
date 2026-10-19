@@ -292,9 +292,15 @@ export class Sandbox {
 
   /**
    * Check if a root-relative path reported by an external program (e.g., git) is allowed.
+   * Must check both that the path is inside the root and not restricted.
    */
   allowsReported(relPath: string): boolean {
     if (!this.enforced) return true;
+    // Check if path is inside the root (no .. escape, not absolute)
+    if (!isInside(relPath)) {
+      return false;
+    }
+    // Check if path is restricted
     return !isRestricted(relPath);
   }
 
