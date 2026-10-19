@@ -18,6 +18,9 @@ import { isInside, isRestricted } from "./policy.ts";
 
 export type SandboxState = "on" | "off";
 
+/**
+ * Error thrown when a path violates sandbox rules.
+ */
 export class SandboxError extends Error {
   constructor(
     readonly reason: "outside-root" | "restricted",
@@ -28,203 +31,251 @@ export class SandboxError extends Error {
   }
 }
 
+/**
+ * Global sandbox state. Reset to "on" at each session start.
+ */
+let globalState: SandboxState = "on";
+
+/** Get current sandbox state */
+export function getSandboxState(): SandboxState {
+  return globalState;
+}
+
+/** Set sandbox state */
+export function setSandboxState(next: SandboxState): void {
+  globalState = next;
+}
+
+/**
+ * The sandbox for validating file operations.
+ * 
+ * Each Sandbox instance is immutable and tied to a specific root directory
+ * and enforcement state (snapshotted at creation time).
+ */
 export class Sandbox {
   readonly root: string;
-  #realRoot: string | undefined;
+  readonly enforced: boolean;
+  
+  // Cache for the real (symlink-resolved) root path
+  private realRootCache: string | null = null;
 
-  constructor(root: string, readonly enforced = true) {
+  constructor(root: string, enforced: boolean = true) {
     this.root = path.resolve(root);
+    this.enforced = enforced;
   }
 
-  /** Resolves a model-supplied path against the root. Throws `SandboxError` if it isn't allowed. */
-  resolve(target: string): string {
-    const resolved = path.resolve(this.root, target || ".");
-    if (!this.enforced) return resolved;
+  /**
+   * Get the real (symlink-resolved) root path, caching the result.
+   */
+  private getRealRoot(): string {
+    if (this.realRootCache === null) {
+      this.realRootCache = resolveRealPathWithFallback(this.root);
+    }
+    return this.realRootCache;
+  }
 
-    // Refuse to operate if the root is the user's home directory
-    if (this.root === os.homedir()) {
-      throw new SandboxError("outside-root", `Path "${target}" is the user's home directory, which cannot be used as a project root`);
+  /**
+   * Resolve a model-provided path to an absolute path, validating it against sandbox rules.
+   * 
+   * @throws SandboxError if path is outside root or restricted
+   */
+  resolve(target: string): string {
+    // If sandbox is not enforced, skip all checks
+    if (!this.enforced) {
+      return path.resolve(this.root, target || ".");
     }
 
-    const lexical = path.relative(this.root, resolved);
-    const real = path.relative(this.realRoot(), realpathWithMissingSuffix(resolved));
-    if (!isInside(lexical) || !isInside(real)) {
+    // Prevent using home directory as project root
+    if (this.root === os.homedir()) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" is the user's home directory, which cannot be used as a project root`
+      );
+    }
+
+    // Resolve to absolute path
+    const absolutePath = path.resolve(this.root, target || ".");
+    
+    // Check lexical path (relative to root)
+    const lexicalRelative = path.relative(this.root, absolutePath);
+    if (!isInside(lexicalRelative)) {
       throw new SandboxError("outside-root", `Path "${target}" is outside the project root`);
     }
-    if (isRestricted(lexical) || isRestricted(real)) {
+    if (isRestricted(lexicalRelative)) {
       throw new SandboxError("restricted", `Path "${target}" is restricted by the sandbox`);
     }
-    return resolved;
+
+    // Check real path (resolving symlinks)
+    const realPath = resolveRealPathWithFallback(absolutePath);
+    const realRelative = path.relative(this.getRealRoot(), realPath);
+    if (!isInside(realRelative)) {
+      throw new SandboxError("outside-root", `Path "${target}" is outside the project root`);
+    }
+    if (isRestricted(realRelative)) {
+      throw new SandboxError("restricted", `Path "${target}" is restricted by the sandbox`);
+    }
+
+    return absolutePath;
   }
 
-  /** Like `resolve`, but relative to the root ("" for the root itself), for programs run in the root. */
+  /**
+   * Get a path relative to the root, suitable for passing to child processes.
+   * Adds "./" prefix if path starts with "-" to prevent option injection.
+   */
   relative(target: string): string {
     const resolved = this.resolve(target);
     let rel = path.relative(this.root, resolved);
-    // Prevent option injection: if the relative path starts with "-", prefix it with "./"
+    
+    // Prevent option injection attacks (e.g., "-rf" as a path)
     if (rel.startsWith("-")) {
       rel = `./${rel}`;
     }
+    
     return rel;
   }
 
   /**
-   * Returns a filter for entries a walk found under `base` (a path `resolve` returned). Entries
-   * may be relative to `base` or absolute. Protected entries are dropped, matched relative to the
-   * root. A symlinked entry must also really resolve inside the root; a broken one is dropped.
-   * Plain entries cost no system call: a walk that doesn't follow symlinks finds them where
-   * their real path says they are.
+   * Create a filter function for directory entries.
+   * Used by list/find/grep to filter out restricted entries.
+   * 
+   * @param base - The base directory being walked (already resolved)
+   * @returns A function that takes an entry path and symlink flag, returns whether it's allowed
    */
   entryFilter(base: string): (entryPath: string, isSymlink: boolean) => boolean {
-    if (!this.enforced) return () => true;
+    if (!this.enforced) {
+      // Sandbox off: allow everything
+      return () => true;
+    }
 
-    const lexicalBase = path.resolve(this.root, base);
-    const realBase = realpathWithMissingSuffix(lexicalBase);
+    const baseRealPath = resolveRealPathWithFallback(base);
+    const rootRealPath = this.getRealRoot();
+
     return (entryPath, isSymlink) => {
-      const lexical = path.resolve(lexicalBase, entryPath);
-      if (isRestricted(path.relative(this.root, lexical))) return false;
+      // Build full lexical path
+      const fullLexicalPath = path.resolve(base, entryPath);
+      const lexicalRelative = path.relative(this.root, fullLexicalPath);
+      
+      // Reject if lexical path is restricted
+      if (isRestricted(lexicalRelative)) {
+        return false;
+      }
 
-      const real = isSymlink ? realpathOrUndefined(lexical) : path.join(realBase, path.relative(lexicalBase, lexical));
-      if (real === undefined) return false;
-      const realRelative = path.relative(this.realRoot(), real);
+      // Get real path of the entry
+      let realPath: string;
+      if (isSymlink) {
+        // For symlinks, we need to resolve the actual target
+        const resolved = resolveRealPathOrUndefined(fullLexicalPath);
+        if (resolved === undefined) {
+          // Broken symlink: reject
+          return false;
+        }
+        realPath = resolved;
+      } else {
+        // For regular entries, build real path from base real path
+        realPath = path.join(baseRealPath, path.relative(base, fullLexicalPath));
+      }
+
+      // Check real path is inside root and not restricted
+      const realRelative = path.relative(rootRealPath, realPath);
       return isInside(realRelative) && !isRestricted(realRelative);
     };
   }
 
-  /** True if a root-relative path reported by another program (e.g. git) may be shown. */
+  /**
+   * Check if a root-relative path reported by an external program (e.g., git) is allowed.
+   */
   allowsReported(relPath: string): boolean {
-    return !this.enforced || !isRestricted(relPath);
+    if (!this.enforced) return true;
+    return !isRestricted(relPath);
   }
 
   /**
-   * Checks if a directory contains any restricted entries by walking its contents.
-   * Used by copy/move to prevent exposing restricted files through directory operations.
-   * This checks paths relative to the root, so a restricted file like .config/gcloud/credentials.db
-   * will be caught even if we're copying the .config directory itself.
+   * Check if a directory contains any restricted files or subdirectories.
+   * Used by copy/move to prevent exposing restricted content.
    */
   async hasRestrictedDescendant(dirPath: string): Promise<boolean> {
     if (!this.enforced) return false;
-    
-    // Use real paths to handle symlinks in the directory path itself
-    const realDirPath = realpathWithMissingSuffix(dirPath);
-    const relFromRoot = path.relative(this.realRoot(), realDirPath);
-    
-    // Also check the directory itself
-    if (isRestricted(relFromRoot)) {
-      return true;
+
+    // First check the directory itself using resolve
+    try {
+      this.resolve(dirPath);
+    } catch (err) {
+      if (err instanceof SandboxError) {
+        return true; // Directory itself is restricted or outside root
+      }
+      throw err;
     }
+
+    // Walk the directory tree using a filter that leverages our existing validation
+    return this.walkDirectoryForRestricted(dirPath);
+  }
+
+  /**
+   * Recursively walk a directory to check for restricted entries.
+   * Uses the sandbox's own entryFilter for consistent validation.
+   */
+  private async walkDirectoryForRestricted(dir: string): Promise<boolean> {
+    // Create a filter for this directory using our existing entryFilter method
+    const filter = this.entryFilter(dir);
     
-    const walk = async (dir: string, relFromRoot: string): Promise<boolean> => {
-      const entries = await fsPromises.readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const entryRelFromRoot = relFromRoot ? `${relFromRoot}/${entry.name}` : entry.name;
-        
-        // Check if this entry is restricted (by lexical path relative to root)
-        if (isRestricted(entryRelFromRoot)) {
+    const entries = await fsPromises.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const entryPath = entry.name;
+      const isSymlink = entry.isSymbolicLink();
+      
+      // Use our existing filter to check if entry is allowed
+      // If filter returns false, the entry is restricted
+      if (!filter(entryPath, isSymlink)) {
+        return true;
+      }
+
+      // For directories and symlinks to directories, recurse
+      const fullPath = path.join(dir, entryPath);
+      
+      if (entry.isDirectory()) {
+        if (await this.walkDirectoryForRestricted(fullPath)) {
           return true;
         }
-        
-        // Also check the real path of this entry
-        const fullPath = path.join(dir, entry.name);
+      } else if (isSymlink) {
+        // For symlinks, check if they point to a directory
         try {
-          const realPath = realpathWithMissingSuffix(fullPath);
-          const realRelFromRoot = path.relative(this.realRoot(), realPath);
-          if (isRestricted(realRelFromRoot)) {
-            return true;
-          }
-        } catch {
-          // Path doesn't exist yet or is broken symlink, skip
-        }
-        
-        // If it's a directory, recurse using the real path
-        if (entry.isDirectory()) {
-          try {
-            const realFullPath = realpathWithMissingSuffix(fullPath);
-            const realEntryRelFromRoot = path.relative(this.realRoot(), realFullPath);
-            if (await walk(realFullPath, realEntryRelFromRoot)) {
-              return true;
-            }
-          } catch {
-            // Can't resolve real path, use lexical path
-            if (await walk(fullPath, entryRelFromRoot)) {
-              return true;
-            }
-          }
-        } else if (entry.isSymbolicLink()) {
-          // For symlinks to directories, recurse into the target
-          try {
-            const realPath = await fsPromises.realpath(fullPath);
-            const stat = await fsPromises.stat(realPath);
-            if (stat.isDirectory()) {
-              const realRelFromRoot = path.relative(this.realRoot(), realPath);
-              if (await walk(realPath, realRelFromRoot)) {
+          const realPath = await fsPromises.realpath(fullPath);
+          const stat = await fsPromises.stat(realPath);
+          if (stat.isDirectory()) {
+            // Validate the symlink target is within bounds
+            try {
+              this.resolve(realPath);
+              if (await this.walkDirectoryForRestricted(realPath)) {
                 return true;
               }
+            } catch (err) {
+              if (err instanceof SandboxError) {
+                return true; // Symlink target is restricted
+              }
+              // Other errors (permission, etc.) - skip
             }
-          } catch {
-            // Broken symlink, skip
           }
+        } catch {
+          // Broken symlink or can't stat - skip
         }
       }
-      return false;
-    };
-    
-    return walk(realDirPath, relFromRoot);
-  }
-
-  private realRoot(): string {
-    return (this.#realRoot ??= realpathWithMissingSuffix(this.root));
-  }
-}
-
-// In memory for the life of the process; index.ts resets it to "on" at every session start.
-let state: SandboxState = "on";
-
-export function getSandboxState(): SandboxState {
-  return state;
-}
-
-export function setSandboxState(next: SandboxState): void {
-  state = next;
-}
-
-/** The sandbox for one tool call, snapshotting the current state. */
-export function sandboxFor(root: string): Sandbox {
-  return new Sandbox(root, state === "on");
-}
-
-/**
- * Real path of `target`, resolving its nearest existing ancestor and re-attaching the parts that
- * don't exist yet (a file about to be created). Falls back to `target` if nothing exists.
- */
-function realpathWithMissingSuffix(target: string): string {
-  const missing: string[] = [];
-  let current = target;
-  while (true) {
-    try {
-      return path.join(fs.realpathSync(current), ...missing);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      const parent = path.dirname(current);
-      if (parent === current) return target;
-      missing.unshift(path.basename(current));
-      current = parent;
     }
-  }
-}
 
-function realpathOrUndefined(target: string): string | undefined {
-  try {
-    return fs.realpathSync(target);
-  } catch {
-    return undefined;
+    return false;
   }
 }
 
 /**
- * Standalone function for checking if an entry is sandbox-safe, used by grepWorker.
- * Creates a temporary Sandbox instance to reuse its entryFilter logic.
- * The root is passed explicitly, and stateOverride determines if enforcement is active.
+ * Create a Sandbox instance for the given root, using the current global state.
+ */
+export function sandboxFor(root: string): Sandbox {
+  return new Sandbox(root, globalState === "on");
+}
+
+/**
+ * Standalone function for checking if an entry is sandbox-safe.
+ * Used by grepWorker which runs in a separate thread.
  */
 export function isEntrySandboxSafe(
   root: string,
@@ -233,11 +284,52 @@ export function isEntrySandboxSafe(
   isSymlink: boolean,
   stateOverride?: SandboxState
 ): boolean {
-  // Create a sandbox instance with the appropriate enforcement state
-  const sb = new Sandbox(root, (stateOverride ?? state) === "on");
-  
-  // Use the sandbox's entryFilter to check the entry
-  // base is relative to root, entryPath is relative to base
+  const sb = new Sandbox(root, (stateOverride ?? globalState) === "on");
   const filter = sb.entryFilter(base);
   return filter(entryPath, isSymlink);
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Resolve the real path of a target, handling non-existent files by resolving
+ * the nearest existing ancestor and re-attaching the missing parts.
+ * 
+ * This is important for validating paths that don't exist yet (e.g., a file
+ * about to be created).
+ */
+function resolveRealPathWithFallback(target: string): string {
+  const missingParts: string[] = [];
+  let current = target;
+
+  while (true) {
+    try {
+      return path.join(fs.realpathSync(current), ...missingParts);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw err;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        // Reached root without finding existing path
+        return target;
+      }
+      missingParts.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * Try to resolve the real path, returning undefined on error.
+ * Used for checking symlinks that might be broken.
+ */
+function resolveRealPathOrUndefined(target: string): string | undefined {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return undefined;
+  }
 }
