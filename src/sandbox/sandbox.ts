@@ -93,6 +93,29 @@ export class Sandbox {
       );
     }
 
+    // Prevent environment variable syntax which could expand to paths outside the sandbox
+    // This catches: $VAR, ${VAR}, %VAR%, ${VAR}/path, $VAR/path, etc.
+    if (/[\$\%][\w\d_]+|\$\{[^}]*\}|%[^%]+%/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains environment variable syntax which is not allowed in sandboxed paths`
+      );
+    }
+
+    // Prevent Unicode path separators and lookalikes that could bypass validation
+    // This catches: full-width slash (／), ellipsis (…), etc.
+    if (/[／…]/.test(target)) {
+      throw new SandboxError(
+        "outside-root",
+        `Path "${target}" contains Unicode characters that are not allowed in sandboxed paths`
+      );
+    }
+
+    // Normalize backslashes to forward slashes for consistent validation across platforms
+    // This ensures that path traversal using backslashes (e.g., "foo\..\..\file") 
+    // gets properly detected regardless of the host platform
+    const normalizedTarget = target.replace(/\\/g, '/');
+
     // Prevent using home directory as project root
     if (this.root === os.homedir()) {
       throw new SandboxError(
@@ -101,8 +124,8 @@ export class Sandbox {
       );
     }
 
-    // Resolve to absolute path
-    const absolutePath = path.resolve(this.root, target || ".");
+    // Resolve to absolute path using normalized target
+    const absolutePath = path.resolve(this.root, normalizedTarget || ".");
     
     // Check lexical path (relative to root)
     const lexicalRelative = path.relative(this.root, absolutePath);
