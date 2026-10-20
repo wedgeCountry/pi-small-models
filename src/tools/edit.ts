@@ -53,6 +53,11 @@ function applyOneEdit(content: string, edit: EditSpec, context: string): string 
       `${context}: oldText must not be empty. To insert new text without replacing anything, use the insert tool instead.`
     );
   }
+  if (newText.length === 0) {
+    throw new Error(
+      `${context}: newText must not be empty. To delete text, use the remove tool instead.`
+    );
+  }
   if (oldText === newText) {
     throw new Error(`${context}: oldText and newText must differ`);
   }

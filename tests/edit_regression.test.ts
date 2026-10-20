@@ -48,15 +48,15 @@ test("edit at very end of file - without trailing newline, oldText includes newl
   assert.equal(content, "const foo = 1;");
 });
 
-test("edit at very end of file - newText is empty should NOT fail (currently allowed)", async (t) => {
+test("edit at very end of file - newText is empty should fail", async (t) => {
   const dir = await makeFixture({ "a.txt": "const foo = 1;" });
   t.after(() => cleanupFixture(dir));
 
-  // Note: The current implementation allows empty newText (deleting content)
-  // This test documents current behavior - empty newText is allowed
-  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "1;", "");
+  await assert.rejects(() => 
+    editFile(new Sandbox(dir), path.join(dir, "a.txt"), "1;", "")
+  , /newText must not be empty/);
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
-  assert.equal(content, "const foo = ");
+  assert.equal(content, "const foo = 1;");
 });
 
 test("edit at very end of file - oldText is longer than remaining content should fail", async (t) => {
@@ -134,15 +134,15 @@ test("edit at end of file - oldText matches newline at end (needs allowMultipleM
   assert.equal(content, "line1\n\nline2\n\n");
 });
 
-test("edit at end of file - oldText is newline, newText is empty (currently allowed)", async (t) => {
+test("edit at end of file - oldText is newline, newText is empty should fail", async (t) => {
   const dir = await makeFixture({ "a.txt": "line1\n" });
   t.after(() => cleanupFixture(dir));
 
-  // Note: The current implementation allows empty newText (deleting content)
-  // This test documents current behavior
-  await editFile(new Sandbox(dir), path.join(dir, "a.txt"), "\n", "");
+  await assert.rejects(() => 
+    editFile(new Sandbox(dir), path.join(dir, "a.txt"), "\n", "")
+  , /newText must not be empty/);
   const content = await fs.readFile(path.join(dir, "a.txt"), "utf8");
-  assert.equal(content, "line1");
+  assert.equal(content, "line1\n");
 });
 
 test("edit at end of file - multiline content, edit last line", async (t) => {
