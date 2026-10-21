@@ -1,14 +1,19 @@
 import {getAgentDir, type ExtensionAPI} from "@earendil-works/pi-coding-agent";
+import {registerBuildTool} from "./src/tools/build.ts";
 import {registerDotnetBuildTool} from "./src/tools/dotnet_build.ts";
+import {registerLibInfoTool} from "./src/tools/lib_info.ts";
 import {registerDotnetLibTool} from "./src/tools/dotnet_lib.ts";
 import {registerDotnetListTool} from "./src/tools/dotnet_list.ts";
 import {registerFindUsagesTool} from "./src/tools/find_usages.ts";
+import {registerInstallTool} from "./src/tools/install.ts";
 import {registerGitDiffTool} from "./src/tools/git_diff.ts";
 import {registerGitLogTool} from "./src/tools/git_log.ts";
 import {registerGitStatusTool} from "./src/tools/git_status.ts";
 import {registerNpmListTool} from "./src/tools/npm_list.ts";
+import {registerPyImportTool} from "./src/tools/py_import.ts";
 import {registerPyLibTool} from "./src/tools/py_lib.ts";
 import {registerPyListTool} from "./src/tools/py_list.ts";
+import {registerTestTool} from "./src/tools/test.ts";
 import {registerTsCheckTool} from "./src/tools/ts_check.ts";
 import {registerTsLibTool} from "./src/tools/ts_lib.ts";
 import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
@@ -20,17 +25,22 @@ const DISABLED_TOOLS = new Set(["bash"]);
 export default function (pi: ExtensionAPI) {
   // Every tool registered through `tools` is gated: with the sandbox off, it asks before running.
   const {registry: tools, gatedTools} = createGatedRegistry(pi);
+  registerBuildTool(tools);
   registerDotnetBuildTool(tools);
+  registerLibInfoTool(tools);
   registerDotnetLibTool(tools);
   registerDotnetListTool(tools);
   registerFindUsagesTool(tools);
+  registerInstallTool(tools);
   registerGitDiffTool(tools);
   registerGitLogTool(tools);
   registerGitStatusTool(tools);
   registerNpmListTool(tools);
+  registerPyImportTool(tools);
   registerPyLibTool(tools);
   registerPyListTool(tools);
   registerTsCheckTool(tools);
+  registerTestTool(tools);
   registerTsLibTool(tools);
 
   pi.on("session_start", (_event) => {
