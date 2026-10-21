@@ -161,9 +161,18 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
   if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
+  // Accumulates per-line byte counts (each line is joined with a 1-byte "\n") instead of
+  // re-measuring the whole selection each time, so the cap stays O(n) for large ranges.
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
-    selected = selected.slice(0, -1);
+  if (!opts.uncapped && selected.length > 0) {
+    let bytes = -1; // no separator before the first line
+    let lastUnder = 0;
+    for (let i = 0; i < selected.length; i++) {
+      bytes += Buffer.byteLength(selected[i]!, "utf8") + 1;
+      if (bytes > DEFAULT_MAX_BYTES) break;
+      lastUnder = i + 1;
+    }
+    selected = selected.slice(0, lastUnder);
   }
   endIndex = startIndex + selected.length;
 

@@ -418,3 +418,13 @@ test("read with peek=true propagates real errors (missing file), not just unsupp
     /Could not read file/,
   );
 });
+
+test("uncapped reads bypass the byte cap entirely", async (t) => {
+  const lineCount = 12801;
+  const dir = await makeFixture({ "big.txt": "aaa\n".repeat(lineCount) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "big.txt"), { uncapped: true });
+  assert.equal(result.lines.length, lineCount + 1);
+  assert.equal(result.truncated, false);
+});
