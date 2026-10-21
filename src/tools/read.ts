@@ -10,6 +10,38 @@ import { createReadTool } from "@earendil-works/pi-coding-agent";
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
 
+/**
+ * Decodes `buffer` to text, honoring BOMs so UTF-8/UTF-16 files keep their real characters
+ * instead of mojibake: a UTF-8 BOM is stripped, UTF-16LE/BE are decoded via their BOM.
+ * Throws when the buffer looks like binary data (NUL byte), so the model gets a clear
+ * error instead of silently corrupted replacement characters.
+ */
+function decodeBuffer(buffer: Buffer, filePath: string): string {
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString("utf8");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return swap16(buffer.subarray(2)).toString("utf16le");
+  }
+  const scanLength = Math.min(buffer.length, 8 * 1024);
+  if (buffer.subarray(0, scanLength).includes(0)) {
+    throw new Error(`Could not read "${filePath}": it looks like a binary file.`);
+  }
+  return buffer.toString("utf8");
+}
+
+function swap16(buf: Buffer): Buffer {
+  const out = Buffer.allocUnsafe(buf.length - (buf.length % 2));
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    out[i] = buf[i + 1]!;
+    out[i + 1] = buf[i]!;
+  }
+  return out;
+}
+
 const IMAGE_EXTENSIONS = new Set([
   ".png",
   ".jpg",
@@ -113,7 +145,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     throw new Error(`Could not read file "${relPath}": ${errMsg}`);
   }
 
-  const allLines = buffer.toString("utf8").split(/\r\n|\n/);
+  const allLines = decodeBuffer(buffer, path.relative(sb.root, filePath)).split(/\r\n|\n/);
   const totalLines = allLines.length;
 
   const offset = opts.offset ?? 1;

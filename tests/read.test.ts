@@ -212,3 +212,37 @@ test("read with peek=false on supported extension uses standard read mode", asyn
   assert.equal(result.lines[0]!.text, "line1", "First line should be actual content");
   assert.equal(result.lines[299]!.text, "line300", "Last line should be actual content");
 });
+
+test("strips a UTF-8 BOM", async (t) => {
+  const dir = await makeFixture({ "bom.txt": Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("héllo")]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "bom.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("decodes UTF-16LE with BOM", async (t) => {
+  const dir = await makeFixture({ "u16le.txt": Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("héllo", "utf16le")]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "u16le.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("decodes UTF-16BE with BOM", async (t) => {
+  const dir = await makeFixture({ "u16be.txt": Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from("héllo", "utf16le").swap16()]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "u16be.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("rejects binary files containing NUL bytes", async (t) => {
+  const dir = await makeFixture({ "bin.dat": Buffer.from([0x4d, 0x5a, 0x00, 0x01, 0x02]) });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    readFile(new Sandbox(dir), path.join(dir, "bin.dat")),
+    /binary file/,
+  );
+});
