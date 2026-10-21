@@ -6,6 +6,8 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
+import { peekFile, renderPeekResult } from "./peek.ts";
+import type { PeekVisibility } from "./previewManagers/types.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -26,8 +28,7 @@ function decodeBuffer(buffer: Buffer, filePath: string): string {
   if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
     return swap16(buffer.subarray(2)).toString("utf16le");
   }
-  const scanLength = Math.min(buffer.length, 8 * 1024);
-  if (buffer.subarray(0, scanLength).includes(0)) {
+  if (buffer.includes(0)) {
     throw new Error(`Could not read "${filePath}": it looks like a binary file.`);
   }
   return buffer.toString("utf8");
@@ -187,7 +188,36 @@ export function registerReadTool(pi: ToolRegistry) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await readFile(sandboxFor(ctx.cwd), params.path, { offset: params.offset, limit: params.limit, signal });
+      const sb = sandboxFor(ctx.cwd);
+
+      // `peek` defaults to true: without offset/limit, return the file's structural outline
+      // instead of its raw contents. Unsupported extensions fall through to a full read, and
+      // offset/limit always force raw contents (a range of an outline is meaningless).
+      if (params.peek !== false && params.offset === undefined && params.limit === undefined) {
+        try {
+          const visibility = (params.visibility ?? "public") as PeekVisibility;
+          const result = await peekFile(sb, params.path, {
+            visibility,
+            includeDocs: params.includeDocs,
+            maxDepth: params.maxDepth,
+            signal,
+          });
+          return {
+            content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
+            details: {
+              peek: true,
+              language: result.language,
+              shownLines: result.lines.length,
+              totalLines: result.totalLines,
+              truncated: result.truncated,
+            },
+          };
+        } catch (err) {
+          if (!/does not support/.test((err as Error).message)) throw err;
+        }
+      }
+
+      const result = await readFile(sb, params.path, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
       if (result.truncated) {
@@ -197,7 +227,7 @@ export function registerReadTool(pi: ToolRegistry) {
 
       return {
         content: [{ type: "text", text }],
-        details: { totalLines: result.totalLines, truncated: result.truncated },
+        details: { peek: false, totalLines: result.totalLines, truncated: result.truncated },
       };
     },
   });
@@ -206,10 +236,8 @@ export function registerReadTool(pi: ToolRegistry) {
 /**
  * Helper function to get the file extension from a path.
  */
-function getExtension(path: string): string {
-  const parts = path.split('.');
-  if (parts.length < 2) return "";
-  // Join the parts back together to handle names like 'archive.tar.gz'
-  const lastDotIndex = Math.max(path.lastIndexOf('.'));
-  return lastDotIndex === -1 ? "" : path.substring(lastDotIndex);
+export function getExtension(p: string): string {
+  const lastDotIndex = p.lastIndexOf(".");
+  if (lastDotIndex === -1) return "";
+  return p.substring(lastDotIndex).toLowerCase();
 }

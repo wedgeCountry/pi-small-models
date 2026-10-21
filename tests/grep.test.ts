@@ -182,3 +182,29 @@ test("accepts a path that names a file and searches within it", async (t) => {
   assert.equal(result.matchCount, 1);
   assert.equal(result.lines[0]?.file, "main.py");
 });
+
+test("skips binary files containing NUL bytes and still matches text files", async (t) => {
+  const dir = await makeFixture({
+    "text.ts": "const needle = 1;\n",
+    "bin.ts": Buffer.concat([Buffer.from("const needle = "), Buffer.from([0x00, 0x01, 0x02]), Buffer.from(" 2;\n")]),
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(new Sandbox(dir), ".", "needle");
+  assert.equal(result.matchCount, 1);
+  assert.deepEqual(
+    result.lines.filter((l) => l.isMatch).map((l) => l.file),
+    ["text.ts"],
+  );
+});
+
+test("reports a match when the pattern itself occurs before any NUL in a binary file is scanned", async (t) => {
+  const dir = await makeFixture({
+    "bin.ts": Buffer.concat([Buffer.from("const needle = 1;\nconst other = "), Buffer.from([0x00]), Buffer.from(" 2;\n")]),
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(new Sandbox(dir), ".", "needle");
+  assert.equal(result.matchCount, 0);
+  assert.equal(result.lines.length, 0);
+});
