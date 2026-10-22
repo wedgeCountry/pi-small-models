@@ -16,6 +16,7 @@ import {registerPyListTool} from "./src/tools/py_list.ts";
 import {registerTestTool} from "./src/tools/test.ts";
 import {registerTsCheckTool} from "./src/tools/ts_check.ts";
 import {registerTsLibTool} from "./src/tools/ts_lib.ts";
+import {registerUninstallTool} from "./src/tools/uninstall.ts";
 import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
 
 // find/grep/edit/read/write override Pi's built-in tools of the same name (same-name registration
@@ -42,6 +43,7 @@ export default function (pi: ExtensionAPI) {
   registerTsCheckTool(tools);
   registerTestTool(tools);
   registerTsLibTool(tools);
+  registerUninstallTool(tools);
 
   pi.on("session_start", (_event) => {
     pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));

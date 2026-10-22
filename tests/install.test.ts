@@ -21,6 +21,7 @@ function makeMockDeps(overrides: {
       return { success: true, output: `+ ${args.join(" ")}`, ...overrides.installResult };
     },
     fetchJson: async () => undefined,
+    addRequirement: async () => "Added to requirements.txt",
   };
   (deps as InstallDeps & { lookupCalls: typeof lookupCalls; installCalls: typeof installCalls }).lookupCalls = lookupCalls;
   (deps as InstallDeps & { lookupCalls: typeof lookupCalls; installCalls: typeof installCalls }).installCalls = installCalls;
@@ -215,4 +216,30 @@ test("rejects when the signal is already aborted", async (t) => {
   await assert.rejects(() =>
     install(new Sandbox(dir), { package: "x", language: "typescript", signal: ac.signal, deps: makeMockDeps() })
   );
+});
+
+test("pip install updates requirements.txt (integration with the real helper)", async (t) => {
+  const dir = await makeFixture({
+    "a.py": "x = 1\n",
+    "requirements.txt": "flask==3.0.0\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const { addRequirement } = await import("../src/tools/requirementsManifest.ts");
+  const deps = makeMockDeps();
+  (deps as InstallDeps & { addRequirement: typeof addRequirement }).addRequirement = addRequirement;
+  const result = await install(new Sandbox(dir), {
+    package: "requests",
+    version: "2.31.0",
+    language: "python",
+    deps,
+  });
+  assert.equal(result.success, true);
+  assert.ok(result.output.includes("requirements.txt"));
+  const content = await (await import("node:fs/promises")).readFile(
+    (await import("node:path")).join(dir, "requirements.txt"),
+    "utf8"
+  );
+  assert.ok(content.includes("requests==2.31.0"));
+  assert.ok(content.includes("flask==3.0.0"));
 });
