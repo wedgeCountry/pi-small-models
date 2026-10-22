@@ -7,6 +7,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
 import { isValidIdentifier } from "./usageRules/shared.ts";
@@ -67,8 +68,10 @@ async function detectLanguage(base: string, ignoreGlobs: string[], signal?: Abor
   if (hasVenv) detected.push("python");
 
   if (detected.length === 0) {
-    throw new Error(
-      `find_usages could not auto-detect a language under "${base}" (found none of: a .sln/.csproj file, a node_modules folder, a .venv folder) — specify "language" explicitly.`
+    throw toolError(
+      "find_usages",
+      `find_usages could not auto-detect a language under "${base}" (found none of: a .sln/.csproj file, a node_modules folder, a .venv folder) — specify "language" explicitly.`,
+      { path: base }
     );
   }
 
@@ -97,9 +100,11 @@ export async function findUsages(
 ): Promise<FindUsagesResult> {
   const base = sb.resolve(target);
   if (!isValidIdentifier(symbol)) {
-    throw new Error(
+    throw toolError(
+      "find_usages",
       `find_usages symbol "${symbol}" is not a valid identifier — expected letters, digits, and ` +
-        `underscores, not starting with a digit.`
+        `underscores, not starting with a digit.`,
+      { symbol, path: target, language }
     );
   }
 
@@ -110,10 +115,10 @@ export async function findUsages(
   try {
     baseStat = await fs.stat(base);
   } catch {
-    throw new Error(`find_usages path "${base}" does not exist.`);
+    throw toolError("find_usages", `find_usages path "${base}" does not exist.`, { symbol, path: target, language });
   }
   if (!baseStat.isDirectory()) {
-    throw new Error(`find_usages path "${base}" is a file, not a directory. Use "path" to point at a directory.`);
+    throw toolError("find_usages", `find_usages path "${base}" is a file, not a directory. Use "path" to point at a directory.`, { symbol, path: target, language });
   }
 
   opts.signal?.throwIfAborted();

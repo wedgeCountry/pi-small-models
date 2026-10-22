@@ -6,6 +6,7 @@ import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface CopyOptions {
   recursive?: boolean;
@@ -37,7 +38,7 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
   const destPath = sb.resolve(destination);
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
-    throw new Error("Source and destination are the same path");
+    throw toolError("copy", "Source and destination are the same path", { path: source, destination });
   }
 
   opts.signal?.throwIfAborted();
@@ -46,11 +47,11 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
   try {
     sourceStat = await fs.lstat(sourcePath);
   } catch (err) {
-    throw new Error(`Could not copy "${sourcePath}": ${(err as Error).message}`);
+    throw toolError("copy", `Could not copy "${sourcePath}": ${(err as Error).message}`, { path: source, destination, recursive: opts.recursive });
   }
 
   if (sourceStat.isDirectory() && !opts.recursive) {
-    throw new Error(`"${sourcePath}" is a directory; set recursive to true to copy it`);
+    throw toolError("copy", `"${sourcePath}" is a directory; set recursive to true to copy it`, { path: source, destination, recursive: opts.recursive });
   }
 
   // Check if copying a directory would expose restricted files
@@ -65,13 +66,13 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
     opts.signal?.throwIfAborted();
 
     if (!opts.overwrite && (await pathExists(destPath))) {
-      throw new Error(`"${destPath}" already exists; set overwrite to true to replace it`);
+      throw toolError("copy", `"${destPath}" already exists; set overwrite to true to replace it`, { path: source, destination, overwrite: opts.overwrite });
     }
 
     try {
       await fs.mkdir(path.dirname(destPath), { recursive: true });
     } catch (err) {
-      throw new Error(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
+      throw toolError("copy", `Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`, { path: source, destination });
     }
 
     // fs.cp doesn't accept a `signal` option (unlike fs.readFile/writeFile), so — same as
@@ -84,7 +85,7 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
       // if destPath exists and overwrite wasn't set.
       await fs.cp(sourcePath, destPath, { recursive: true, force: true });
     } catch (err) {
-      throw new Error(`Could not copy "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
+      throw toolError("copy", `Could not copy "${sourcePath}" to "${destPath}": ${(err as Error).message}`, { path: source, destination, recursive: opts.recursive, overwrite: opts.overwrite });
     }
   });
 }

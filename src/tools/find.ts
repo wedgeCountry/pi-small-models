@@ -8,6 +8,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {oneLine, callName} from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -41,7 +42,7 @@ export async function findFiles(sb: Sandbox, target: string, pattern: string, op
 
   // Reject absolute patterns to prevent walking outside the project tree
   if (path.isAbsolute(pattern)) {
-    throw new Error(`find does not accept absolute patterns like "${pattern}"`);
+    throw toolError("find", `find does not accept absolute patterns like "${pattern}"`, { pattern, path: target });
   }
 
   const effectivePattern = ensureRecursivePattern(pattern);
@@ -92,7 +93,7 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
       finish(() => {
         stream.removeAllListeners();
         stream.destroy();
-        reject(new Error(`find over "${pattern}" was aborted`));
+        reject(toolError("find", `find over "${pattern}" was aborted`, { pattern, path: base }));
       });
     };
 

@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -61,7 +62,7 @@ export async function gitLog(sb: Sandbox, opts: GitLogOptions = {}): Promise<Git
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
     // A repository with no commits yet makes `git log` exit non-zero; that's just "no history".
     if (/does not have any commits yet/.test(describeError(err))) return { commits: [] };
-    throw new Error(`git log failed: ${describeError(err)}`);
+    throw toolError("git_log", `git log failed: ${describeError(err)}`, { path: opts.path, maxCount: opts.maxCount });
   }
 
   const commits: GitLogCommit[] = [];

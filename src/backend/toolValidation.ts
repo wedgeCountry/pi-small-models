@@ -1,3 +1,4 @@
+import { formatError } from "./formatError.ts";
 import { Compile } from "typebox/compile";
 import { Value } from "typebox/value";
 import type { TSchema } from "typebox";
@@ -72,17 +73,23 @@ function formatConciseValidationError(toolName: string, schema: TSchema, args: u
   const argNames =
     typeof args === "object" && args !== null && !Array.isArray(args) ? Object.keys(args as Record<string, unknown>) : [];
 
-  const lines = [`Validation failed for tool "${toolName}":`, errorLines || "  Unknown validation error"];
-  if (argNames.length > 0) {
-    lines.push("", `Received argument names: ${argNames.join(", ")}`);
-  }
+  const lines = ["Validation failed:", errorLines || "  Unknown validation error"];
 
   const record = args as Record<string, unknown>;
-  for (const key of extractNamedArgs(errors, new Set(argNames))) {
+  const namedArgs = extractNamedArgs(errors, new Set(argNames));
+  for (const key of namedArgs) {
     lines.push(`${key}: ${JSON.stringify(record[key])}`);
   }
 
-  return lines.join("\n");
+  const parameters: Record<string, unknown> = {};
+  for (const key of argNames) {
+    if (!namedArgs.includes(key)) parameters[key] = record[key];
+  }
+  for (const key of namedArgs) {
+    parameters[key] = record[key];
+  }
+
+  return formatError(toolName, lines.join("\n"), parameters);
 }
 
 /**

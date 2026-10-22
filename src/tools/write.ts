@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
@@ -30,7 +31,7 @@ export async function writeFile(sb: Sandbox, target: string, content: string, op
     try {
       await fs.mkdir(dir, { recursive: true });
     } catch (err) {
-      throw new Error(`Could not create directory "${dir}": ${(err as Error).message}`);
+      throw toolError("write", `Could not create directory "${dir}": ${(err as Error).message}`, { path: target });
     }
 
     opts.signal?.throwIfAborted();
@@ -40,7 +41,7 @@ export async function writeFile(sb: Sandbox, target: string, content: string, op
       await fs.writeFile(filePath, content, { encoding: "utf8", signal: opts.signal });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-      throw new Error(`Could not write file "${filePath}": ${(err as Error).message}`);
+      throw toolError("write", `Could not write file "${filePath}": ${(err as Error).message}`, { path: target });
     }
   });
 }
