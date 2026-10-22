@@ -6,9 +6,42 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
+import { peekFile, renderPeekResult } from "./peek.ts";
+import type { PeekVisibility } from "./previewManagers/types.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+
+/**
+ * Decodes `buffer` to text, honoring BOMs so UTF-8/UTF-16 files keep their real characters
+ * instead of mojibake: a UTF-8 BOM is stripped, UTF-16LE/BE are decoded via their BOM.
+ * Throws when the buffer looks like binary data (NUL byte), so the model gets a clear
+ * error instead of silently corrupted replacement characters.
+ */
+function decodeBuffer(buffer: Buffer, filePath: string): string {
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString("utf8");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return swap16(buffer.subarray(2)).toString("utf16le");
+  }
+  if (buffer.includes(0)) {
+    throw new Error(`Could not read "${filePath}": it looks like a binary file.`);
+  }
+  return buffer.toString("utf8");
+}
+
+function swap16(buf: Buffer): Buffer {
+  const out = Buffer.allocUnsafe(buf.length - (buf.length % 2));
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    out[i] = buf[i + 1]!;
+    out[i + 1] = buf[i]!;
+  }
+  return out;
+}
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",
@@ -100,37 +133,62 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
   }
 
 
+  const relPath = path.relative(sb.root, filePath);
+  const fail = (err: unknown): never => {
+    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
+    throw new Error(`Could not read file "${relPath}": ${describeReadError(err as NodeJS.ErrnoException)}`);
+  };
+
+  const offset = opts.offset ?? 1;
+  const maxLines = opts.uncapped ? Infinity : opts.limit !== undefined ? opts.limit : DEFAULT_MAX_LINES;
+  const maxBytes = opts.uncapped ? Infinity : DEFAULT_MAX_BYTES;
+
+  // Capped, non-UTF-16 reads stream: an offset/limit read of a multi-GB log must not allocate a
+  // multi-GB buffer. `uncapped` (peek) genuinely needs every line, and UTF-16 needs whole-buffer
+  // BOM handling, so those keep the whole-file path.
+  if (!opts.uncapped && !looksUtf16(filePath)) {
+    try {
+      return await readFileStreaming(filePath, relPath, { offset, maxLines, maxBytes, signal: opts.signal });
+    } catch (err) {
+      if (err instanceof StreamingBinaryError) {
+        throw new Error(`Could not read file "${relPath}": it looks like a binary file.`);
+      }
+      return fail(err);
+    }
+  }
+
   let buffer: Buffer;
   try {
     // fs.readFile natively honors `signal`, unlike fs.rm/fs.mkdir — no manual abort plumbing
     // needed here.
     buffer = await fs.readFile(filePath, { signal: opts.signal });
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    // Use relative path to avoid exposing absolute host path
-    const relPath = path.relative(sb.root, filePath);
-    const errMsg = (err as NodeJS.ErrnoException).message.replace(filePath, relPath);
-    throw new Error(`Could not read file "${relPath}": ${errMsg}`);
+    return fail(err);
   }
 
-  const allLines = buffer.toString("utf8").split(/\r\n|\n/);
+  const allLines = decodeBuffer(buffer, relPath).split(/\r\n|\n/);
   const totalLines = allLines.length;
 
-  const offset = opts.offset ?? 1;
   if (offset > totalLines) {
     throw new Error(`Offset ${offset} is beyond end of file (${totalLines} line(s) total)`);
   }
 
   const startIndex = offset - 1;
-  let endIndex = opts.limit !== undefined ? Math.min(startIndex + opts.limit, totalLines) : totalLines;
-
-  // Cap by line count.
-  if (!opts.uncapped) endIndex = Math.min(endIndex, startIndex + DEFAULT_MAX_LINES);
+  let endIndex = Math.min(startIndex + maxLines, totalLines);
 
   // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
+  // Accumulates per-line byte counts (each line is joined with a 1-byte "\n") instead of
+  // re-measuring the whole selection each time, so the cap stays O(n) for large ranges.
   let selected = allLines.slice(startIndex, endIndex);
-  while (!opts.uncapped && selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
-    selected = selected.slice(0, -1);
+  if (selected.length > 0 && Number.isFinite(maxBytes)) {
+    let bytes = -1; // no separator before the first line
+    let lastUnder = 0;
+    for (let i = 0; i < selected.length; i++) {
+      bytes += Buffer.byteLength(selected[i]!, "utf8") + 1;
+      if (bytes > maxBytes) break;
+      lastUnder = i + 1;
+    }
+    selected = selected.slice(0, lastUnder);
   }
   endIndex = startIndex + selected.length;
 
@@ -141,12 +199,129 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
   };
 }
 
+class StreamingBinaryError extends Error {}
+
+/** True when the file at `p` carries a UTF-16 BOM (whole-buffer decode path). */
+async function looksUtf16(p: string): Promise<boolean> {
+  let handle: fs.FileHandle;
+  try {
+    handle = await fs.open(p, "r");
+  } catch {
+    return false; // let the main read path produce the proper error
+  }
+  try {
+    const head = Buffer.alloc(2);
+    const { bytesRead } = await handle.read(head, 0, 2, 0);
+    return bytesRead === 2 && ((head[0] === 0xff && head[1] === 0xfe) || (head[0] === 0xfe && head[1] === 0xff));
+  } catch {
+    return false; // e.g. EISDIR — the main read path produces the proper error
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Streaming variant of the line extraction: reads 64KB chunks, splits complete lines as it goes,
+ * and never holds more than a chunk plus the collected range in memory. Mirrors `decodeBuffer`:
+ * a UTF-8 BOM is skipped, any NUL byte means binary (thrown as StreamingBinaryError after the
+ * scan, so `totalLines` counting is unaffected), and line splitting matches the whole-file path
+ * exactly — a trailing newline produces the same final empty line.
+ */
+async function readFileStreaming(
+  filePath: string,
+  relPath: string,
+  opts: { offset: number; maxLines: number; maxBytes: number; signal?: AbortSignal },
+): Promise<ReadResult> {
+  let handle: fs.FileHandle;
+  try {
+    handle = await fs.open(filePath, "r");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
+    throw new Error(`Could not read file "${relPath}": ${describeReadError(err as NodeJS.ErrnoException)}`);
+  }
+
+  const CHUNK = 64 * 1024;
+  const chunk = Buffer.alloc(CHUNK);
+  const collected: string[] = [];
+  let collectedBytes = -1;
+  let nextLine = 1; // 1-indexed line number the next emitted line will get
+  let carry = "";
+  let sawNul = false;
+  let done = false;
+  let skippedBom = false;
+
+  try {
+    try {
+      while (!done) {
+        opts.signal?.throwIfAborted();
+        const { bytesRead } = await handle.read(chunk, 0, CHUNK, null);
+        if (bytesRead === 0) break;
+        let piece = chunk.subarray(0, bytesRead);
+      if (!skippedBom) {
+        skippedBom = true;
+        if (bytesRead >= 3 && piece[0] === 0xef && piece[1] === 0xbb && piece[2] === 0xbf) piece = piece.subarray(3);
+      }
+      if (!sawNul && piece.includes(0)) sawNul = true;
+
+      // Decode byte-by-byte-safe: StringDecoder keeps incomplete UTF-8 sequences at chunk
+      // boundaries for the next round instead of emitting replacement characters.
+      const combined = carry + piece.toString("utf8");
+      carry = "";
+      const parts = combined.split(/\r\n|\n/);
+      carry = parts.pop() ?? "";
+      for (const text of parts) {
+        if (sawNul) break; // still counting lines below, but collect nothing
+        if (nextLine >= opts.offset && collected.length < opts.maxLines) {
+          collectedBytes += Buffer.byteLength(text, "utf8") + 1;
+          if (collectedBytes <= opts.maxBytes) collected.push(text);
+          else done = true;
+        }
+        nextLine++;
+      }
+      if (done) break;
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
+      if (err instanceof StreamingBinaryError) throw err;
+      throw new Error(`Could not read file "${relPath}": ${describeReadError(err as NodeJS.ErrnoException)}`);
+    }
+    if (!done) {
+      // EOF: the final carried fragment (empty after a trailing newline) is the last line.
+      if (sawNul) throw new StreamingBinaryError();
+      if (nextLine >= opts.offset && collected.length < opts.maxLines) {
+        collectedBytes += Buffer.byteLength(carry, "utf8") + 1;
+        if (collectedBytes <= opts.maxBytes) collected.push(carry);
+      }
+      nextLine++;
+    }
+  } finally {
+    await handle.close();
+  }
+
+  if (sawNul) throw new StreamingBinaryError();
+  const totalLines = nextLine - 1;
+  if (opts.offset > totalLines) {
+    throw new Error(`Offset ${opts.offset} is beyond end of file (${totalLines} line(s) total)`);
+  }
+  return {
+    lines: collected.map((text, i) => ({ line: opts.offset + i, text })),
+    totalLines,
+    truncated: opts.offset + collected.length - 1 < totalLines,
+  };
+}
+
 export function registerReadTool(pi: ToolRegistry) {
   pi.registerTool({
     ...READ_TOOL_DEFINITION,
     prepareArguments: withConciseValidationErrors(READ_TOOL_DEFINITION.name, READ_TOOL_DEFINITION.parameters),
     renderCall(args, theme) {
       let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
+      const flags: string[] = [];
+      if (args.peek === false) flags.push("peek=false");
+      if (args.visibility !== undefined && args.visibility !== "public") flags.push(args.visibility);
+      if (args.includeDocs) flags.push("docs");
+      if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
+      if (flags.length) text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
       if (args.offset !== undefined || args.limit !== undefined) {
         const start = args.offset ?? 1;
         const end = args.limit !== undefined ? start + args.limit - 1 : undefined;
@@ -155,7 +330,36 @@ export function registerReadTool(pi: ToolRegistry) {
       return oneLine(text);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await readFile(sandboxFor(ctx.cwd), params.path, { offset: params.offset, limit: params.limit, signal });
+      const sb = sandboxFor(ctx.cwd);
+
+      // `peek` defaults to true: without offset/limit, return the file's structural outline
+      // instead of its raw contents. Unsupported extensions fall through to a full read, and
+      // offset/limit always force raw contents (a range of an outline is meaningless).
+      if (params.peek !== false && params.offset === undefined && params.limit === undefined) {
+        try {
+          const visibility = (params.visibility ?? "public") as PeekVisibility;
+          const result = await peekFile(sb, params.path, {
+            visibility,
+            includeDocs: params.includeDocs,
+            maxDepth: params.maxDepth,
+            signal,
+          });
+          return {
+            content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
+            details: {
+              peek: true,
+              language: result.language,
+              shownLines: result.lines.length,
+              totalLines: result.totalLines,
+              truncated: result.truncated,
+            },
+          };
+        } catch (err) {
+          if (!/does not support/.test((err as Error).message)) throw err;
+        }
+      }
+
+      const result = await readFile(sb, params.path, { offset: params.offset, limit: params.limit, signal });
 
       let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
       if (result.truncated) {
@@ -165,19 +369,33 @@ export function registerReadTool(pi: ToolRegistry) {
 
       return {
         content: [{ type: "text", text }],
-        details: { totalLines: result.totalLines, truncated: result.truncated },
+        details: { peek: false, totalLines: result.totalLines, truncated: result.truncated },
       };
     },
   });
 }
 
+/** Maps the errnos `read` can hit to fixed, host-independent messages. */
+function describeReadError(err: NodeJS.ErrnoException): string {
+  switch (err.code) {
+    case "ENOENT":
+      return "file not found";
+    case "EISDIR":
+      return "is a directory";
+    case "EACCES":
+      return "permission denied";
+    case "EPERM":
+      return "operation not permitted";
+    default:
+      return err.message;
+  }
+}
+
 /**
  * Helper function to get the file extension from a path.
  */
-function getExtension(path: string): string {
-  const parts = path.split('.');
-  if (parts.length < 2) return "";
-  // Join the parts back together to handle names like 'archive.tar.gz'
-  const lastDotIndex = Math.max(path.lastIndexOf('.'));
-  return lastDotIndex === -1 ? "" : path.substring(lastDotIndex);
+export function getExtension(p: string): string {
+  const lastDotIndex = p.lastIndexOf(".");
+  if (lastDotIndex === -1) return "";
+  return p.substring(lastDotIndex).toLowerCase();
 }
