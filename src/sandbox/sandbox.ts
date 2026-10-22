@@ -23,7 +23,7 @@ export type SandboxState = "on" | "off";
  */
 export class SandboxError extends Error {
   constructor(
-    readonly reason: "outside-root" | "restricted",
+    readonly reason: "outside-root" | "outside-libraries" | "restricted",
     message: string
   ) {
     super(message);
@@ -296,6 +296,41 @@ export class Sandbox {
   allowsReported(relPath: string): boolean {
     if (!this.enforced) return true;
     return !isRestricted(relPath);
+  }
+
+  /**
+   * Resolves a file inside an installed package. The model never names these files; tools derive
+   * `libRoots` from package-manager metadata. The file must really lie under one of the roots and
+   * must not match a protected pattern relative to it. Read-only use only.
+   */
+  resolveLibraryFile(libRoots: readonly string[], target: string): string {
+    const resolved = path.resolve(target);
+    if (!this.enforced) return resolved;
+
+    const real = resolveRealPathWithFallback(resolved);
+    for (const libRoot of libRoots) {
+      const lexicalRoot = path.resolve(libRoot);
+      const realRelative = path.relative(resolveRealPathWithFallback(lexicalRoot), real);
+      if (!isInside(realRelative)) continue;
+      if (isRestricted(path.relative(lexicalRoot, resolved)) || isRestricted(realRelative)) {
+        throw new SandboxError("restricted", `Library file "${target}" is restricted by the sandbox`);
+      }
+      return resolved;
+    }
+    throw new SandboxError(
+      "outside-libraries",
+      `Library file "${target}" is outside the installed-package locations this tool may read`
+    );
+  }
+
+  /** Non-throwing form of `resolveLibraryFile`. */
+  allowsLibraryFile(libRoots: readonly string[], target: string): boolean {
+    try {
+      this.resolveLibraryFile(libRoots, target);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
