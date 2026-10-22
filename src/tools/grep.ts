@@ -8,6 +8,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import path from "node:path";
 
 export interface GrepOptions {
@@ -51,7 +52,7 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
   try {
     new RegExp(pattern, flags); // validate syntax before spending a worker on it
   } catch (err) {
-    throw new Error(`Invalid pattern: ${(err as Error).message}`);
+    throw toolError("grep", `Invalid pattern: ${(err as Error).message}`, { regex: pattern, path: target });
   }
 
   // `base` is meant to be a directory that fast-glob walks with `cwd`, not the
@@ -61,7 +62,7 @@ export async function grepFiles(sb: Sandbox, target: string, pattern: string, op
   try {
     baseStat = await fs.stat(base);
   } catch {
-    throw new Error(`grep path "${base}" does not exist.`);
+    throw toolError("grep", `grep path "${base}" does not exist.`, { path: target, regex: pattern, glob: opts.glob });
   }
   
   // If base is a file, convert it to a directory search with a specific glob
@@ -134,8 +135,10 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
       finish(() => {
         if (worker) worker.terminate();
         reject(
-          new Error(
-            `grep pattern "${input.pattern}" took longer than ${timeoutMs}ms to evaluate — it may be causing catastrophic backtracking; try a simpler pattern or narrow "glob"/"path"`
+          toolError(
+            "grep",
+            `grep pattern "${input.pattern}" took longer than ${timeoutMs}ms to evaluate — it may be causing catastrophic backtracking; try a simpler pattern or narrow "glob"/"path"`,
+            { regex: input.pattern, path: input.base }
           )
         );
       });

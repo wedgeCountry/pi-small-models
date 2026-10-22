@@ -4,6 +4,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
@@ -23,7 +24,7 @@ export async function makeDir(sb: Sandbox, target: string, opts: MakeDirOptions 
   try {
     await fs.mkdir(dirPath, { recursive: true });
   } catch (err) {
-    throw new Error(`Could not create directory "${dirPath}": ${(err as Error).message}`);
+    throw toolError("mkdir", `Could not create directory "${dirPath}": ${(err as Error).message}`, { path: target });
   }
 }
 

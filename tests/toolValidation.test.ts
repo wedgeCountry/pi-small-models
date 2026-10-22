@@ -20,11 +20,11 @@ test("reports a missing required property without dumping the full raw arguments
   assert.throws(
     () => prepare({ maxResults: 5 }),
     (err: Error) => {
-      assert.match(err.message, /Validation failed for tool "my_tool":/);
+      assert.match(err.message, /^my_tool error: Validation failed:/m);
       assert.match(err.message, /path: must have required properties path/);
-      assert.match(err.message, /Received argument names: maxResults/);
+      assert.match(err.message, /^Parameters: maxResults=5$/m);
       // The missing property was never received, so no value line for it.
-      assert.doesNotMatch(err.message, /^path: /m);
+      assert.doesNotMatch(err.message, /^Parameters:.*path=/m);
       return true;
     }
   );
@@ -36,10 +36,8 @@ test("includes the value of an argument a validation error actually names", () =
     () => prepare({ path: "a.ts", maxResults: "not-a-number" }),
     (err: Error) => {
       assert.match(err.message, /maxResults: must be integer/);
-      assert.match(err.message, /Received argument names: path, maxResults/);
+      assert.match(err.message, /^Parameters: path="a\.ts", maxResults="not-a-number"$/m);
       assert.match(err.message, /^maxResults: "not-a-number"$/m);
-      // The unrelated "path" argument's value isn't echoed back.
-      assert.doesNotMatch(err.message, /^path: "a\.ts"$/m);
       return true;
     }
   );
@@ -50,7 +48,7 @@ test("omits the received-argument-names line when no arguments were sent", () =>
   assert.throws(
     () => prepare({}),
     (err: Error) => {
-      assert.doesNotMatch(err.message, /Received argument names/);
+      assert.doesNotMatch(err.message, /^Parameters:/m);
       return true;
     }
   );

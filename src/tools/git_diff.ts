@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -83,7 +84,7 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
     ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`git diff failed: ${describeError(err)}`);
+    throw toolError("git_diff", `git diff failed: ${describeError(err)}`, { path: opts.path });
   }
 
   if (stdout === "") return { text: "", truncated: false };

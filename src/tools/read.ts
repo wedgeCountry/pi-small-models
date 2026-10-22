@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_MAX_LINES = 2000;
@@ -63,16 +64,20 @@ export interface ReadResult {
 export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = {}): Promise<ReadResult> {
   const filePath = sb.resolve(target);
   if (opts.offset !== undefined && (!Number.isInteger(opts.offset) || opts.offset < 1)) {
-    throw new Error(`offset must be a positive integer, got ${opts.offset}`);
+    throw toolError("read", `offset must be a positive integer, got ${opts.offset}`, { path: target, offset: opts.offset });
   }
   if (opts.limit !== undefined && (!Number.isInteger(opts.limit) || opts.limit < 1)) {
-    throw new Error(`limit must be a positive integer, got ${opts.limit}`);
+    throw toolError("read", `limit must be a positive integer, got ${opts.limit}`, { path: target, limit: opts.limit });
   }
 
   // Handle images using SDK read tool
   if (IMAGE_EXTENSIONS.has(getExtension(filePath || ""))) {
     if (opts.offset !== undefined || opts.limit !== undefined) {
-      throw new Error(`offset and limit are not allowed for image files`);
+      throw toolError("read", `offset and limit are not allowed for image files`, {
+        path: target,
+        ...(opts.offset !== undefined ? { offset: opts.offset } : {}),
+        ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+      });
     }
 
     // Create SDK read tool with custom operations that use our sandbox
@@ -110,7 +115,7 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
     // Use relative path to avoid exposing absolute host path
     const relPath = path.relative(sb.root, filePath);
     const errMsg = (err as NodeJS.ErrnoException).message.replace(filePath, relPath);
-    throw new Error(`Could not read file "${relPath}": ${errMsg}`);
+    throw toolError("read", `Could not read file "${relPath}": ${errMsg}`, { path: target });
   }
 
   const allLines = buffer.toString("utf8").split(/\r\n|\n/);
@@ -118,7 +123,11 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
 
   const offset = opts.offset ?? 1;
   if (offset > totalLines) {
-    throw new Error(`Offset ${offset} is beyond end of file (${totalLines} line(s) total)`);
+    throw toolError("read", `Offset ${offset} is beyond end of file (${totalLines} line(s) total)`, {
+      path: target,
+      offset,
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+    });
   }
 
   const startIndex = offset - 1;
