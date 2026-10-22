@@ -46,6 +46,25 @@ function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
  * (the common case for model-generated text) still matches a file that's actually saved with
  * `\r\n` and/or Unicode escape sequences, and restore the file's real line-ending style afterwards.
  */
+const FENCE_LINE = /^```/;
+
+/**
+ * Detects whether `text` is a whole markdown code block — i.e. wrapped in triple-backtick
+ * fences — which is how models sometimes hand over code when they forget to strip the markdown
+ * formatting from tool arguments. Left in place, the fences would be written into the file
+ * verbatim (or, for oldText, cause a confusing "oldText not found"), so callers reject the edit
+ * with an actionable message instead. Only a text whose first and last lines are fences, with no
+ * other fence lines between them, counts; fences that are merely part of the file's actual
+ * content are left alone.
+ */
+function detectCodeFence(text: string): boolean {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  if (lines.length < 2 || !FENCE_LINE.test(lines[0]!) || !FENCE_LINE.test(lines[lines.length - 1]!)) {
+    return false;
+  }
+  return lines.slice(1, -1).every((line) => !FENCE_LINE.test(line));
+}
+
 function applyOneEdit(content: string, edit: EditSpec, context: string): string {
   const { oldText, newText, allowMultipleMatches } = edit;
   if (oldText.length === 0) {
@@ -60,6 +79,18 @@ function applyOneEdit(content: string, edit: EditSpec, context: string): string 
   }
   if (oldText === newText) {
     throw new Error(`${context}: oldText and newText must differ`);
+  }
+  if (detectCodeFence(oldText)) {
+    throw new Error(
+      `${context}: oldText appears to be wrapped in a markdown code block (triple backticks). ` +
+        `Strip the \`\`\` fences and pass only the plain file content — the code block formatting is not part of the file.`
+    );
+  }
+  if (detectCodeFence(newText)) {
+    throw new Error(
+      `${context}: newText appears to be wrapped in a markdown code block (triple backticks). ` +
+        `Strip the \`\`\` fences and pass only the plain file content, otherwise the fences get written into the file.`
+    );
   }
 
   const firstIndex = content.indexOf(oldText);
