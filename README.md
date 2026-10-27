@@ -54,7 +54,7 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | Tool         | What it does |
 |--------------|--------------|
 | `git_status` | Current branch and changed files |
-| `git_diff`   | Unstaged changes, optionally for one path |
+| `git_diff`   | Changes vs. HEAD (staged + unstaged), optionally for one path, optionally just the file names |
 | `git_log`    | Recent commits with author, date and changed files |
 
 `read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
