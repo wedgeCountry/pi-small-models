@@ -31,4 +31,8 @@ Tests call these plain functions directly with `new Sandbox(fixtureDir)`.
 ## Special Cases
 - **grep**: Runs in a worker thread (`grepWorker.mjs`) — can be killed to stop runaway regex
 - **git_status/git_diff**: Shell out to `git` CLI via `execFile` (no shell injection possible)
+- **git_diff**: Diffs against `HEAD`, so staged and unstaged changes alike show up. `nameOnly` adds
+  git's `--name-only`, whose output has none of the `diff --git` headers the chunk filter splits on,
+  so it goes through a line-by-line filter instead; both judge paths with git's core.quotepath
+  quoting stripped
 - **find/grep/edit/read/write**: Replace Pi built-ins

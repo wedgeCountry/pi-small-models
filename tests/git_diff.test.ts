@@ -32,7 +32,7 @@ test("shows unstaged changes", async (t) => {
   assert.match(result.text, /\+goodbye/);
 });
 
-test("does not show a change that's already staged (git_diff is unstaged-only)", async (t) => {
+test("shows a staged change too (diff is against HEAD, not the index)", async (t) => {
   const dir = await makeFixture({ "a.txt": "hello\n" });
   await initGitRepo(dir);
   t.after(() => cleanupFixture(dir));
@@ -41,7 +41,113 @@ test("does not show a change that's already staged (git_diff is unstaged-only)",
   await execFile("git", ["add", "a.txt"], { cwd: dir });
 
   const result = await gitDiff(new Sandbox(dir));
+  assert.match(result.text, /-hello/);
+  assert.match(result.text, /\+goodbye/);
+});
+
+test("shows staged and unstaged changes to the same file together", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "staged\n", "utf8");
+  await execFile("git", ["add", "a.txt"], { cwd: dir });
+  await fs.writeFile(path.join(dir, "a.txt"), "staged + working\n", "utf8");
+
+  const result = await gitDiff(new Sandbox(dir));
+  assert.match(result.text, /-hello/);
+  assert.match(result.text, /\+staged \+ working/);
+});
+
+test("nameOnly lists the changed paths, one per line, with no diff body", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n", "sub/b.txt": "hello\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed-a\n", "utf8");
+  await fs.writeFile(path.join(dir, "sub/b.txt"), "changed-b\n", "utf8");
+
+  const result = await gitDiff(new Sandbox(dir), { nameOnly: true });
+  assert.deepEqual(result.text.split("\n"), ["a.txt", "sub/b.txt"]);
+  assert.equal(result.truncated, false);
+  assert.doesNotMatch(result.text, /diff --git|changed-a/);
+});
+
+test("nameOnly covers staged and unstaged changes against HEAD, listing each file once", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "staged\n", "utf8");
+  await execFile("git", ["add", "a.txt"], { cwd: dir });
+  await fs.writeFile(path.join(dir, "a.txt"), "staged + working\n", "utf8");
+
+  const result = await gitDiff(new Sandbox(dir), { nameOnly: true });
+  assert.deepEqual(result.text.split("\n"), ["a.txt"]);
+});
+
+test("nameOnly can be scoped to a path", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n", "sub/b.txt": "hello\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
+  await fs.writeFile(path.join(dir, "sub/b.txt"), "changed\n", "utf8");
+
+  const result = await gitDiff(new Sandbox(dir), { path: "sub", nameOnly: true });
+  assert.deepEqual(result.text.split("\n"), ["sub/b.txt"]);
+});
+
+test("nameOnly reports no changes for a clean repo", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  const result = await gitDiff(new Sandbox(dir), { nameOnly: true });
   assert.equal(result.text, "");
+  assert.equal(result.truncated, false);
+});
+
+test("nameOnly omits sandbox-restricted paths too", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n", ".env": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
+  await fs.writeFile(path.join(dir, ".env"), "API_KEY=sk-live-secret\n", "utf8");
+
+  const result = await gitDiff(new Sandbox(dir), { nameOnly: true });
+  assert.deepEqual(result.text.split("\n"), ["a.txt"]);
+  assert.doesNotMatch(result.text, /\.env/);
+});
+
+test("omits a restricted path git C-quotes (core.quotepath), in both modes", async (t) => {
+  // core.quotepath makes git print a path with non-ASCII bytes as a quoted, octal-escaped string —
+  // `".env\303\251"`. The denylist pattern `**/.env*` doesn't match the quoted form, so the quotes
+  // have to come off before a path is judged, or the protected file slips through the filter.
+  const dir = await makeFixture({ "a.txt": "hello\n", ".env\u00e9": "API_KEY=placeholder\n" });
+  await initGitRepo(dir);
+  t.after(() => cleanupFixture(dir));
+
+  await fs.writeFile(path.join(dir, "a.txt"), "changed\n", "utf8");
+  await fs.writeFile(path.join(dir, ".env\u00e9"), "API_KEY=sk-live-secret\n", "utf8");
+
+  const names = await gitDiff(new Sandbox(dir), { nameOnly: true });
+  assert.deepEqual(names.text.split("\n"), ["a.txt"]);
+
+  const body = await gitDiff(new Sandbox(dir));
+  assert.match(body.text, /a\.txt/);
+  assert.doesNotMatch(body.text, /placeholder|sk-live-secret/);
+});
+
+test("says so when the repository has no commit to diff against", async (t) => {
+  const dir = await makeFixture({ "a.txt": "hello\n" });
+  await execFile("git", ["init", "-q"], { cwd: dir });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await gitDiff(new Sandbox(dir));
+  assert.equal(result.text, "");
+  assert.equal(result.noHead, true);
 });
 
 test("scopes the diff to a path", async (t) => {
