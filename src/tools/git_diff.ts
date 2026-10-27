@@ -41,11 +41,12 @@ export interface GitDiffResult {
 }
 
 // Matches the "diff --git a/<path> b/<path>" line git prints at the start of each file's section —
-// the boundary `filterRestrictedDiffChunks` splits on. Also handles mnemonicPrefix mode which uses
-// "i/" and "w/" instead of "a/" and "b/". Captures whatever git put after the prefix, quotes and
+// the boundary `filterRestrictedDiffChunks` splits on. Also handles mnemonicPrefix mode, where git
+// replaces "a"/"b" with any single-letter mnemonic ("c", "i", "o", "w", ...) depending on where each
+// side comes from, so any one-letter prefix is accepted. Captures whatever git put after the prefix, quotes and
 // core.quotepath escapes included; `reportedPathAllowed` takes care of the quoting before a path is
 // judged, the same pragmatic level `gitStatus` applies to its own "-> " rename-arrow splitting.
-const DIFF_FILE_HEADER_RE = /^diff --git [ai]\/(.+) [bw]\/(.+)$/;
+const DIFF_FILE_HEADER_RE = /^diff --git [a-z]\/(.+) [a-z]\/(.+)$/;
 
 /**
  * Splits `diffText` into per-file sections on its `diff --git a/<path> b/<path>` headers and drops
