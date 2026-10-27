@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -52,7 +53,7 @@ export async function gitStatus(sb: Sandbox, opts: GitStatusOptions = {}): Promi
     ({ stdout } = await execFile("git", args, { cwd: sb.root, signal: opts.signal, maxBuffer: MAX_BUFFER }));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`git status failed: ${describeError(err)}`);
+    throw toolError("git_status", `git status failed: ${describeError(err)}`, { path: opts.path });
   }
 
   let branch: string | null = null;

@@ -4,6 +4,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface LstatResult {
   isFile: boolean;
@@ -20,7 +21,7 @@ export async function lstatPath(sb: Sandbox, target: string): Promise<LstatResul
   try {
     stat = await fs.lstat(targetPath);
   } catch (err) {
-    throw new Error(`Could not stat "${targetPath}": ${(err as Error).message}`);
+    throw toolError("lstat", `Could not stat "${targetPath}": ${(err as Error).message}`, { path: target });
   }
 
   return {

@@ -5,6 +5,7 @@ import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../backend/mutationQueue.ts";
 import {oneLine, callName} from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
@@ -37,15 +38,6 @@ function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
   return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
-/**
- * Applies a single {oldText -> newText} replacement to `content`, returning the updated string.
- *
- * `content`, `oldText`, and `newText` must already be LF-normalized (see `normalizeToLF`) and
- * Unicode-normalized (see `normalizeUnicodeEscapes`) — callers match against a normalized copy
- * of the file so an `oldText` written with bare `\n` line breaks and/or actual Unicode characters
- * (the common case for model-generated text) still matches a file that's actually saved with
- * `\r\n` and/or Unicode escape sequences, and restore the file's real line-ending style afterwards.
- */
 const FENCE_LINE = /^```/;
 
 /**
@@ -65,16 +57,30 @@ function detectCodeFence(text: string): boolean {
   return lines.slice(1, -1).every((line) => !FENCE_LINE.test(line));
 }
 
-function applyOneEdit(content: string, edit: EditSpec, context: string): string {
+
+/**
+ * Applies a single {oldText -> newText} replacement to `content`, returning the updated string.
+ *
+ * `content`, `oldText`, and `newText` must already be LF-normalized (see `normalizeToLF`) and
+ * Unicode-normalized (see `normalizeUnicodeEscapes`) — callers match against a normalized copy
+ * of the file so an `oldText` written with bare `\n` line breaks and/or actual Unicode characters
+ * (the common case for model-generated text) still matches a file that's actually saved with
+ * `\r\n` and/or Unicode escape sequences, and restore the file's real line-ending style afterwards.
+ */
+function applyOneEdit(content: string, edit: EditSpec, context: string, params: Record<string, unknown>): string {
   const { oldText, newText, allowMultipleMatches } = edit;
   if (oldText.length === 0) {
-    throw new Error(
-      `${context}: oldText must not be empty. To insert new text without replacing anything, use the insert tool instead.`
+    throw toolError(
+      "edit",
+      `${context}: oldText must not be empty. To insert new text without replacing anything, use the insert tool instead.`,
+      params
     );
   }
   if (newText.length === 0) {
-    throw new Error(
-      `${context}: newText must not be empty. To delete text, use the remove tool instead.`
+    throw toolError(
+      "edit",
+      `${context}: newText must not be empty. To delete text, use the remove tool instead.`,
+      params
     );
   }
   if (oldText === newText) {
@@ -95,11 +101,15 @@ function applyOneEdit(content: string, edit: EditSpec, context: string): string 
 
   const firstIndex = content.indexOf(oldText);
   if (firstIndex === -1) {
-    throw new Error(`${context}: oldText not found`);
+    throw toolError("edit", `${context}: oldText not found`, params);
   }
   const secondIndex = content.indexOf(oldText, firstIndex + oldText.length);
   if (secondIndex !== -1 && !allowMultipleMatches) {
-    throw new Error(`${context}: oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`);
+    throw toolError(
+      "edit",
+      `${context}: oldText is not unique; it matches multiple locations, use allowMultipleMatches: true if this is desired behaviour!`,
+      params
+    );
   }
 
   return allowMultipleMatches
@@ -107,14 +117,14 @@ function applyOneEdit(content: string, edit: EditSpec, context: string): string 
     : content.slice(0, firstIndex) + newText + content.slice(firstIndex + oldText.length);
 }
 
-async function readForEdit(filePath: string, signal?: AbortSignal): Promise<string> {
+async function readForEdit(filePath: string, target: string, signal?: AbortSignal): Promise<string> {
   try {
     // fs.readFile/writeFile natively honor `signal`, unlike fs.rm/fs.mkdir —
     // no manual abort plumbing needed here.
     return await fs.readFile(filePath, { encoding: "utf8", signal });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-    throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
+    throw toolError("edit", `Could not read file "${filePath}": ${(err as Error).message}`, { path: target });
   }
 }
 
@@ -144,7 +154,7 @@ export async function editFile(
   const filePath = sb.resolve(target);
 
   await withFileMutationQueue(filePath, async () => {
-    const content = await readForEdit(filePath, opts.signal);
+    const content = await readForEdit(filePath, target, opts.signal);
     const eol = detectLineEnding(content);
     
     // Normalize line endings for both content and edit parameters
@@ -156,7 +166,13 @@ export async function editFile(
     const updated = applyOneEdit(
       lfContent,
       { oldText: lfOldText, newText: lfNewText, allowMultipleMatches: opts.allowMultipleMatches },
-      `oldText in "${filePath}"`
+      `oldText in "${filePath}"`,
+      {
+        path: target,
+        oldText,
+        newText,
+        allowMultipleMatches: opts.allowMultipleMatches,
+      }
     );
     
     await fs.writeFile(filePath, restoreLineEndings(updated, eol), { encoding: "utf8", signal: opts.signal });
@@ -177,7 +193,7 @@ export function registerEditTool(pi: ToolRegistry) {
       const hasSingle = params.oldText !== undefined || params.newText !== undefined;
 
       if (params.oldText === undefined || params.newText === undefined) {
-        throw new Error("Specify oldText and newText");
+        throw toolError("edit", "Specify oldText and newText", { path: params.path });
       }
       await editFile(sb, params.path, params.oldText, params.newText, {
         allowMultipleMatches: params.allowMultipleMatches,

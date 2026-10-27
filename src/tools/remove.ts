@@ -6,6 +6,7 @@ import {sandboxFor, type Sandbox, SandboxError} from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
@@ -53,7 +54,7 @@ export async function removeRecursively(targetPath: string, signal?: AbortSignal
 export async function removePath(sb: Sandbox, target: string, opts: RemoveOptions = {}): Promise<void> {
   const targetPath = sb.resolve(target);
   if (targetPath === sb.root) {
-    throw new Error("Refusing to remove the project root");
+    throw toolError("remove", "Refusing to remove the project root", { path: target });
   }
 
   await withFileMutationQueue(targetPath, async () => {
@@ -61,11 +62,11 @@ export async function removePath(sb: Sandbox, target: string, opts: RemoveOption
     try {
       stat = await fs.lstat(targetPath);
     } catch (err) {
-      throw new Error(`Could not remove "${targetPath}": ${(err as Error).message}`);
+      throw toolError("remove", `Could not remove "${targetPath}": ${(err as Error).message}`, { path: target, recursive: opts.recursive });
     }
 
     if (stat.isDirectory() && !opts.recursive) {
-      throw new Error(`"${targetPath}" is a directory; set recursive to true to remove it`);
+      throw toolError("remove", `"${targetPath}" is a directory; set recursive to true to remove it`, { path: target, recursive: opts.recursive });
     }
 
     opts.signal?.throwIfAborted();
