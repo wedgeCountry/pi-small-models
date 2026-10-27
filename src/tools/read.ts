@@ -178,7 +178,6 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
   const allLines = decodeBuffer(buffer, relPath).split(/\r\n|\n/);
   const totalLines = allLines.length;
 
-  const offset = opts.offset ?? 1;
   if (offset > totalLines) {
     throw toolError("read", `Offset ${offset} is beyond end of file (${totalLines} line(s) total)`, {
       path: target,
