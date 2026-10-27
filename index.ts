@@ -14,7 +14,10 @@ import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerMoveTool} from "./src/tools/move.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
+import {registerPiDocsTool} from "./src/tools/pi_docs.ts";
+import {registerPiSkillsTool} from "./src/tools/pi_skills.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
+import {resetSkillsCache} from "./src/sandbox/piRoots.ts";
 import {getSandboxState, setSandboxState, type SandboxState} from "./src/sandbox/sandbox.ts";
 import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
 import {
@@ -51,6 +54,14 @@ export default function (pi: ExtensionAPI) {
   registerRemoveTool(tools);
   // registerSearchTool(tools); // deactivated, ambiguous to grep and find
   registerWriteTool(tools);
+
+  // Pi's own documentation and the skills Pi discovered live outside the project root — and, for the
+  // docs, inside a `node_modules` directory — so these two read-only tools are not project-sandbox
+  // tools at all: they get a fixed root discovered from Pi's layout plus an always-enforced Sandbox over
+  // just that root (src/sandbox/piRoots.ts), and are registered on `pi` directly rather than through the
+  // gated registry, so `/toggle-sandbox off` doesn't ask for confirmation on every docs or skill lookup.
+  registerPiDocsTool(pi);
+  registerPiSkillsTool(pi);
 
   pi.registerCommand("toggle-sandbox", {
     description: "Set the sandbox (src/sandbox/sandbox.ts): on (fully enforced locally — root containment plus " +
@@ -119,6 +130,9 @@ export default function (pi: ExtensionAPI) {
     // The sandbox state lives for the whole process, not one session; reset it so a previous
     // session's `/toggle-sandbox off` never leaks into a new one.
     setSandboxState("on");
+    // Same for the discovered pi skills: a new session may sit in another directory, project trust may
+    // have been granted or `/reload` may have installed packages since the last lookup.
+    resetSkillsCache();
   });
 
   pi.on("tool_call", createPermissionGate(gatedTools));
