@@ -46,7 +46,7 @@ export interface GitDiffResult {
 // side comes from, so any one-letter prefix is accepted. Captures whatever git put after the prefix, quotes and
 // core.quotepath escapes included; `reportedPathAllowed` takes care of the quoting before a path is
 // judged, the same pragmatic level `gitStatus` applies to its own "-> " rename-arrow splitting.
-const DIFF_FILE_HEADER_RE = /^diff --git [a-z]\/(.+) [a-z]\/(.+)$/;
+const DIFF_FILE_HEADER_RE = /^diff --git [^/\s]+\/(.+) [^/\s]+\/(.+)$/;
 
 /**
  * Splits `diffText` into per-file sections on its `diff --git a/<path> b/<path>` headers and drops
@@ -132,7 +132,11 @@ function filterRestrictedNameOnly(sb: Sandbox, nameOnlyText: string): string {
  * the model which files to ask about, and it can't disclose any content it wasn't going to hide.
  */
 export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<GitDiffResult> {
-  const args = ["diff", "HEAD"];
+  // Force the canonical a/... b/... header form regardless of the user's git config: the
+  // restricted-file filter below splits on those headers, and its regex accepts mnemonic
+  // prefixes only as a fallback for output shape we don't fully control. This never changes the
+  // diff content itself, only the decorative header prefixes.
+  const args = ["-c", "diff.mnemonicPrefix=false", "diff", "HEAD"];
   if (opts.nameOnly) args.push("--name-only");
   const scope = opts.path ? sb.relative(opts.path) : ".";
   args.push("--", scope);
@@ -148,7 +152,10 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
     if (/bad revision 'HEAD'|does not have any commits yet/.test(describeError(err))) {
       return { text: "", truncated: false, noHead: true };
     }
-    throw new Error(`git diff failed: ${describeError(err)}`);
+    throw toolError("git_diff", `git diff failed: ${describeError(err)}`, {
+      ...(opts.path !== undefined ? { path: opts.path } : {}),
+      ...(opts.nameOnly !== undefined ? { nameOnly: opts.nameOnly } : {}),
+    });
   }
 
   if (stdout === "") return { text: "", truncated: false };

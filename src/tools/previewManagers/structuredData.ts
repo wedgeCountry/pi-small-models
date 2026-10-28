@@ -19,12 +19,24 @@ export class StructuredDataPreviewManager implements PreviewManager {
     if (this.kind === "json") {
       let depth = 0;
       let started = false;
+      let inString = false;
+      let escaped = false;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i] ?? "";
         // Depth *before* this line: a top-level member sits directly inside the root braces.
+        // String-literal state carries across lines so braces/quotes inside strings (e.g.
+        // "}") can't corrupt the count; `escaped` handles backslash escapes inside strings.
         const depthBefore = depth;
         for (const ch of line) {
-          if (ch === "{" || ch === "[") {
+          if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === "\\") escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+          }
+          if (ch === '"') {
+            inString = true;
+          } else if (ch === "{" || ch === "[") {
             depth++;
             started = true;
           } else if (ch === "}" || ch === "]") {

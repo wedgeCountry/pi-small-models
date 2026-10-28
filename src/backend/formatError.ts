@@ -43,5 +43,12 @@ export function formatError(toolName: string, message: string, parameters: Recor
 
 /** Convenience wrapper so a tool throws with the unified format in one call. */
 export function toolError(toolName: string, message: string, parameters: Record<string, unknown> = {}): Error {
-  return new Error(formatError(toolName, message, parameters));
+  const err = new Error(formatError(toolName, message, parameters));
+  (err as Error & { toolFormatted?: boolean }).toolFormatted = true;
+  return err;
+}
+
+/** True when `err` was already produced by `toolError`/`formatError` — don't wrap it again. */
+export function isToolFormattedError(err: unknown): boolean {
+  return err instanceof Error && (err as Error & { toolFormatted?: boolean }).toolFormatted === true;
 }

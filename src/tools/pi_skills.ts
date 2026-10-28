@@ -9,6 +9,7 @@ import {
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 
 const LISTING_MAX_SHOWN = 60;
@@ -45,24 +46,36 @@ export function resolveSkillRequest(
   const query = (skill ?? "").trim();
   if (query === "") {
     if ((file ?? "").trim() !== "") {
-      throw new Error('pi_skills needs "skill" when "path" is given: "path" is a file inside that skill\'s own folder.');
+      throw toolError(
+        "pi_skills",
+        'pi_skills needs "skill" when "path" is given: "path" is a file inside that skill\'s own folder.',
+        { path: file }
+      );
     }
     return undefined;
   }
 
   const matches = findSkills(skills, query, cwd);
-  if (matches.length === 0) throw new Error(`No skill named "${query}". ${describeOtherSkills(skills)}`);
+  if (matches.length === 0) {
+    throw toolError("pi_skills", `No skill named "${query}". ${describeOtherSkills(skills)}`, { skill: query });
+  }
   if (matches.length > 1) {
-    throw new Error(
+    throw toolError(
+      "pi_skills",
       `"${query}" matches ${matches.length} skills:\n${matches.map((m) => `  ${m.skillFile}`).join("\n")}\n` +
-        'Pass one of those paths as "skill" to choose.'
+        'Pass one of those paths as "skill" to choose.',
+      { skill: query }
     );
   }
 
   const relativeFile = (file ?? "").trim() === "" ? "SKILL.md" : (file as string).trim();
   const matched = matches[0]!;
   if (path.isAbsolute(relativeFile) || relativeFile.startsWith("~")) {
-    throw new Error(`"path" must be relative to the skill directory ${matched.dir}, got "${relativeFile}".`);
+    throw toolError(
+      "pi_skills",
+      `"path" must be relative to the skill directory ${matched.dir}, got "${relativeFile}".`,
+      { skill: query, path: relativeFile }
+    );
   }
 
   return { skill: matched, file: relativeFile };

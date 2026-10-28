@@ -15,6 +15,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import type { Sandbox } from "../sandbox/sandbox.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 import type { ListEntry } from "./list.ts";
 
@@ -121,9 +122,11 @@ export async function readPiDocs(
  */
 function assertInDocScope(rel: string, target: string | undefined): void {
   if (isPiDocPath(rel)) return;
-  throw new Error(
+  throw toolError(
+    "pi_docs",
     `"${target ?? rel}" is not part of Pi's documentation. pi_docs reaches ${PI_DOC_ENTRIES.join(", ")} inside ` +
-      `${PI_PACKAGE_NAME} only.`
+      `${PI_PACKAGE_NAME} only.`,
+    { path: target ?? rel }
   );
 }
 
@@ -217,8 +220,10 @@ async function statExisting(absolute: string, rel: string, version: string): Pro
     return await fs.stat(absolute);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(
-        `"${rel}" does not exist in Pi ${version}'s documentation. Call pi_docs with no path to list what is available.`
+      throw toolError(
+        "pi_docs",
+        `"${rel}" does not exist in Pi ${version}'s documentation. Call pi_docs with no path to list what is available.`,
+        { path: rel }
       );
     }
     throw err;
@@ -243,7 +248,8 @@ export function registerPiDocsTool(pi: ToolRegistry) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const locations = await discoverPiDocs({ agentDir: getAgentDir(), cwd: ctx.cwd });
       if (locations.length === 0) {
-        throw new Error(
+        throw toolError(
+          "pi_docs",
           `Could not find Pi's own documentation: no installed copy of ${PI_PACKAGE_NAME} with a ` +
             `${PI_DOC_ENTRIES.join(", ")} entry was found.`
         );

@@ -17,6 +17,12 @@ export interface EditSpec {
   oldText: string;
   newText: string;
   allowMultipleMatches?: boolean;
+  /**
+   * Skips the code-fence rejection below. Set only for markdown targets when the fence-wrapped
+   * oldText genuinely occurs in the file (or for the stripped retry) — there, fences are content,
+   * not model formatting.
+   */
+  allowFencedText?: boolean;
 }
 /**
  * Detects a file's dominant line-ending style from its content, the same heuristic `insertText`
@@ -57,6 +63,17 @@ function detectCodeFence(text: string): boolean {
   return lines.slice(1, -1).every((line) => !FENCE_LINE.test(line));
 }
 
+/**
+ * Removes the outer code fences from `text` (whose presence `detectCodeFence` confirmed), keeping
+ * the inner lines verbatim and preserving the original line-ending style of the inner content.
+ */
+function unwrapCodeFence(text: string): string {
+  const usedCrlf = text.includes("\r\n");
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const inner = lines.slice(1, -1);
+  return usedCrlf ? inner.join("\r\n") : inner.join("\n");
+}
+
 
 /**
  * Applies a single {oldText -> newText} replacement to `content`, returning the updated string.
@@ -84,18 +101,24 @@ function applyOneEdit(content: string, edit: EditSpec, context: string, params: 
     );
   }
   if (oldText === newText) {
-    throw new Error(`${context}: oldText and newText must differ`);
+    throw toolError("edit", `${context}: oldText and newText must differ`, params);
   }
-  if (detectCodeFence(oldText)) {
-    throw new Error(
+  if (detectCodeFence(oldText) && !edit.allowFencedText) {
+    throw toolError(
+      "edit",
       `${context}: oldText appears to be wrapped in a markdown code block (triple backticks). ` +
-        `Strip the \`\`\` fences and pass only the plain file content — the code block formatting is not part of the file.`
+        `Strip the \`\`\` fences and pass only the plain file content — the code block formatting is not part of the file. ` +
+        `If the fences genuinely belong in a markdown file, include surrounding non-fence lines in oldText.`,
+      params
     );
   }
-  if (detectCodeFence(newText)) {
-    throw new Error(
+  if (detectCodeFence(newText) && !edit.allowFencedText) {
+    throw toolError(
+      "edit",
       `${context}: newText appears to be wrapped in a markdown code block (triple backticks). ` +
-        `Strip the \`\`\` fences and pass only the plain file content, otherwise the fences get written into the file.`
+        `Strip the \`\`\` fences and pass only the plain file content, otherwise the fences get written into the file. ` +
+        `If the fences genuinely belong in a markdown file, include surrounding non-fence lines in newText.`,
+      params
     );
   }
 
@@ -156,14 +179,47 @@ export async function editFile(
   await withFileMutationQueue(filePath, async () => {
     const content = await readForEdit(filePath, target, opts.signal);
     const eol = detectLineEnding(content);
-    
+
     // Normalize line endings for both content and edit parameters
     const lfContent = normalizeToLF(content);
     const lfOldText = normalizeToLF(oldText);
     const lfNewText = normalizeToLF(newText);
-    
+
+    // Markdown files legitimately consist of (or contain) fenced code blocks, so the
+    // model-error heuristic ("arguments accidentally wrapped in fences") must not reject
+    // fence-shaped text when the target file is markdown. There, genuine content wins: the
+    // verbatim fence-wrapped text is tried first, and only when it is not found does the edit
+    // fall back to the stripped form (the model probably wrapped its arguments after all).
+    const isMarkdownTarget = /\.(?:md|markdown|mdx)$/i.test(target);
+    const applyEdit = (
+      editContent: string,
+      spec: EditSpec,
+      context: string,
+      params: Record<string, unknown>
+    ): string => {
+      if (!isMarkdownTarget) return applyOneEdit(editContent, spec, context, params);
+      // Genuine content wins: if the verbatim fence-wrapped oldText is actually in the file,
+      // apply the edit as given. Only when it is absent do we retry with the fences stripped —
+      // the model probably wrapped its arguments after all — and only then surface an error.
+      if (
+        spec.oldText.length > 0 &&
+        detectCodeFence(spec.oldText) &&
+        editContent.includes(spec.oldText)
+      ) {
+        return applyOneEdit(editContent, { ...spec, allowFencedText: true }, context, params);
+      }
+      const strippedOld = spec.oldText.length > 0 && detectCodeFence(spec.oldText) ? unwrapCodeFence(spec.oldText) : spec.oldText;
+      const strippedNew = spec.newText.length > 0 && detectCodeFence(spec.newText) ? unwrapCodeFence(spec.newText) : spec.newText;
+      if (strippedOld !== spec.oldText || strippedNew !== spec.newText) {
+        if (strippedOld.length > 0 && strippedNew.length > 0 && strippedOld !== strippedNew) {
+          return applyOneEdit(editContent, { ...spec, oldText: strippedOld, newText: strippedNew, allowFencedText: true }, context, params);
+        }
+      }
+      return applyOneEdit(editContent, spec, context, params);
+    };
+
     // Apply the edit using LF-normalized content and text
-    const updated = applyOneEdit(
+    const updated = applyEdit(
       lfContent,
       { oldText: lfOldText, newText: lfNewText, allowMultipleMatches: opts.allowMultipleMatches },
       `oldText in "${filePath}"`,

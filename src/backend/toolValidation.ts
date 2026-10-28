@@ -74,6 +74,9 @@ function formatConciseValidationError(toolName: string, schema: TSchema, args: u
     typeof args === "object" && args !== null && !Array.isArray(args) ? Object.keys(args as Record<string, unknown>) : [];
 
   const lines = ["Validation failed:", errorLines || "  Unknown validation error"];
+  if (argNames.length > 0) {
+    lines.push(`Received argument names: ${argNames.join(", ")}`);
+  }
 
   const record = args as Record<string, unknown>;
   const namedArgs = extractNamedArgs(errors, new Set(argNames));
@@ -83,9 +86,6 @@ function formatConciseValidationError(toolName: string, schema: TSchema, args: u
 
   const parameters: Record<string, unknown> = {};
   for (const key of argNames) {
-    if (!namedArgs.includes(key)) parameters[key] = record[key];
-  }
-  for (const key of namedArgs) {
     parameters[key] = record[key];
   }
 
