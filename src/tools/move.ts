@@ -7,6 +7,7 @@ import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface MoveOptions {
   recursive?: boolean;
@@ -45,11 +46,11 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
   const sourcePath = sb.resolve(source);
   const destPath = sb.resolve(destination);
   if (sourcePath === sb.root) {
-    throw new Error("Refusing to move the project root");
+    throw toolError("move", "Refusing to move the project root", { path: source, destination });
   }
 
   if (path.resolve(sourcePath) === path.resolve(destPath)) {
-    throw new Error("Source and destination are the same path");
+    throw toolError("move", "Source and destination are the same path", { path: source, destination });
   }
 
   const sortedPaths = [sourcePath, destPath].sort();
@@ -64,11 +65,11 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
       try {
         sourceStat = await fs.lstat(sourcePath);
       } catch (err) {
-        throw new Error(`Could not move "${sourcePath}": ${(err as Error).message}`);
+        throw toolError("move", `Could not move "${sourcePath}": ${(err as Error).message}`, { path: source, destination, recursive: opts.recursive });
       }
 
       if (sourceStat.isDirectory() && !opts.recursive) {
-        throw new Error(`"${sourcePath}" is a directory; set recursive to true to move it`);
+        throw toolError("move", `"${sourcePath}" is a directory; set recursive to true to move it`, { path: source, destination, recursive: opts.recursive });
       }
 
       // Check if moving a directory would expose restricted files
@@ -81,13 +82,13 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 
       const destExists = await pathExists(destPath);
       if (destExists && !opts.overwrite) {
-        throw new Error(`"${destPath}" already exists; set overwrite to true to replace it`);
+        throw toolError("move", `"${destPath}" already exists; set overwrite to true to replace it`, { path: source, destination, overwrite: opts.overwrite });
       }
 
       try {
         await fs.mkdir(path.dirname(destPath), { recursive: true });
       } catch (err) {
-        throw new Error(`Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`);
+        throw toolError("move", `Could not create directory "${path.dirname(destPath)}": ${(err as Error).message}`, { path: source, destination });
       }
 
       if (destExists) {
@@ -98,7 +99,7 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
         await fs.rename(sourcePath, destPath);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "EXDEV") {
-          throw new Error(`Could not move "${sourcePath}" to "${destPath}": ${(err as Error).message}`);
+          throw toolError("move", `Could not move "${sourcePath}" to "${destPath}": ${(err as Error).message}`, { path: source, destination, recursive: opts.recursive, overwrite: opts.overwrite });
         }
         // fs.cp doesn't accept a `signal` option, so the EXDEV fallback's copy step can't be
         // interrupted mid-flight; removeRecursively's own signal checks still apply to deleting
@@ -108,7 +109,7 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
           await removeRecursively(sourcePath, opts.signal);
         } catch (fallbackErr) {
           if ((fallbackErr as NodeJS.ErrnoException).name === "AbortError") throw fallbackErr;
-          throw new Error(`Could not move "${sourcePath}" to "${destPath}": ${(fallbackErr as Error).message}`);
+          throw toolError("move", `Could not move "${sourcePath}" to "${destPath}": ${(fallbackErr as Error).message}`, { path: source, destination, recursive: opts.recursive, overwrite: opts.overwrite });
         }
       }
     })

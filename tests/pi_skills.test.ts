@@ -175,7 +175,7 @@ test("two skills with the same name are refused rather than guessed at", async (
 
   const skills = await discoverSkills({ agentDir: path.join(dir, "agent"), cwd: dir, homeDir: path.join(dir, "home") });
   assert.equal(skills.length, 2);
-  assert.throws(() => resolveSkillRequest(skills, "dup"), /ambiguous: 2 skills named "dup"/);
+  assert.throws(() => resolveSkillRequest(skills, "dup"), /"dup" matches 2 skills:/);
 });
 
 test("reading a bundled file requires naming the skill it belongs to", async (t) => {
@@ -183,8 +183,13 @@ test("reading a bundled file requires naming the skill it belongs to", async (t)
   t.after(() => cleanupFixture(dir));
 
   const skills = await discoverSkills(roots);
-  assert.throws(() => resolveSkillRequest(skills, undefined, "references/guide.md"), /"path" only makes sense/);
-  assert.equal(resolveSkillRequest(skills, "project-skill"), undefined); // no skill asked for -> listing
+  assert.throws(
+    () => resolveSkillRequest(skills, undefined, "references/guide.md"),
+    /pi_skills needs "skill" when "path" is given/
+  );
+  const resolved = resolveSkillRequest(skills, "project-skill");
+  assert.equal(resolved?.skill.name, "project-skill");
+  assert.equal(resolved?.file, "SKILL.md"); // no file asked for -> the skill's SKILL.md
 });
 
 test("a bundled file path is always relative to its own skill directory", async (t) => {
@@ -258,12 +263,13 @@ test("the listing names each skill, where it came from, what it is for and how t
 
   const text = formatSkillListing(await discoverSkills(roots));
 
-  assert.ok(text.includes("project-skill (project): Always load for this project"), text);
-  assert.ok(text.includes("brain (package): Brain agent memory management"), text);
-  assert.ok(text.includes("agent-skill (user): Personal skill"), text);
+  assert.ok(text.includes("project-skill [project]"), text);
+  assert.ok(text.includes("Always load for this project"), text);
+  assert.ok(text.includes("brain [package]"), text);
+  assert.ok(text.includes("agent-skill [user]"), text);
   assert.ok(text.includes(path.join("project", ".agents", "skills", "project-skill", "SKILL.md")), text);
-  assert.ok(text.includes('pi_skills skill="project-skill" path="references/guide.md"'), text);
-  assert.ok(text.includes("plain-skill (project)"), text); // no description, still listed
+  assert.ok(text.includes('Read one with pi_skills(skill="name")'), text);
+  assert.ok(text.includes("plain-skill [project]"), text); // no description, still listed
 });
 
 test("the listing shows where the truncation happened and how many skills exist", async (t) => {
@@ -271,8 +277,8 @@ test("the listing shows where the truncation happened and how many skills exist"
   t.after(() => cleanupFixture(dir));
 
   const text = formatSkillListing(await discoverSkills(roots), 2);
-  assert.ok(text.includes("7 skills available (2 shown)"), text);
-  assert.ok(text.includes("… 5 more skills not shown"), text);
+  assert.ok(text.includes("Skills Pi can load (7):"), text);
+  assert.ok(text.includes("… 5 more skill(s) not listed"), text);
 });
 
 // --- caching -------------------------------------------------------------------------------

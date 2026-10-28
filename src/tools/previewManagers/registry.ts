@@ -3,6 +3,7 @@ import { PythonPreviewManager } from "./python.ts";
 import { TypeScriptPreviewManager } from "./typescript.ts";
 import { CSharpPreviewManager } from "./csharp.ts";
 import { MarkdownPreviewManager } from "./markdown.ts";
+import { StructuredDataPreviewManager } from "./structuredData.ts";
 
 /**
  * Every PreviewManager `peek` knows about. Peek mode is selected purely by file extension: the
@@ -14,6 +15,9 @@ export const PREVIEW_MANAGERS: readonly PreviewManager[] = [
   new TypeScriptPreviewManager(),
   new CSharpPreviewManager(),
   new MarkdownPreviewManager(),
+  new StructuredDataPreviewManager("json", [".json"], "json"),
+  new StructuredDataPreviewManager("yaml", [".yaml", ".yml"], "yaml"),
+  new StructuredDataPreviewManager("toml", [".toml"], "toml"),
 ];
 
 const BY_EXTENSION = new Map<string, PreviewManager>();

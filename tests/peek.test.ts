@@ -26,8 +26,10 @@ test("selects the PreviewManager by file extension (case-insensitive)", () => {
   assert.equal(previewManagerFor(".mjs")?.language, "typescript");
   assert.equal(previewManagerFor(".cs")?.language, "csharp");
   assert.equal(previewManagerFor(".md")?.language, "markdown");
-  assert.equal(previewManagerFor(".json"), undefined);
-  for (const ext of [".py", ".ts", ".cs", ".md"]) assert.ok(PEEK_EXTENSIONS.includes(ext));
+  assert.equal(previewManagerFor(".json")?.language, "json");
+  assert.equal(previewManagerFor(".YAML")?.language, "yaml");
+  assert.equal(previewManagerFor(".toml")?.language, "toml");
+  for (const ext of [".py", ".ts", ".cs", ".md", ".json", ".yaml", ".toml"]) assert.ok(PEEK_EXTENSIONS.includes(ext));
 });
 
 test("called with only a path: public overview with line numbers, no bodies", async (t) => {
@@ -55,18 +57,18 @@ test("visibility is inclusive: protected adds _names, private shows everything",
 });
 
 test("rejects unsupported extensions with a hint to use read", async (t) => {
-  const dir = await makeFixture({ "data.json": "{}" });
+  const dir = await makeFixture({ "data.csv": "a,b" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(peekFile(new Sandbox(dir), "data.json"), /does not support "\.json".*Use read/s);
+  await assert.rejects(peekFile(new Sandbox(dir), "data.csv"), /does not support "\.csv".*Use read/s);
 });
 
 test("rejects directories, missing files and binary files", async (t) => {
   const dir = await makeFixture({ "pkg.py/x.py": "def f(): pass", "bin.py": "def f():\0" });
   t.after(() => cleanupFixture(dir));
 
-  await assert.rejects(peekFile(new Sandbox(dir), "pkg.py"), /Could not read file.*EISDIR/);
-  await assert.rejects(peekFile(new Sandbox(dir), "missing.py"), /Could not read file.*ENOENT/);
+  await assert.rejects(peekFile(new Sandbox(dir), "pkg.py"), /Could not read file.*is a directory/);
+  await assert.rejects(peekFile(new Sandbox(dir), "missing.py"), /Could not read file.*file not found/);
   await assert.rejects(peekFile(new Sandbox(dir), "bin.py"), /binary/);
 });
 

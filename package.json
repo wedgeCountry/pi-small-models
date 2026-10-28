@@ -31,7 +31,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test tests/*.test.ts tests/*/*.test.ts",
     "test:grep": "tsx --test tests/grep.test.ts",
     "start": "tsx index.ts"
   },

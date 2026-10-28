@@ -213,7 +213,7 @@ test("a missing documentation path is reported as a miss, not as a host path", a
   t.after(() => cleanupFixture(dir));
 
   await assert.rejects(
-    () => readPiDocs(await docsLocation(roots), "docs/nope.md"),
+    async () => readPiDocs(await docsLocation(roots), "docs/nope.md"),
     /"docs\/nope\.md" does not exist in Pi 1\.4\.0's documentation/
   );
 });
@@ -271,7 +271,7 @@ test("a symlink inside docs/ that points outside the package root is rejected", 
   const packageRoot = path.join(dir, PKG_REL);
   if (!(await trySymlink(t, path.join(dir, "outside", "secret.txt"), path.join(packageRoot, "docs", "link.md")))) return;
 
-  await assert.rejects(() => readPiDocs(await docsLocation(roots), "docs/link.md"), SandboxError);
+  await assert.rejects(async () => readPiDocs(await docsLocation(roots), "docs/link.md"), SandboxError);
 });
 
 test("a symlink inside docs/ that points into the package's own source is still out of scope", async (t) => {
@@ -284,7 +284,7 @@ test("a symlink inside docs/ that points into the package's own source is still 
   if (!(await trySymlink(t, path.join(packageRoot, "src", "core", "internal.ts"), path.join(packageRoot, "docs", "leak.md"))))
     return;
 
-  await assert.rejects(() => readPiDocs(await docsLocation(roots), "docs/leak.md"), /is not part of Pi's documentation/);
+  await assert.rejects(async () => readPiDocs(await docsLocation(roots), "docs/leak.md"), /is not part of Pi's documentation/);
 });
 
 test("protected policy paths are blocked inside the docs tree as well", async (t) => {

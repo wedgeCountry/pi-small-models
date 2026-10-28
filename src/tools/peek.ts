@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
 
@@ -43,21 +44,23 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
   const ext = path.extname(target);
   const manager = previewManagerFor(ext);
   if (!manager) {
-    throw new Error(
+    throw toolError(
+      "peek",
       `peek does not support "${ext || path.basename(target)}" files. Supported extensions: ` +
-        `${PEEK_EXTENSIONS.join(", ")}. Use read with peek=false to view this file instead.`
+        `${PEEK_EXTENSIONS.join(", ")}. Use read with peek=false to view this file instead.`,
+      { path: target }
     );
   }
 
   const maxDepth = opts.maxDepth ?? 6;
   if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > 6) {
-    throw new Error(`maxDepth must be an integer from 1 to 6, got ${opts.maxDepth}`);
+    throw toolError("peek", `maxDepth must be an integer from 1 to 6, got ${opts.maxDepth}`, { path: target, maxDepth: opts.maxDepth });
   }
 
   // `uncapped`: peek has to see the whole file to outline it; its own output is capped below.
   const read = await readFile(sb, target, { uncapped: true, signal: opts.signal });
   const allLines = read.lines.map((l) => l.text);
-  if (allLines.some((l) => l.includes("\0"))) throw new Error(`Could not peek "${target}": it looks like a binary file.`);
+  if (allLines.some((l) => l.includes("\0"))) throw toolError("peek", `Could not peek "${target}": it looks like a binary file.`, { path: target });
   opts.signal?.throwIfAborted();
   let lines = manager.preview(allLines, {
     visibility: opts.visibility ?? "public",

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { readFile } from "../src/tools/read.ts";
+import { readFile, getExtension, registerReadTool } from "../src/tools/read.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 
@@ -211,4 +211,220 @@ test("read with peek=false on supported extension uses standard read mode", asyn
   assert.equal(result.truncated, false, "Should not be truncated since file < DEFAULT_MAX_LINES");
   assert.equal(result.lines[0]!.text, "line1", "First line should be actual content");
   assert.equal(result.lines[299]!.text, "line300", "Last line should be actual content");
+});
+
+test("strips a UTF-8 BOM", async (t) => {
+  const dir = await makeFixture({ "bom.txt": Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("héllo")]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "bom.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("decodes UTF-16LE with BOM", async (t) => {
+  const dir = await makeFixture({ "u16le.txt": Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("héllo", "utf16le")]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "u16le.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("decodes UTF-16BE with BOM", async (t) => {
+  const dir = await makeFixture({ "u16be.txt": Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from("héllo", "utf16le").swap16()]) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "u16be.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "héllo" }]);
+});
+
+test("rejects binary files containing NUL bytes", async (t) => {
+  const dir = await makeFixture({ "bin.dat": Buffer.from([0x4d, 0x5a, 0x00, 0x01, 0x02]) });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    readFile(new Sandbox(dir), path.join(dir, "bin.dat")),
+    /binary file/,
+  );
+});
+
+test("getExtension handles plain, multi-dot, dotfile, and case variants", () => {
+  assert.equal(getExtension("a.txt"), ".txt");
+  assert.equal(getExtension("archive.tar.gz"), ".gz");
+  assert.equal(getExtension("noext"), "");
+  assert.equal(getExtension(".gitignore"), ".gitignore");
+  assert.equal(getExtension("IMG.PNG"), ".png");
+});
+
+test("totalLines counts a trailing newline as a line terminator, not an extra line", async (t) => {
+  const dir = await makeFixture({ "a.txt": "line1\nline2\nline3\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"));
+  assert.equal(result.totalLines, 4);
+  assert.equal(result.truncated, false);
+});
+
+test("totalLines counts a lone trailing newline as an empty final line", async (t) => {
+  const dir = await makeFixture({ "a.txt": "\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "a.txt"));
+  assert.equal(result.totalLines, 2);
+  assert.deepEqual(result.lines, [
+    { line: 1, text: "" },
+    { line: 2, text: "" },
+  ]);
+});
+
+test("throws when the offset is past the end of the file", async (t) => {
+  const dir = await makeFixture({ "a.txt": "line1\nline2" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 3 }),
+    /beyond end of file \(2 line/,
+  );
+});
+
+test("rejects an offset far beyond the end of the file", async (t) => {
+  const dir = await makeFixture({ "a.txt": "line1\nline2" });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    readFile(new Sandbox(dir), path.join(dir, "a.txt"), { offset: 99 }),
+    /beyond end of file/,
+  );
+});
+
+test("does not flag a large text file as binary", async (t) => {
+  const dir = await makeFixture({ "big.txt": "line\n".repeat(20 * 1024) + "payload" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "big.txt"), { offset: 1, limit: 1 });
+  assert.equal(result.lines[0]!.text, "line");
+});
+
+test("throws for a file that starts as text but contains a NUL byte", async (t) => {
+  const dir = await makeFixture({ "sneaky.txt": Buffer.concat([Buffer.from("hello\nworld\n"), Buffer.from([0x00, 0x01])]) });
+  t.after(() => cleanupFixture(dir));
+
+  await assert.rejects(
+    readFile(new Sandbox(dir), path.join(dir, "sneaky.txt")),
+    /binary file/,
+  );
+});
+
+test("does not flag a file with U+FEFF mid-content (not a BOM, not a NUL)", async (t) => {
+  const dir = await makeFixture({ "zwsp.txt": "before\uFEFFafter" });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "zwsp.txt"));
+  assert.deepEqual(result.lines, [{ line: 1, text: "before\uFEFFafter" }]);
+});
+
+test("read's peek parameter: default returns an outline, peek=false returns raw contents", async (t) => {
+  const dir = await makeFixture({
+    "api.py": "def public_fn():\n    pass\n\ndef _private_fn():\n    pass\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const registered: Record<string, unknown> = {};
+  registerReadTool({
+    registerTool: (tool: Record<string, unknown>) => Object.assign(registered, tool),
+  } as never);
+  const execute = registered["execute"] as (
+    id: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: unknown,
+    ctx?: { cwd: string },
+  ) => Promise<{ content: { type: string; text: string }[]; details: Record<string, unknown> }>;
+
+  const outlined = await execute("t1", { path: path.join(dir, "api.py") }, undefined, undefined, { cwd: dir });
+  assert.equal(outlined.details["peek"], true);
+  assert.equal(outlined.details["language"], "python");
+  assert.match(outlined.content[0]!.text, /public_fn/);
+  assert.doesNotMatch(outlined.content[0]!.text, /_private_fn/);
+
+  const raw = await execute("t2", { path: path.join(dir, "api.py"), peek: false }, undefined, undefined, { cwd: dir });
+  assert.equal(raw.details["peek"], false);
+  assert.match(raw.content[0]!.text, /_private_fn/);
+  assert.match(raw.content[0]!.text, /^1:def public_fn\(\):/m);
+});
+
+test("read with offset forces raw contents even though peek defaults to true", async (t) => {
+  const dir = await makeFixture({
+    "api.py": "def public_fn():\n    pass\n\ndef _private_fn():\n    pass\n",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const registered: Record<string, unknown> = {};
+  registerReadTool({
+    registerTool: (tool: Record<string, unknown>) => Object.assign(registered, tool),
+  } as never);
+  const execute = registered["execute"] as (
+    id: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: unknown,
+    ctx?: { cwd: string },
+  ) => Promise<{ content: { type: string; text: string }[]; details: Record<string, unknown> }>;
+
+  const raw = await execute("t1", { path: path.join(dir, "api.py"), offset: 3, limit: 2 }, undefined, undefined, { cwd: dir });
+  assert.equal(raw.details["peek"], false);
+  assert.match(raw.content[0]!.text, /^3:$/m);
+  assert.match(raw.content[0]!.text, /^4:def _private_fn\(\):/m);
+});
+
+test("read with peek=true falls back to raw contents for unsupported extensions", async (t) => {
+  const dir = await makeFixture({ "data.txt": "plain text\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const registered: Record<string, unknown> = {};
+  registerReadTool({
+    registerTool: (tool: Record<string, unknown>) => Object.assign(registered, tool),
+  } as never);
+  const execute = registered["execute"] as (
+    id: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: unknown,
+    ctx?: { cwd: string },
+  ) => Promise<{ content: { type: string; text: string }[]; details: Record<string, unknown> }>;
+
+  const raw = await execute("t1", { path: path.join(dir, "data.txt") }, undefined, undefined, { cwd: dir });
+  assert.equal(raw.details["peek"], false);
+  assert.match(raw.content[0]!.text, /^1:plain text$/m);
+});
+
+test("read with peek=true propagates real errors (missing file), not just unsupported extensions", async (t) => {
+  const dir = await makeFixture({ "a.py": "x = 1\n" });
+  t.after(() => cleanupFixture(dir));
+
+  const registered: Record<string, unknown> = {};
+  registerReadTool({
+    registerTool: (tool: Record<string, unknown>) => Object.assign(registered, tool),
+  } as never);
+  const execute = registered["execute"] as (
+    id: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: unknown,
+    ctx?: { cwd: string },
+  ) => Promise<unknown>;
+
+  await assert.rejects(
+    execute("t1", { path: path.join(dir, "missing.py") }, undefined, undefined, { cwd: dir }),
+    /Could not read file/,
+  );
+});
+
+test("uncapped reads bypass the byte cap entirely", async (t) => {
+  const lineCount = 12801;
+  const dir = await makeFixture({ "big.txt": "aaa\n".repeat(lineCount) });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await readFile(new Sandbox(dir), path.join(dir, "big.txt"), { uncapped: true });
+  assert.equal(result.lines.length, lineCount + 1);
+  assert.equal(result.truncated, false);
 });

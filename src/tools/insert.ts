@@ -5,6 +5,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
@@ -19,7 +20,7 @@ export interface InsertOptions {
  */
 export async function insertText(sb: Sandbox, target: string, line: number, text: string, opts: InsertOptions = {}): Promise<void> {
   if (!Number.isInteger(line) || line < 0) {
-    throw new Error(`line must be a non-negative integer, got ${line}`);
+    throw toolError("insert", `line must be a non-negative integer, got ${line}`, { path: target, line, text });
   }
 
   const filePath = sb.resolve(target);
@@ -32,7 +33,7 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
       content = await fs.readFile(filePath, { encoding: "utf8", signal: opts.signal });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
-      throw new Error(`Could not read file "${filePath}": ${(err as Error).message}`);
+      throw toolError("insert", `Could not read file "${filePath}": ${(err as Error).message}`, { path: target, line });
     }
 
     // Detect and preserve the file's line ending so the inserted text doesn't end up
@@ -41,7 +42,7 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
     const lines = content.split(/\r\n|\n/);
     if (line > lines.length) {
-      throw new Error(`line ${line} is past the end of "${filePath}" (${lines.length} line(s))`);
+      throw toolError("insert", `line ${line} is past the end of "${filePath}" (${lines.length} line(s))`, { path: target, line, text });
     }
 
     lines.splice(line, 0, ...text.split(/\r\n|\n/));

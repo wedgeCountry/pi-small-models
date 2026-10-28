@@ -8,6 +8,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolError } from "../backend/formatError.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -47,7 +48,7 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
   const entries: ListEntry[] = [];
 
   async function walk(dir: string, relPrefix: string, depth: number): Promise<void> {
-    if (opts.signal?.aborted) throw new Error("Aborted");
+    if (opts.signal?.aborted) throw toolError("list", "Aborted", { path: target });
     const dirents = await fs.readdir(dir, { withFileTypes: true });
     const filtered = dirents
       .filter((d) => opts.showHidden || !d.name.startsWith("."))
