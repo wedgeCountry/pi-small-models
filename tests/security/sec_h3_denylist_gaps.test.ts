@@ -12,6 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as os from "node:os";
+import * as path from "node:path";
 import { isRestricted } from "../../src/sandbox/policy.ts";
 import { Sandbox } from "../../src/sandbox/sandbox.ts";
 
@@ -40,10 +41,16 @@ for (const rel of SHOULD_BE_RESTRICTED) {
 
 test("H3: a sandbox rooted at the user's home directory must refuse to operate", () => {
   const home = os.homedir();
-  const sb = new Sandbox(home); // enforced
   // With $HOME as root, ~/.bashrc, ~/.pi/agent/auth.json, ~/.mozilla, etc. are all "inside root".
+  // The constructor rejects the home directory as a project root.
   assert.throws(
-    () => sb.resolve(".bashrc"),
-    "SECURITY: the sandbox allowed access under $HOME; home/filesystem roots should be rejected"
+    () => new Sandbox(home),
+    "SECURITY: the sandbox allowed $HOME as root; home/filesystem roots should be rejected"
   );
+});
+
+test("H3: a sandbox rooted under the user's home directory still operates", () => {
+  const sub = path.join(os.homedir(), "project-subdir");
+  const sb = new Sandbox(sub); // must not throw: only the home directory itself is rejected
+  assert.equal(sb.root, sub);
 });

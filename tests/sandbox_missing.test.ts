@@ -159,6 +159,48 @@ test("hasRestrictedDescendant: handles broken symlinks gracefully", async (t) =>
   assert.equal(await sb.hasRestrictedDescendant(path.join(dir, "project")), false);
 });
 
+test("hasRestrictedDescendant: terminates on symlink pointing to ancestor directory", async (t) => {
+  const dir = await makeFixture({
+    "project/src/index.ts": "const x = 1;",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  // A symlink pointing at an ancestor directory: without cycle detection the
+  // walk recurses into the same directory forever (stack overflow).
+  if (!(await trySymlink(t, "..", path.join(dir, "project", "src", "back")))) return;
+
+  const sb = new Sandbox(dir);
+  assert.equal(await sb.hasRestrictedDescendant(path.join(dir, "project")), false);
+});
+
+test("hasRestrictedDescendant: terminates on symlink cycle between directories", async (t) => {
+  const dir = await makeFixture({
+    "project/a/keep.txt": "a",
+    "project/b/keep.txt": "b",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  if (!(await trySymlink(t, "../b", path.join(dir, "project", "a", "to-b")))) return;
+  if (!(await trySymlink(t, "../a", path.join(dir, "project", "b", "to-a")))) return;
+
+  const sb = new Sandbox(dir);
+  assert.equal(await sb.hasRestrictedDescendant(path.join(dir, "project")), false);
+});
+
+test("hasRestrictedDescendant: still detects restricted content through symlink cycle", async (t) => {
+  const dir = await makeFixture({
+    "project/a/keep.txt": "a",
+    "project/b/.env": "SECRET=1",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  if (!(await trySymlink(t, "../b", path.join(dir, "project", "a", "to-b")))) return;
+  if (!(await trySymlink(t, "../a", path.join(dir, "project", "b", "to-a")))) return;
+
+  const sb = new Sandbox(dir);
+  assert.equal(await sb.hasRestrictedDescendant(path.join(dir, "project")), true);
+});
+
 test("hasRestrictedDescendant: checks the directory itself", async () => {
   const dir = await makeFixture({
     "project/.git/config": "[core]",
