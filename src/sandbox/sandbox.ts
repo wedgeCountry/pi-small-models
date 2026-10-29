@@ -61,6 +61,15 @@ export class Sandbox {
 
   constructor(root: string, enforced: boolean = true) {
     this.root = path.resolve(root);
+
+    // Prevent using the home directory as a project root
+    if (this.root === os.homedir()) {
+      throw new SandboxError(
+        "outside-root",
+        `Sandbox root "${this.root}" is the user's home directory, which cannot be used as a project root`
+      );
+    }
+
     this.enforced = enforced;
   }
 
@@ -194,14 +203,6 @@ export class Sandbox {
     // gets properly detected regardless of the host platform
     let normalizedTarget = target.replace(/\\/g, '/');
 
-    // Prevent using home directory as project root
-    if (this.root === os.homedir()) {
-      throw new SandboxError(
-        "outside-root",
-        `Path "${target}" is the user's home directory, which cannot be used as a project root`
-      );
-    }
-
     // Resolve to absolute path using normalized target
     const absolutePath = path.resolve(this.root, normalizedTarget || ".");
     
@@ -295,7 +296,7 @@ export class Sandbox {
    */
   allowsReported(relPath: string): boolean {
     if (!this.enforced) return true;
-    return !isRestricted(relPath);
+    return isInside(relPath) && !isRestricted(relPath);
   }
 
   /**
@@ -321,15 +322,20 @@ export class Sandbox {
       throw err;
     }
 
-    // Walk the directory tree
-    return this.walkDirectoryForRestricted(dirPath);
+    // Walk the directory tree, tracking visited directories to terminate on cycles
+    return this.walkDirectoryForRestricted(dirPath, new Set());
   }
 
   /**
    * Recursively walk a directory to check for restricted entries.
    * Uses the same validation logic as entryFilter for consistency.
    */
-  private async walkDirectoryForRestricted(dir: string): Promise<boolean> {
+  private async walkDirectoryForRestricted(dir: string, visited: Set<string>): Promise<boolean> {
+    const realDir = resolveRealPathWithFallback(dir);
+    if (visited.has(realDir)) {
+      return false;
+    }
+    visited.add(realDir);
     const entries = await fsPromises.readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
@@ -362,7 +368,7 @@ export class Sandbox {
 
       // For directories and symlinks to directories, recurse
       if (entry.isDirectory()) {
-        if (await this.walkDirectoryForRestricted(fullPath)) {
+        if (await this.walkDirectoryForRestricted(fullPath, visited)) {
           return true;
         }
       } else if (isSymlink) {
@@ -374,7 +380,7 @@ export class Sandbox {
             // Validate the symlink target is within bounds
             try {
               this.resolve(realPath);
-              if (await this.walkDirectoryForRestricted(realPath)) {
+              if (await this.walkDirectoryForRestricted(realPath, visited)) {
                 return true;
               }
             } catch (err) {

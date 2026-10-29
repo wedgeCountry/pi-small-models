@@ -118,7 +118,16 @@ export function isRestricted(relPath: string): boolean {
   return posix !== "" && picomatch.isMatch(posix, RESTRICTED_GLOBS as string[], MATCH_OPTIONS);
 }
 
-/** True if `relPath` (from `path.relative`) stays inside its root: no `..` escape, not absolute. */
+/** True if `relPath` (from `path.relative`) stays inside its root: no `..` escape, not absolute.
+ * Separator- and platform-agnostic: rejects `..` escapes written with either `/` or `\`, and
+ * absolute paths in POSIX (`/etc`), Windows drive (`C:\\...`), or UNC (`\\\\server\\...`) form,
+ * regardless of the platform the check runs on. */
 export function isInside(relPath: string): boolean {
-  return relPath !== ".." && !relPath.startsWith(`..${path.sep}`) && !path.isAbsolute(relPath);
+  const posix = relPath.split(/[\\/]/).join("/");
+  return (
+    !posix.split("/").includes("..") &&
+    !path.isAbsolute(relPath) &&
+    !posix.startsWith("/") &&
+    !/^[A-Za-z]:/.test(posix)
+  );
 }

@@ -78,6 +78,29 @@ test("policy: isInside rejects parent escapes and absolute paths", () => {
   assert.equal(isInside(path.resolve("/elsewhere")), false);
 });
 
+test("policy: isInside is separator- and platform-agnostic (POSIX paths)", () => {
+  assert.equal(isInside("src/a.ts"), true);
+  assert.equal(isInside("a/b/c.txt"), true);
+  assert.equal(isInside("..."), true); // literal dot-dot-dot filename is inside
+  assert.equal(isInside("a..b/file.txt"), true); // '..' inside a name is fine
+  assert.equal(isInside("../secret"), false);
+  assert.equal(isInside("a/../../secret"), false);
+  assert.equal(isInside("/etc/passwd"), false); // POSIX-absolute
+});
+
+test("policy: isInside is separator- and platform-agnostic (Windows paths)", () => {
+  // Escapes written with backslashes must be rejected on every platform
+  assert.equal(isInside("..\\secret"), false);
+  assert.equal(isInside("a\\..\\..\\secret"), false);
+  // Windows-absolute forms must be rejected on every platform
+  assert.equal(isInside("C:\\Users\\victim\\notes.txt"), false); // drive letter
+  assert.equal(isInside("c:\\Users\\victim\\notes.txt"), false); // lowercase drive
+  assert.equal(isInside("\\\\server\\share\\secret.txt"), false); // UNC
+  // A backslash is a legal POSIX filename character: backslash-only names stay inside
+  assert.equal(isInside("a\\b"), true);
+  assert.equal(isInside("..foo\\bar"), true);
+});
+
 // --- B1: state switch ------------------------------------------------------------------------
 
 test("B1: the switch starts on, and sandboxFor snapshots it per call", (t) => {
@@ -200,6 +223,20 @@ test("B5: allowsReported filters root-relative paths by the protected patterns",
   assert.equal(sandbox.allowsReported("config/.git/HEAD"), false);
 });
 
+test("B5: allowsReported rejects paths outside the root, POSIX and Windows forms", () => {
+  // POSIX escapes and absolutes
+  assert.equal(sandbox.allowsReported("../outside.txt"), false);
+  assert.equal(sandbox.allowsReported("a/../../outside.txt"), false);
+  assert.equal(sandbox.allowsReported("/etc/passwd"), false);
+  // Windows escapes and absolutes
+  assert.equal(sandbox.allowsReported("..\\outside.txt"), false);
+  assert.equal(sandbox.allowsReported("C:\\Users\\victim\\notes.txt"), false);
+  assert.equal(sandbox.allowsReported("\\\\server\\share\\secret.txt"), false);
+  // Ordinary paths, either separator, stay allowed
+  assert.equal(sandbox.allowsReported("src\\a.ts"), true);
+  assert.equal(sandbox.allowsReported("deep/nested/file.txt"), true);
+});
+
 // --- B6: unenforced sandbox ------------------------------------------------------------------
 
 test("B6: an unenforced sandbox checks nothing", () => {
@@ -208,6 +245,7 @@ test("B6: an unenforced sandbox checks nothing", () => {
   assert.equal(off.resolve(".git/config"), path.join(root, ".git", "config"));
   assert.equal(off.entryFilter(root)(".ssh/id_rsa", true), true);
   assert.equal(off.allowsReported(".env"), true);
+  assert.equal(off.allowsReported("../outside.txt"), true); // isInside skipped when unenforced
 });
 
 // --- B7: error messages ----------------------------------------------------------------------
