@@ -7,7 +7,7 @@ import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {oneLine, callName} from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface FindOptions {
@@ -113,7 +113,7 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
 
 export function registerFindTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(FIND_TOOL_DEFINITION, {
+    createTool(FIND_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "find")} ${theme.fg("accent", args.pattern ?? "")}`;
         text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

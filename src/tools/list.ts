@@ -7,7 +7,7 @@ import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface ListOptions {
@@ -76,7 +76,7 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
 
 export function registerListTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(LIST_TOOL_DEFINITION, {
+    createTool(LIST_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
         if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);

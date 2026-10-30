@@ -3,7 +3,7 @@ import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface MakeDirOptions {
@@ -30,7 +30,7 @@ export async function makeDir(sb: Sandbox, target: string, opts: MakeDirOptions 
 
 export function registerMkdirTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(MKDIR_TOOL_DEFINITION, {
+    createTool(MKDIR_TOOL_DEFINITION, {
       renderCall(args, theme) {
         return oneLine(`${callName(theme, "mkdir")} ${theme.fg("accent", args.path ?? "")}`);
       },

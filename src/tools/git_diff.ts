@@ -4,7 +4,7 @@ import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -180,7 +180,7 @@ function describeError(err: unknown): string {
 
 export function registerGitDiffTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(GIT_DIFF_TOOL_DEFINITION, {
+    createTool(GIT_DIFF_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = callName(theme, "git_diff");
         if (args.nameOnly) text += theme.fg("toolOutput", " --name-only");

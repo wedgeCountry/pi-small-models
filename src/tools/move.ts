@@ -6,7 +6,7 @@ import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface MoveOptions {
@@ -118,7 +118,7 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 
 export function registerMoveTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(MOVE_TOOL_DEFINITION, {
+    createTool(MOVE_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "move")} ${theme.fg("accent", args.path ?? "")} ${theme.fg(
           "toolOutput",

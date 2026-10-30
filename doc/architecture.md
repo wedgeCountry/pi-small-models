@@ -48,7 +48,7 @@ classes, instantiation, member access, and calls. Python includes a whole-scope 
 
 ## Backend infrastructure
 
-Shared utilities live in `src/backend/`: `defineTool.ts` (builds the `pi.registerTool()` object from a
+Shared utilities live in `src/backend/`: `createTool.ts` (builds the `pi.registerTool()` object from a
 definition plus `renderCall`/`execute` hooks, applying the shared `prepareArguments` validation wrapper),
 `renderCall.ts` (tool call rendering), `toolValidation.ts` (validation utilities),
 and `grepWorker.ts`/`grepWorker.mjs` (worker thread for grep operations).

@@ -4,7 +4,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface InsertOptions {
@@ -52,7 +52,7 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
 
 export function registerInsertTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(INSERT_TOOL_DEFINITION, {
+    createTool(INSERT_TOOL_DEFINITION, {
       renderCall(args, theme) {
         const text = `${callName(theme, "insert")} ${theme.fg("accent", args.path ?? "")}`;
         return oneLine(text + theme.fg("toolOutput", ` after line ${args.line}`));

@@ -3,7 +3,7 @@ import { LSTAT_TOOL_DEFINITION } from "../tool_definitions/lstat.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface LstatResult {
@@ -35,7 +35,7 @@ export async function lstatPath(sb: Sandbox, target: string): Promise<LstatResul
 
 export function registerLstatTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(LSTAT_TOOL_DEFINITION, {
+    createTool(LSTAT_TOOL_DEFINITION, {
       renderCall(args, theme) {
         return oneLine(`${callName(theme, "lstat")} ${theme.fg("accent", args.path ?? "")}`);
       },

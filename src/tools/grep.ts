@@ -7,7 +7,7 @@ import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import path from "node:path";
 
@@ -180,7 +180,7 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
 
 export function registerGrepTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(GREP_TOOL_DEFINITION, {
+    createTool(GREP_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.regex ?? ""}/`)}`;
         text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

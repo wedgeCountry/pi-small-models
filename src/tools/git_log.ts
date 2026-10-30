@@ -4,7 +4,7 @@ import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -97,7 +97,7 @@ export function formatGitLog(result: GitLogResult): string {
 
 export function registerGitLogTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(GIT_LOG_TOOL_DEFINITION, {
+    createTool(GIT_LOG_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = callName(theme, "git_log");
         if (args.maxCount) text += theme.fg("toolOutput", ` -${args.maxCount}`);

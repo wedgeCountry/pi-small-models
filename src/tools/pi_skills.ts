@@ -8,7 +8,7 @@ import {
 } from "../sandbox/piRoots.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 
@@ -167,7 +167,7 @@ function renderSkillFile(request: ResolvedSkillRequest, result: ReadResult): str
  */
 export function registerPiSkillsTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(PI_SKILLS_TOOL_DEFINITION, {
+    createTool(PI_SKILLS_TOOL_DEFINITION, {
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       renderCall(args, theme) {
         const skill = (args.skill ?? "").trim();

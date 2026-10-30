@@ -6,7 +6,7 @@ import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../commands/ignor
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
@@ -189,7 +189,7 @@ export async function findUsages(
 
 export function registerFindUsagesTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(FIND_USAGES_TOOL_DEFINITION, {
+    createTool(FIND_USAGES_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
         text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);

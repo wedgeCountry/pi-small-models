@@ -4,7 +4,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../backend/mutationQueue.ts";
 import {oneLine, callName} from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface EditOptions {
@@ -237,7 +237,7 @@ export async function editFile(
 
 export function registerEditTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(EDIT_TOOL_DEFINITION, {
+    createTool(EDIT_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "edit")} ${theme.fg("accent", args.path ?? "")}`;
         text += theme.fg("toolOutput", "");

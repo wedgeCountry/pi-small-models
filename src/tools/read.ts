@@ -4,7 +4,7 @@ import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 import { peekFile, renderPeekResult } from "./peek.ts";
@@ -338,7 +338,7 @@ async function readFileStreaming(
 
 export function registerReadTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(READ_TOOL_DEFINITION, {
+    createTool(READ_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
         const flags: string[] = [];

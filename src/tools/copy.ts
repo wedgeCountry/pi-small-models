@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface CopyOptions {
@@ -92,7 +92,7 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
 
 export function registerCopyTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(COPY_TOOL_DEFINITION, {
+    createTool(COPY_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "copy")} ${theme.fg("accent", args.path ?? "")} ${theme.fg(
           "toolOutput",

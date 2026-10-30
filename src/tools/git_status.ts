@@ -4,7 +4,7 @@ import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -105,7 +105,7 @@ function describeError(err: unknown): string {
 
 export function registerGitStatusTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(GIT_STATUS_TOOL_DEFINITION, {
+    createTool(GIT_STATUS_TOOL_DEFINITION, {
       renderCall(args, theme) {
         const text = callName(theme, "git_status");
         return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);

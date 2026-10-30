@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 
 export interface SearchOptions {
   maxResults?: number;
@@ -38,7 +38,7 @@ export async function searchFiles(
 
 export function registerSearchTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(SEARCH_TOOL_DEFINITION, {
+    createTool(SEARCH_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "search")} ${theme.fg("accent", args.pattern ?? "")}`;
         text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);

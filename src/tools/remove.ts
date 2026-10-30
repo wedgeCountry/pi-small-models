@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxError} from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface RemoveOptions {
@@ -86,7 +86,7 @@ export async function removePath(sb: Sandbox, target: string, opts: RemoveOption
 
 export function registerRemoveTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(REMOVE_TOOL_DEFINITION, {
+    createTool(REMOVE_TOOL_DEFINITION, {
       renderCall(args, theme) {
         let text = `${callName(theme, "remove")} ${theme.fg("accent", args.path ?? "")}`;
         if (args.recursive) text += theme.fg("toolOutput", " (recursive)");

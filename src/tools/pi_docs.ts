@@ -14,7 +14,7 @@ import {
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import type { Sandbox } from "../sandbox/sandbox.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
-import { defineTool } from "../backend/defineTool.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 import type { ListEntry } from "./list.ts";
@@ -238,7 +238,7 @@ async function statExisting(absolute: string, rel: string, version: string): Pro
  */
 export function registerPiDocsTool(pi: ToolRegistry) {
   pi.registerTool(
-    defineTool(PI_DOCS_TOOL_DEFINITION, {
+    createTool(PI_DOCS_TOOL_DEFINITION, {
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       renderCall(args, theme) {
         const target = piDocsTarget(args.path);
