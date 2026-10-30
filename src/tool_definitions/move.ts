@@ -1,9 +1,12 @@
 import { Type } from "typebox";
+import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const MOVE_TOOL_DEFINITION = {
   name: "move",
   label: "Move",
   description: "Move or rename a file or directory to a new path within the project.",
+  promptGuidelines: INJECTION_GUARD_GUIDELINES,
+
   parameters: Type.Object({
     path: Type.String({ description: "File or directory to move, relative to the project root." }),
     destination: Type.String({ description: "Path to move to, relative to the project root." }),

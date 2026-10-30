@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const PI_SKILLS_TOOL_DEFINITION = {
   name: "pi_skills",
@@ -11,6 +12,7 @@ export const PI_SKILLS_TOOL_DEFINITION = {
     "pi_skills: no arguments lists every discovered skill (name, description, SKILL.md path); skill=\"name\" reads that " +
     "SKILL.md; skill+path reads a file bundled with that skill",
   promptGuidelines: [
+    ...INJECTION_GUARD_GUIDELINES,
     "Use pi_skills when a skill listed in <available_skills> mentions a reference file or script you need, or when you " +
       "must see a skill's own instructions before following them.",
     "Call pi_skills with no arguments first to get the exact names and paths; a skill can also be named by its directory.",

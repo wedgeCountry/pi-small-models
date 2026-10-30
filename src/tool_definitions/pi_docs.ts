@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const PI_DOCS_TOOL_DEFINITION = {
   name: "pi_docs",
@@ -10,6 +11,7 @@ export const PI_DOCS_TOOL_DEFINITION = {
   promptSnippet:
     "pi_docs: read Pi's own documentation (README.md, docs/..., examples/...); no arguments lists the available pages",
   promptGuidelines: [
+    ...INJECTION_GUARD_GUIDELINES,
     "Use pi_docs whenever the question is about pi itself — how to write an extension, which tools exist, how settings " +
       "or skills work — instead of answering from memory.",
     "Call it with no arguments to see which pages exist, then read the page you need; follow the links it mentions.",
