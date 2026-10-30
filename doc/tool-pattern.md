@@ -17,6 +17,14 @@ Each tool has two files:
 
 `index.ts` imports and calls all `registerXTool` functions.
 
+## Injection guard
+
+Prompt-injection defense lives in `src/injectionGuard.ts` and is injected **once** into the system
+prompt's rules by `index.ts` via a `before_agent_start` handler
+(`systemPromptOptions.promptGuidelines` — Pi renders these as the `rules` section), not duplicated
+into each tool's `promptGuidelines`. Keep `tests/injectionGuard.test.ts` green — it fails if the
+handler stops appending the rules or duplicates them.
+
 ## Minimal template
 
 `src/tool_definitions/touch.ts`:
