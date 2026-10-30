@@ -8,6 +8,7 @@ import { removeRecursively } from "./remove.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface MoveOptions {
   recursive?: boolean;
@@ -136,7 +137,7 @@ export function registerMoveTool(pi: ToolRegistry) {
       });
 
       return {
-        content: [{ type: "text", text: `Moved ${params.path} to ${params.destination}.` }],
+        content: [{ type: "text", text: escapeTripleBackticks(`Moved ${params.path} to ${params.destination}.`) }],
         details: {},
       };
     },

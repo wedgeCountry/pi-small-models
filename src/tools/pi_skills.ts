@@ -185,7 +185,7 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
 
       if (!request) {
         return {
-          content: [{ type: "text", text: formatSkillListing(skills) }],
+          content: [{ type: "text", text: escapeTripleBackticks(formatSkillListing(skills)) }],
           details: {
             kind: "list",
             count: skills.length,
@@ -200,7 +200,7 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
         signal,
       });
       return {
-        content: [{ type: "text", text: renderSkillFile(request, result) }],
+        content: [{ type: "text", text: escapeTripleBackticks(renderSkillFile(request, result)) }],
         details: {
           kind: "file",
           skill: request.skill.name,

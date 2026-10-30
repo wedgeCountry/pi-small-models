@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 import { peekFile, renderPeekResult } from "./peek.ts";
 import type { PeekVisibility } from "./previewManagers/types.ts";
@@ -371,7 +372,7 @@ export function registerReadTool(pi: ToolRegistry) {
             signal,
           });
           return {
-            content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
+            content: [{ type: "text", text: escapeTripleBackticks(renderPeekResult(params.path, result, visibility)) }],
             details: {
               peek: true,
               language: result.language,
@@ -394,7 +395,7 @@ export function registerReadTool(pi: ToolRegistry) {
       }
 
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: escapeTripleBackticks(text) }],
         details: { peek: false, totalLines: result.totalLines, truncated: result.truncated },
       };
     },

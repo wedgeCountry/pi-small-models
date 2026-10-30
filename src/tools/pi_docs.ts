@@ -16,6 +16,7 @@ import type { Sandbox } from "../sandbox/sandbox.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 import { readFile, type ReadResult } from "./read.ts";
 import type { ListEntry } from "./list.ts";
 
@@ -264,7 +265,7 @@ export function registerPiDocsTool(pi: ToolRegistry) {
 
       if (result.kind === "file") {
         return {
-          content: [{ type: "text", text: renderDocsFile(result.content) }],
+          content: [{ type: "text", text: escapeTripleBackticks(renderDocsFile(result.content)) }],
           details: {
             version: location.version,
             kind: result.kind,
@@ -276,7 +277,7 @@ export function registerPiDocsTool(pi: ToolRegistry) {
       }
 
       return {
-        content: [{ type: "text", text: renderDocsListing(location, result) }],
+        content: [{ type: "text", text: escapeTripleBackticks(renderDocsListing(location, result)) }],
         details: { version: location.version, kind: result.kind, path: result.path, entries: result.entries.length, truncated: result.truncated },
       };
     },

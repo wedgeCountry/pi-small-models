@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -109,7 +110,7 @@ export function registerGitLogTool(pi: ToolRegistry) {
       const result = await gitLog(sandboxFor(ctx.cwd), { maxCount: params.maxCount, path: params.path, signal });
 
       return {
-        content: [{ type: "text", text: formatGitLog(result) }],
+        content: [{ type: "text", text: escapeTripleBackticks(formatGitLog(result)) }],
         details: { count: result.commits.length },
       };
     },

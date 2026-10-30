@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -204,7 +205,7 @@ export function registerGitDiffTool(pi: ToolRegistry) {
       }
 
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: escapeTripleBackticks(text) }],
         details: { truncated: result.truncated, nameOnly: params.nameOnly === true, noHead: result.noHead === true },
       };
     },

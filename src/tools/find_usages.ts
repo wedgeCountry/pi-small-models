@@ -8,6 +8,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
 import { isValidIdentifier } from "./usageRules/shared.ts";
@@ -211,7 +212,7 @@ export function registerFindUsagesTool(pi: ToolRegistry) {
         : "No usages found.";
 
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: escapeTripleBackticks(text) }],
         details: { total: result.total, filesScanned: result.filesScanned, truncated: result.truncated },
       };
     },

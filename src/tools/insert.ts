@@ -6,6 +6,7 @@ import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface InsertOptions {
   signal?: AbortSignal;
@@ -62,7 +63,7 @@ export function registerInsertTool(pi: ToolRegistry) {
       await insertText(sandboxFor(ctx.cwd), params.path, params.line, params.text, { signal });
 
       return {
-        content: [{ type: "text", text: `Inserted text into ${params.path} after line ${params.line}.` }],
+        content: [{ type: "text", text: escapeTripleBackticks(`Inserted text into ${params.path} after line ${params.line}.`) }],
         details: {},
       };
     },

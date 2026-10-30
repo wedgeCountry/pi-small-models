@@ -7,6 +7,7 @@ import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface WriteOptions {
   signal?: AbortSignal;
@@ -59,7 +60,7 @@ export function registerWriteTool(pi: ToolRegistry) {
       await writeFile(sandboxFor(ctx.cwd), params.path, params.content, { signal });
 
       return {
-        content: [{ type: "text", text: `Successfully wrote ${params.content.length} bytes to ${params.path}.` }],
+        content: [{ type: "text", text: escapeTripleBackticks(`Successfully wrote ${params.content.length} bytes to ${params.path}.`) }],
         details: {},
       };
     },

@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "File list truncated" rather than "Diff truncated" in name-only mode.
 
 ### Changed
+- Every tool now escapes triple backticks in its returned text (`src/backend/escapeBackticks.ts`):
+  a file, path, diff or commit message containing ``` can no longer break into (or out of) a
+  markdown code block in the model's transcript. Backtick runs of three or more are split with
+  zero-width joiners, so the text still reads as backticks.
 - `git_diff` now runs `git diff HEAD` instead of plain `git diff`, so staged changes are reported
   too instead of being invisible until they're committed.
 - `git diff`'s `bad revision 'HEAD'` failure in a repository without commits is caught and reported
@@ -33,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quotes can only ever make a path more likely to be rejected, never less.
 
 ### Tests
+- `tests/escape_backticks.test.ts`: a parameterized test that runs every registered tool's
+  `execute()` against fixture content containing triple backticks (file contents, filenames,
+  commit messages) and asserts no literal ``` survives in the returned text.
 - `tests/git_diff.test.ts`: `nameOnly` lists changed paths with no diff body; covers staged and
   unstaged changes against HEAD as one entry per file; is scoped by `path`; reports nothing for a
   clean repo; omits sandbox-restricted paths; omits a restricted path git C-quotes (checked in both

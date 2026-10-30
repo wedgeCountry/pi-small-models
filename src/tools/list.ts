@@ -9,6 +9,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -101,7 +102,7 @@ export function registerListTool(pi: ToolRegistry) {
         : "(empty directory)";
 
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: escapeTripleBackticks(text) }],
         details: result,
       };
     },

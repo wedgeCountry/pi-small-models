@@ -7,6 +7,7 @@ import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
 import { toolError } from "../backend/formatError.ts";
+import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface RemoveOptions {
   recursive?: boolean;
@@ -97,7 +98,7 @@ export function registerRemoveTool(pi: ToolRegistry) {
       await removePath(sandboxFor(ctx.cwd), params.path, { recursive: params.recursive, signal });
 
       return {
-        content: [{ type: "text", text: `Removed ${params.path}.` }],
+        content: [{ type: "text", text: escapeTripleBackticks(`Removed ${params.path}.`) }],
         details: {},
       };
     },
