@@ -44,6 +44,14 @@ export const RESTRICTED_GLOBS: readonly string[] = [
   "**/AGENTS.md",
   "**/CLAUDE.md",
   "**/.agents/**",
+  // Prefix globs restoring the old suffix-blocking behavior: any file/dir whose name merely
+  // starts with a restricted dir name (".git-backup", "node_modules_old", ...) is restricted too.
+  // Exact-name and dot/case lookalikes are covered separately by RESTRICTED_DIR_NAMES below.
+  "**/.git*",
+  "**/.venv*",
+  "**/node_modules*",
+  "**/bower_components*",
+  "**/jspm_packages*",
 ];
 
 /**
