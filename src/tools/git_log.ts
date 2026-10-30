@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -98,12 +98,8 @@ export function formatGitLog(result: GitLogResult): string {
 export function registerGitLogTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(GIT_LOG_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = callName(theme, "git_log");
-        if (args.maxCount) text += theme.fg("toolOutput", ` -${args.maxCount}`);
-        if (args.path) text += theme.fg("toolOutput", ` ${args.path}`);
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "git_log", undefined, args.maxCount ? ` -${args.maxCount}` : undefined, args.path ? ` ${args.path}` : undefined),
       async execute(params, { signal, cwd }) {
         const result = await gitLog(sandboxFor(cwd), { maxCount: params.maxCount, path: params.path, signal });
 

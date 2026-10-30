@@ -3,7 +3,7 @@ import { PEEK_TOOL_DEFINITION } from "../tool_definitions/peek.ts";
 import { readFile } from "./read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
@@ -108,14 +108,12 @@ export function renderPeekResult(displayPath: string, result: PeekResult, visibi
 export function registerPeekTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(PEEK_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "peek")} ${theme.fg("accent", args.path ?? "")}`;
+      renderCall: (args, theme) => {
         const flags: string[] = [];
         if (args.visibility && args.visibility !== "public") flags.push(args.visibility);
         if (args.includeDocs) flags.push("docs");
         if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
-        if (flags.length) text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
-        return oneLine(text);
+        return renderLine(theme, "peek", args.path, flags.length ? ` (${flags.join(", ")})` : undefined);
       },
       async execute(params, { signal, cwd }) {
         const visibility = (params.visibility ?? "public") as PeekVisibility;

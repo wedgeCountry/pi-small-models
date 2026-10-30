@@ -5,7 +5,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
@@ -190,12 +190,8 @@ export async function findUsages(
 export function registerFindUsagesTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(FIND_USAGES_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
-        text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);
-        if (args.path) text += theme.fg("toolOutput", ` in ${args.path}`);
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "find_usages", args.symbol, ` (${args.language ?? "auto"})`, args.path ? ` in ${args.path}` : undefined),
       async execute(params, { signal, cwd }) {
         const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
         const result = await findUsages(sandboxFor(cwd), params.path ?? ".", params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {

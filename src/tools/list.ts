@@ -6,7 +6,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -77,11 +77,8 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
 export function registerListTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(LIST_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
-        if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "list", args.path ?? ".", args.recursive ? ` (recursive, depth ${args.maxDepth ?? 3})` : undefined),
       async execute(params, { signal, cwd }) {
         const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
         const result = await listDir(sandboxFor(cwd), params.path ?? ".", {

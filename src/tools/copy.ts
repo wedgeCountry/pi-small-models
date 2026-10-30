@@ -4,7 +4,7 @@ import { COPY_TOOL_DEFINITION } from "../tool_definitions/copy.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -93,14 +93,8 @@ export async function copyFile(sb: Sandbox, source: string, destination: string,
 export function registerCopyTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(COPY_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "copy")} ${theme.fg("accent", args.path ?? "")} ${theme.fg(
-          "toolOutput",
-          "->"
-        )} ${theme.fg("accent", args.destination ?? "")}`;
-        if (args.recursive) text += theme.fg("toolOutput", " (recursive)");
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "copy", args.path, "->", args.destination, args.recursive ? " (recursive)" : undefined),
       async execute(params, { signal, cwd }) {
         await copyFile(sandboxFor(cwd), params.path, params.destination, { recursive: params.recursive, overwrite: params.overwrite, signal });
 

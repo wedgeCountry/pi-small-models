@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -31,9 +31,7 @@ export async function makeDir(sb: Sandbox, target: string, opts: MakeDirOptions 
 export function registerMkdirTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(MKDIR_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        return oneLine(`${callName(theme, "mkdir")} ${theme.fg("accent", args.path ?? "")}`);
-      },
+      renderCall: (args, theme) => renderLine(theme, "mkdir", args.path),
       async execute(params, { signal, cwd }) {
         await makeDir(sandboxFor(cwd), params.path, { signal });
 

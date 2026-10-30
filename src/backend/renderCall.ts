@@ -14,3 +14,24 @@ export function oneLine(text: string): { render(): string[]; invalidate(): void 
 export function callName(theme: Theme, name: string): string {
   return theme.fg("toolTitle", theme.bold(name));
 }
+
+/**
+ * The one-line `renderCall` shape shared by every tool here: `name main extra1 extra2 …`,
+ * where `main` is accent-highlighted and each `extra` is a plain toolOutput-colored suffix.
+ * Empty/undefined segments are omitted. Usage: `renderCall: (args, theme) =>
+ * renderLine(theme, "write", args.path, …)`. A tool needing something fancier can still
+ * write its own `renderCall` by hand.
+ */
+export function renderLine(
+  theme: Theme,
+  name: string,
+  main: string | undefined,
+  ...extras: (string | undefined)[]
+): { render(): string[]; invalidate(): void } {
+  let text = callName(theme, name);
+  if (main !== undefined && main !== "") text += ` ${theme.fg("accent", main)}`;
+  for (const extra of extras) {
+    if (extra !== undefined && extra !== "") text += theme.fg("toolOutput", extra);
+  }
+  return oneLine(text);
+}

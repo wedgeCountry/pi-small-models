@@ -3,7 +3,7 @@ import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../backend/mutationQueue.ts";
-import {oneLine, callName} from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -238,11 +238,7 @@ export async function editFile(
 export function registerEditTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(EDIT_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "edit")} ${theme.fg("accent", args.path ?? "")}`;
-        text += theme.fg("toolOutput", "");
-        return oneLine(text);
-      },
+      renderCall: (args, theme) => renderLine(theme, "edit", args.path, ""),
       async execute(params, { signal, cwd }) {
         if (params.oldText === undefined || params.newText === undefined) {
           throw toolError("edit", "Specify oldText and newText", { path: params.path });

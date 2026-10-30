@@ -4,7 +4,7 @@ import { WRITE_TOOL_DEFINITION } from "../tool_definitions/write.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -49,11 +49,8 @@ export async function writeFile(sb: Sandbox, target: string, content: string, op
 export function registerWriteTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(WRITE_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        const text = `${callName(theme, "write")} ${theme.fg("accent", args.path ?? "")}`;
-        const size = args.content?.length;
-        return oneLine(text + (size !== undefined ? theme.fg("toolOutput", ` (${size} bytes)`) : ""));
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "write", args.path, args.content !== undefined ? ` (${args.content.length} bytes)` : undefined),
       async execute(params, { signal, cwd }) {
         await writeFile(sandboxFor(cwd), params.path, params.content, { signal });
 

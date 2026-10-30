@@ -6,7 +6,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import path from "node:path";
@@ -181,14 +181,8 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
 export function registerGrepTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(GREP_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.regex ?? ""}/`)}`;
-        text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-        if (args.glob) text += theme.fg("toolOutput", ` (${args.glob})`);
-        if (args.ignoreCase) text += theme.fg("toolOutput", " -i");
-        if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` limit ${args.maxResults}`);
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "grep", `/${args.regex ?? ""}/`, ` in ${args.path ?? "."}`, args.glob ? ` (${args.glob})` : undefined, args.ignoreCase ? " -i" : undefined, args.maxResults !== undefined ? ` limit ${args.maxResults}` : undefined),
       async execute(params, { signal, cwd }) {
         const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
         const result = await grepFiles(sandboxFor(cwd), params.path ?? ".", params.regex, {

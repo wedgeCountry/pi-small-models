@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
@@ -106,10 +106,7 @@ function describeError(err: unknown): string {
 export function registerGitStatusTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(GIT_STATUS_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        const text = callName(theme, "git_status");
-        return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);
-      },
+      renderCall: (args, theme) => renderLine(theme, "git_status", undefined, args.path ? ` ${args.path}` : undefined),
       async execute(params, { signal, cwd }) {
         const result = await gitStatus(sandboxFor(cwd), { path: params.path, signal });
 

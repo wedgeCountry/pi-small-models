@@ -7,7 +7,7 @@ import {
   type SkillLocation,
 } from "../sandbox/piRoots.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
-import { callName, oneLine } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
@@ -169,11 +169,9 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(PI_SKILLS_TOOL_DEFINITION, {
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-      renderCall(args, theme) {
+      renderCall: (args, theme) => {
         const skill = (args.skill ?? "").trim();
-        let text = `${callName(theme, "pi_skills")} ${theme.fg("accent", skill === "" ? "(list)" : skill)}`;
-        if ((args.path ?? "").trim() !== "") text += theme.fg("toolOutput", `:${String(args.path).trim()}`);
-        return oneLine(text);
+        return renderLine(theme, "pi_skills", skill === "" ? "(list)" : skill, (args.path ?? "").trim() !== "" ? `:${String(args.path).trim()}` : undefined);
       },
       async execute(params, { signal, cwd }) {
         const skills = await discoverSkillsCached({ agentDir: getAgentDir(), cwd: cwd });

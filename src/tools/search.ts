@@ -4,7 +4,7 @@ import { findFiles } from "./find.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 
 export interface SearchOptions {
@@ -39,13 +39,8 @@ export async function searchFiles(
 export function registerSearchTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(SEARCH_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "search")} ${theme.fg("accent", args.pattern ?? "")}`;
-        text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-        if (args.maxResults !== undefined)
-          text += theme.fg("toolOutput", ` (limit ${args.maxResults})`);
-        return oneLine(text);
-      },
+      renderCall: (args, theme) =>
+        renderLine(theme, "search", args.pattern, ` in ${args.path ?? "."}`, args.maxResults !== undefined ? ` (limit ${args.maxResults})` : undefined),
       async execute(params, { signal, cwd }) {
         const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
         const result = await searchFiles(sandboxFor(cwd), params.path ?? ".", params.pattern, {

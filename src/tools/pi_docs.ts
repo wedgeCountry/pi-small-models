@@ -13,7 +13,7 @@ import {
 } from "../sandbox/piRoots.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import type { Sandbox } from "../sandbox/sandbox.ts";
-import { callName, oneLine } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
@@ -240,9 +240,9 @@ export function registerPiDocsTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(PI_DOCS_TOOL_DEFINITION, {
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-      renderCall(args, theme) {
+      renderCall: (args, theme) => {
         const target = piDocsTarget(args.path);
-        return oneLine(`${callName(theme, "pi_docs")} ${theme.fg("accent", target === "" ? "(list)" : target)}`);
+        return renderLine(theme, "pi_docs", target === "" ? "(list)" : target);
       },
       async execute(params, { signal, cwd }) {
         const locations = await discoverPiDocs({ agentDir: getAgentDir(), cwd });

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { READ_TOOL_DEFINITION } from "../tool_definitions/read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
+import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
@@ -339,20 +339,16 @@ async function readFileStreaming(
 export function registerReadTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(READ_TOOL_DEFINITION, {
-      renderCall(args, theme) {
-        let text = `${callName(theme, "read")} ${theme.fg("accent", args.path ?? "")}`;
+      renderCall: (args, theme) => {
         const flags: string[] = [];
         if (args.peek === false) flags.push("peek=false");
         if (args.visibility !== undefined && args.visibility !== "public") flags.push(args.visibility);
         if (args.includeDocs) flags.push("docs");
         if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
-        if (flags.length) text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
-        if (args.offset !== undefined || args.limit !== undefined) {
-          const start = args.offset ?? 1;
-          const end = args.limit !== undefined ? start + args.limit - 1 : undefined;
-          text += theme.fg("toolOutput", `:${start}${end !== undefined ? `-${end}` : "+"}`);
-        }
-        return oneLine(text);
+        const range = args.offset !== undefined || args.limit !== undefined
+          ? `:${args.offset ?? 1}${args.limit !== undefined ? `-${(args.offset ?? 1) + args.limit - 1}` : "+"}`
+          : undefined;
+        return renderLine(theme, "read", args.path, flags.length ? ` (${flags.join(", ")})` : undefined, range);
       },
       async execute(params, { signal, cwd }) {
         const sb = sandboxFor(cwd);
