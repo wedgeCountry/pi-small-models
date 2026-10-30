@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool-call line shows the flag (`git_diff --name-only src/…`), and the truncation hint says
   "File list truncated" rather than "Diff truncated" in name-only mode.
 
+### Fixed
+- `list` wraps unexpected walk errors (e.g. a missing directory) in the unified `toolError` shape
+  instead of letting a raw fs error (with its absolute host path) reach the model.
+- `Sandbox.resolve`'s realpath fallback treats `ENOTDIR` like `ENOENT` (walking up to the nearest
+  existing ancestor), so a path whose parent is a regular file no longer throws a raw fs error
+  from inside the sandbox; the calling tool's own formatted error is reported instead.
+
 ### Changed
 - Every tool now escapes triple backticks in its returned text (`src/backend/escapeBackticks.ts`):
   a file, path, diff or commit message containing ``` can no longer break into (or out of) a
@@ -37,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quotes can only ever make a path more likely to be rejected, never less.
 
 ### Tests
+- `tests/structured_result.test.ts`: a parameterized test that every tool's `execute()` returns
+  Pi's structured tool-result shape (`content` array of `{ type: "text" }` blocks with string
+  `text`, plus an object `details`) and that failures throw tool-formatted errors — what the
+  framework turns into the `{ role: "toolResult", toolName, content, isError }` message.
 - `tests/escape_backticks.test.ts`: a parameterized test that runs every registered tool's
   `execute()` against fixture content containing triple backticks (file contents, filenames,
   commit messages) and asserts no literal ``` survives in the returned text.

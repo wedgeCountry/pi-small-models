@@ -442,7 +442,10 @@ function resolveRealPathWithFallback(target: string): string {
     try {
       return path.join(fs.realpathSync(current), ...missingParts);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      // ENOTDIR means a segment of `current` is a regular file, so the path cannot exist as a
+      // directory chain — walk up like ENOENT, so the caller's own (tool-formatted) error path
+      // reports it instead of a raw fs error escaping `resolve`.
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT" && (err as NodeJS.ErrnoException).code !== "ENOTDIR") {
         throw err;
       }
       const parent = path.dirname(current);

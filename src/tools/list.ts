@@ -8,7 +8,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
-import { toolError } from "../backend/formatError.ts";
+import { toolError, isToolFormattedError } from "../backend/formatError.ts";
 import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface ListOptions {
@@ -70,7 +70,15 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
     }
   }
 
-  await walk(base, "", 0);
+  try {
+    await walk(base, "", 0);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).name === "AbortError") throw err;
+    if (isToolFormattedError(err)) throw err;
+    const relPath = path.relative(sb.root, base);
+    const message = (err as Error).message.replace(base, relPath);
+    throw toolError("list", `Could not list "${relPath}": ${message}`, { path: target });
+  }
   const truncated = entries.length > max;
   return { entries: entries.slice(0, max), total: entries.length, truncated };
 }
