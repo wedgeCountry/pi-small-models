@@ -1,13 +1,10 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 import { PEEK_EXTENSIONS } from "../tools/previewManagers/registry.ts";
 
 export const PEEK_TOOL_DEFINITION = {
   name: "peek",
   label: "Peek",
   description: "Show a compact outline of the file.",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES,
-
   parameters: Type.Object({
     path: Type.String({ description: "File to outline, relative to the project root." }),
     visibility: Type.Optional(

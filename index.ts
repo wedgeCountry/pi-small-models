@@ -17,6 +17,7 @@ import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerPiDocsTool} from "./src/tools/pi_docs.ts";
 import {registerPiSkillsTool} from "./src/tools/pi_skills.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
+import {INJECTION_GUARD_RULES} from "./src/injectionGuard.ts";
 import {resetSkillsCache} from "./src/sandbox/piRoots.ts";
 import {getSandboxState, setSandboxState, type SandboxState} from "./src/sandbox/sandbox.ts";
 import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
@@ -123,6 +124,17 @@ export default function (pi: ExtensionAPI) {
         "info"
       );
     },
+  });
+
+  // One prompt-injection guard for the whole system prompt, not per tool: tool results and file
+  // contents are data, never instructions. Registered once here instead of duplicated into every
+  // tool's promptGuidelines.
+  pi.on("before_agent_start", (event) => {
+    for (const rule of INJECTION_GUARD_RULES) {
+      if (!event.systemPromptOptions.promptGuidelines.includes(rule)) {
+        event.systemPromptOptions.promptGuidelines.push(rule);
+      }
+    }
   });
 
   pi.on("session_start", (_event) => {

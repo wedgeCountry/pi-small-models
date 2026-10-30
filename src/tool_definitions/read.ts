@@ -1,5 +1,4 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const READ_TOOL_DEFINITION = {
   name: "read",
@@ -8,8 +7,6 @@ export const READ_TOOL_DEFINITION = {
     "Read a text file. Defaults to peek=true: shows a compact outline of the file's structure " +
     "(declarations with line numbers). Pass peek=false, or an offset/limit, to read raw contents " +
     "numbered by line.",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES,
-
   parameters: Type.Object({
     path: Type.String({ description: "Path to the file to read, relative to the project root." }),
     offset: Type.Optional(

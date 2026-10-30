@@ -1,12 +1,9 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const GREP_TOOL_DEFINITION = {
   name: "grep",
   label: "Grep",
   description: "Search file contents for a regex within the project.",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES,
-
   parameters: Type.Object({
     regex: Type.String({
       description: "Regex to search for within file contents, e.g. \"foo\\s*=\\s*\\d+\"."

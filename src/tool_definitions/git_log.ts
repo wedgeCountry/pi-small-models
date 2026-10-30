@@ -1,13 +1,10 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const GIT_LOG_TOOL_DEFINITION = {
   name: "git_log",
   label: "Git Log",
   description:
     "Show recent commits (newest first)",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES,
-
   parameters: Type.Object({
     maxCount: Type.Optional(
       Type.Integer({

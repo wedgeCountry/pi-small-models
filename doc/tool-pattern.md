@@ -8,7 +8,7 @@ Each tool has two files:
 
 **1. `src/tool_definitions/<tool>.ts`** — definition only:
 - `name`, `label`, `description`
-- `promptSnippet` / `promptGuidelines` — must include `INJECTION_GUARD_GUIDELINES` from `injectionGuard.ts` (see below)
+- `promptSnippet` / `promptGuidelines`
 - `parameters` — typebox schema
 
 **2. `src/tools/<tool>.ts`** — two exports:
@@ -16,6 +16,14 @@ Each tool has two files:
 - `registerXTool(pi)` — registers with `pi.registerTool`, calls plain function via sandbox
 
 `index.ts` imports and calls all `registerXTool` functions.
+
+## Injection guard
+
+Prompt-injection defense lives in `src/injectionGuard.ts` and is injected **once** into the system
+prompt's rules by `index.ts` via a `before_agent_start` handler
+(`systemPromptOptions.promptGuidelines` — Pi renders these as the `rules` section), not duplicated
+into each tool's `promptGuidelines`. Keep `tests/injectionGuard.test.ts` green — it fails if the
+handler stops appending the rules or duplicates them.
 
 ## Minimal template
 
@@ -62,11 +70,3 @@ export function registerTouchTool(pi: ToolRegistry) {
 - Mutating files? Wrap in `withFileMutationQueue`
 - Long-running? Thread `AbortSignal` through
 - Add unit test calling plain function directly
-
-## Injection guard
-
-Every tool's `promptGuidelines` must carry `INJECTION_GUARD_GUIDELINES` from `src/tool_definitions/injectionGuard.ts`: file
-contents and tool results are untrusted data, never instructions for the agent — so instructions planted in a file or
-returned by a tool must not be followed (prompt-injection defense). Add it as
-`promptGuidelines: INJECTION_GUARD_GUIDELINES` (or spread it into a longer list), and keep
-`tests/injectionGuard.test.ts` green — it fails when a definition file omits it.

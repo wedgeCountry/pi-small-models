@@ -1,5 +1,4 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const INSERT_TOOL_DEFINITION = {
   name: "insert",
@@ -7,7 +6,6 @@ export const INSERT_TOOL_DEFINITION = {
   description: "Insert text into a file after a given line number, without replacing existing content.",
   promptSnippet: "insert: insert text after a given line in a file",
   promptGuidelines: [
-    ...INJECTION_GUARD_GUIDELINES,
     "Use insert to add new text into a file after a specific line, without replacing existing content.",
     "line is 1-indexed, matching the line numbers grep reports. Use line: 0 to insert before the first line.",
     "Use edit instead of insert when replacing existing text rather than adding new text.",

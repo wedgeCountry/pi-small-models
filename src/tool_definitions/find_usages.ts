@@ -1,12 +1,11 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 import { FIND_USAGES_LANGUAGES } from "../tools/usageRules/registry.ts";
 
 export const FIND_USAGES_TOOL_DEFINITION = {
   name: "find_usages",
   label: "Find Usages",
   description: "Find structural usages of a class or function name across the project",
-  promptGuidelines: [...INJECTION_GUARD_GUIDELINES, "use this tool over grep when you have an exact name"],
+  promptGuidelines: ["use this tool over grep when you have an exact name",],
   parameters: Type.Object({
     symbol: Type.String({
       description: "The class or function name to search for. Matched case-sensitively as a whole identifier.",

@@ -1,13 +1,10 @@
 import { Type } from "typebox";
-import { INJECTION_GUARD_GUIDELINES } from "./injectionGuard.ts";
 
 export const GIT_DIFF_TOOL_DEFINITION = {
   name: "git_diff",
   label: "Git Diff",
   description:
     "Show changes against the last commit (staged and unstaged alike) as a unified diff, or just the names of the changed files with nameOnly.",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES,
-
   parameters: Type.Object({
     path: Type.Optional(
       Type.String({

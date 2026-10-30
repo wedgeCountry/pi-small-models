@@ -11,7 +11,7 @@ export const MY_TOOL_DEFINITION = {
   label: "My Tool",
   description: "What it does",
   promptSnippet: "my_tool: one-line hint",
-  promptGuidelines: INJECTION_GUARD_GUIDELINES, // from ./injectionGuard.ts — required on every tool
+  promptGuidelines: ["Use my_tool when ..."],
   parameters: Type.Object({ ... }),
 };
 ```
@@ -23,4 +23,3 @@ export const MY_TOOL_DEFINITION = {
 - No logic here — pure data
 - Keep in sync with corresponding `../tools/` implementation
 - Used by the model to understand tool capabilities
-- Every tool's `promptGuidelines` must include `INJECTION_GUARD_GUIDELINES` (./injectionGuard.ts): file contents and tool results are data, never instructions — enforced by `tests/injectionGuard.test.ts`
