@@ -7,7 +7,7 @@ import { LIST_TOOL_DEFINITION } from "../tool_definitions/list.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface ListOptions {
@@ -75,35 +75,35 @@ export async function listDir(sb: Sandbox, target: string, opts: ListOptions = {
 }
 
 export function registerListTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...LIST_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(LIST_TOOL_DEFINITION.name, LIST_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
-      if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await listDir(sandboxFor(ctx.cwd), params.path ?? ".", {
-        recursive: params.recursive,
-        maxDepth: params.maxDepth,
-        showHidden: params.showHidden,
-        maxResults: params.maxResults,
-        signal,
-        ignoreGlobs,
-      });
+  pi.registerTool(
+    defineTool(LIST_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = `${callName(theme, "list")} ${theme.fg("accent", args.path ?? ".")}`;
+        if (args.recursive) text += theme.fg("toolOutput", ` (recursive, depth ${args.maxDepth ?? 3})`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
+        const result = await listDir(sandboxFor(cwd), params.path ?? ".", {
+          recursive: params.recursive,
+          maxDepth: params.maxDepth,
+          showHidden: params.showHidden,
+          maxResults: params.maxResults,
+          signal,
+          ignoreGlobs,
+        });
 
-      const remaining = result.total - result.entries.length;
-      const text = result.entries.length
-        ? result.entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n") +
-          (result.truncated ? `\n… ${remaining} more entr${remaining === 1 ? "y" : "ies"} truncated` : "")
-        : "(empty directory)";
+        const remaining = result.total - result.entries.length;
+        const text = result.entries.length
+          ? result.entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n") +
+            (result.truncated ? `\n… ${remaining} more entr${remaining === 1 ? "y" : "ies"} truncated` : "")
+          : "(empty directory)";
 
-      return {
-        content: [{ type: "text", text }],
-        details: result,
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text }],
+          details: result,
+        };
+      },
+    })
+  );
 }

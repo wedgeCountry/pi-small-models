@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { getEffectiveIgnoreGlobs } from "../commands/ignore.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 
 export interface SearchOptions {
   maxResults?: number;
@@ -37,35 +37,35 @@ export async function searchFiles(
 }
 
 export function registerSearchTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...SEARCH_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(SEARCH_TOOL_DEFINITION.name, SEARCH_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "search")} ${theme.fg("accent", args.pattern ?? "")}`;
-      text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-      if (args.maxResults !== undefined)
-        text += theme.fg("toolOutput", ` (limit ${args.maxResults})`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await searchFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {
-        maxResults: params.maxResults,
-        signal,
-        ignoreGlobs,
-      });
+  pi.registerTool(
+    defineTool(SEARCH_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = `${callName(theme, "search")} ${theme.fg("accent", args.pattern ?? "")}`;
+        text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
+        if (args.maxResults !== undefined)
+          text += theme.fg("toolOutput", ` (limit ${args.maxResults})`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
+        const result = await searchFiles(sandboxFor(cwd), params.path ?? ".", params.pattern, {
+          maxResults: params.maxResults,
+          signal,
+          ignoreGlobs,
+        });
 
-      const text = result.matches.length
-        ? result.matches.join("\n") +
-          (result.truncated
-            ? `\n… ${result.total - result.matches.length} more result(s) truncated`
-            : "")
-        : "No files matched.";
+        const text = result.matches.length
+          ? result.matches.join("\n") +
+            (result.truncated
+              ? `\n… ${result.total - result.matches.length} more result(s) truncated`
+              : "")
+          : "No files matched.";
 
-      return {
-        content: [{ type: "text", text }],
-        details: result,
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text }],
+          details: result,
+        };
+      },
+    })
+  );
 }

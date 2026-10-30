@@ -8,7 +8,7 @@ import {
 } from "../sandbox/piRoots.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 
@@ -166,51 +166,48 @@ function renderSkillFile(request: ResolvedSkillRequest, result: ReadResult): str
  * not turn every skill lookup into a confirmation dialog.
  */
 export function registerPiSkillsTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...PI_SKILLS_TOOL_DEFINITION,
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    prepareArguments: withConciseValidationErrors(
-      PI_SKILLS_TOOL_DEFINITION.name,
-      PI_SKILLS_TOOL_DEFINITION.parameters
-    ),
-    renderCall(args, theme) {
-      const skill = (args.skill ?? "").trim();
-      let text = `${callName(theme, "pi_skills")} ${theme.fg("accent", skill === "" ? "(list)" : skill)}`;
-      if ((args.path ?? "").trim() !== "") text += theme.fg("toolOutput", `:${String(args.path).trim()}`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const skills = await discoverSkillsCached({ agentDir: getAgentDir(), cwd: ctx.cwd });
-      const request = resolveSkillRequest(skills, params.skill, params.path, ctx.cwd);
+  pi.registerTool(
+    defineTool(PI_SKILLS_TOOL_DEFINITION, {
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      renderCall(args, theme) {
+        const skill = (args.skill ?? "").trim();
+        let text = `${callName(theme, "pi_skills")} ${theme.fg("accent", skill === "" ? "(list)" : skill)}`;
+        if ((args.path ?? "").trim() !== "") text += theme.fg("toolOutput", `:${String(args.path).trim()}`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const skills = await discoverSkillsCached({ agentDir: getAgentDir(), cwd: cwd });
+        const request = resolveSkillRequest(skills, params.skill, params.path, cwd);
 
-      if (!request) {
+        if (!request) {
+          return {
+            content: [{ type: "text", text: formatSkillListing(skills) }],
+            details: {
+              kind: "list",
+              count: skills.length,
+              skills: skills.map((s) => ({ name: s.name, source: s.source, skillFile: s.skillFile })),
+            },
+          };
+        }
+
+        const result = await readSkillFile(request.skill, request.file, {
+          offset: params.offset,
+          limit: params.limit,
+          signal,
+        });
         return {
-          content: [{ type: "text", text: formatSkillListing(skills) }],
+          content: [{ type: "text", text: renderSkillFile(request, result) }],
           details: {
-            kind: "list",
-            count: skills.length,
-            skills: skills.map((s) => ({ name: s.name, source: s.source, skillFile: s.skillFile })),
+            kind: "file",
+            skill: request.skill.name,
+            source: request.skill.source,
+            dir: request.skill.dir,
+            file: request.file,
+            totalLines: result.totalLines,
+            truncated: result.truncated,
           },
         };
-      }
-
-      const result = await readSkillFile(request.skill, request.file, {
-        offset: params.offset,
-        limit: params.limit,
-        signal,
-      });
-      return {
-        content: [{ type: "text", text: renderSkillFile(request, result) }],
-        details: {
-          kind: "file",
-          skill: request.skill.name,
-          source: request.skill.source,
-          dir: request.skill.dir,
-          file: request.file,
-          totalLines: result.totalLines,
-          truncated: result.truncated,
-        },
-      };
-    },
-  });
+      },
+    })
+  );
 }

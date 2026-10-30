@@ -4,7 +4,7 @@ import { readFile } from "./read.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
@@ -106,36 +106,36 @@ export function renderPeekResult(displayPath: string, result: PeekResult, visibi
 }
 
 export function registerPeekTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...PEEK_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(PEEK_TOOL_DEFINITION.name, PEEK_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "peek")} ${theme.fg("accent", args.path ?? "")}`;
-      const flags: string[] = [];
-      if (args.visibility && args.visibility !== "public") flags.push(args.visibility);
-      if (args.includeDocs) flags.push("docs");
-      if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
-      if (flags.length) text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const visibility = (params.visibility ?? "public") as PeekVisibility;
-      const result = await peekFile(sandboxFor(ctx.cwd), params.path, {
-        visibility,
-        includeDocs: params.includeDocs,
-        maxDepth: params.maxDepth,
-        signal,
-      });
+  pi.registerTool(
+    defineTool(PEEK_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = `${callName(theme, "peek")} ${theme.fg("accent", args.path ?? "")}`;
+        const flags: string[] = [];
+        if (args.visibility && args.visibility !== "public") flags.push(args.visibility);
+        if (args.includeDocs) flags.push("docs");
+        if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
+        if (flags.length) text += theme.fg("toolOutput", ` (${flags.join(", ")})`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const visibility = (params.visibility ?? "public") as PeekVisibility;
+        const result = await peekFile(sandboxFor(cwd), params.path, {
+          visibility,
+          includeDocs: params.includeDocs,
+          maxDepth: params.maxDepth,
+          signal,
+        });
 
-      return {
-        content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
-        details: {
-          language: result.language,
-          shownLines: result.lines.length,
-          totalLines: result.totalLines,
-          truncated: result.truncated,
-        },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
+          details: {
+            language: result.language,
+            shownLines: result.lines.length,
+            totalLines: result.totalLines,
+            truncated: result.truncated,
+          },
+        };
+      },
+    })
+  );
 }

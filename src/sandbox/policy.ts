@@ -30,65 +30,8 @@ export const RESTRICTED_GLOBS: readonly string[] = [
   "**/id_dsa",
   "**/id_ecdsa",
   "**/id_ed25519",
-  "**/.git/**",
-  "**/.git",
-  "**/.git*",
-  "**/.git.*",
-  "**/.git.**",
-  "**/.*git*",
-  "**/*/.git.",
-  "**/*/.git...",
-  "**/*/..git",
-  "**/*/...git",
-  "**/..git/**",
-  "**/...git",
-  "**/...git/**",
-  "**/.git..",
-  "**/.git...",
-  "**/..git.",
-  "**/...git.",
   "**/.git-credentials",
-  "**/.venv/**",
-  "**/.venv",
-  "**/.venv*",
-  "**/.venv.*",
-  "**/.venv..",
-  "**/.venv...",
-  "**/..venv",
-  "**/...venv",
-  "**/*/.venv.",
-  "**/*/.venv...",
-  "**/*/..venv",
-  "**/*/...venv",
-  "**/node_modules/**",
-  "**/node_modules",
-  "**/node_modules*",
-  "**/node_modules.**",
-  "**/node_modules..",
-  "**/node_modules...",
-  "**/..node_modules",
-  "**/...node_modules",
-  "**/*/node_modules.",
-  "**/*/node_modules...",
-  "**/*/..node_modules",
-  "**/*/...node_modules",
   "**/.node-repl-history",
-  "**/bower_components/**",
-  "**/bower_components",
-  "**/bower_components*",
-  "**/bower_components.*",
-  "**/bower_components..",
-  "**/bower_components...",
-  "**/..bower_components",
-  "**/...bower_components",
-  "**/jspm_packages/**",
-  "**/jspm_packages",
-  "**/jspm_packages*",
-  "**/jspm_packages.*",
-  "**/jspm_packages..",
-  "**/jspm_packages...",
-  "**/..jspm_packages",
-  "**/...jspm_packages",
   "**/.pypirc",
   "**/.yarnrc.yml",
   "**/server.pem",
@@ -103,6 +46,32 @@ export const RESTRICTED_GLOBS: readonly string[] = [
   "**/.agents/**",
 ];
 
+/**
+ * Directory names no path may pass through, checked per path segment (see `isRestricted`).
+ * Replaces the former per-variant glob entries: any segment whose canonical form equals one of
+ * these names is restricted, so lookalikes (`.git.`, `..git`, `.git...`, `NODE_MODULES`, …) are
+ * covered by construction instead of by enumeration.
+ */
+export const RESTRICTED_DIR_NAMES: readonly string[] = [
+  ".git",
+  ".venv",
+  "node_modules",
+  "bower_components",
+  "jspm_packages",
+];
+
+/**
+ * Canonical form of a path segment for the directory-name check: lowercase, leading and
+ * trailing dots stripped (`.git..` -> `git`, `..git` -> `git`, `..node_modules` ->
+ * `node_modules`). Both the checked segment and `RESTRICTED_DIR_NAMES` go through this, so a
+ * name matches regardless of dotted/case spelling.
+ */
+function canonicalSegment(segment: string): string {
+  return segment.replace(/^\.+/, "").replace(/\.+$/, "").toLowerCase();
+}
+
+const RESTRICTED_DIR_NAMES_CANONICAL: readonly string[] = RESTRICTED_DIR_NAMES.map(canonicalSegment);
+
 // Security-critical paths must be matched case-insensitively on ALL platforms
 // to prevent bypasses like .GIT, .Git, NODE_MODULES, etc.
 // Windows and default macOS filesystems ignore case; Linux does not but we
@@ -112,10 +81,14 @@ const MATCH_OPTIONS = {
   nocase: true,
 };
 
-/** True if `relPath` (relative to a root, any separator) falls under a protected pattern. */
+/** True if `relPath` (relative to a root, any separator) is protected: either one of its path
+ * segments is a restricted directory name (`.git`, `node_modules`, …, in any dotted/case
+ * variation), or it matches a credential-file glob in `RESTRICTED_GLOBS`. */
 export function isRestricted(relPath: string): boolean {
   const posix = relPath.split(path.sep).join("/");
-  return posix !== "" && picomatch.isMatch(posix, RESTRICTED_GLOBS as string[], MATCH_OPTIONS);
+  if (posix === "") return false;
+  const dirHit = posix.split("/").some((segment) => RESTRICTED_DIR_NAMES_CANONICAL.includes(canonicalSegment(segment)));
+  return dirHit || picomatch.isMatch(posix, RESTRICTED_GLOBS as string[], MATCH_OPTIONS);
 }
 
 /** True if `relPath` (from `path.relative`) stays inside its root: no `..` escape, not absolute.

@@ -6,7 +6,7 @@ import { DEFAULT_IGNORE_GLOBS, getEffectiveIgnoreGlobs } from "../commands/ignor
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
@@ -188,32 +188,32 @@ export async function findUsages(
 }
 
 export function registerFindUsagesTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...FIND_USAGES_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(FIND_USAGES_TOOL_DEFINITION.name, FIND_USAGES_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
-      text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);
-      if (args.path) text += theme.fg("toolOutput", ` in ${args.path}`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await findUsages(sandboxFor(ctx.cwd), params.path ?? ".", params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {
-        maxResults: params.maxResults,
-        signal,
-        ignoreGlobs,
-      });
+  pi.registerTool(
+    defineTool(FIND_USAGES_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = `${callName(theme, "find_usages")} ${theme.fg("accent", args.symbol ?? "")}`;
+        text += theme.fg("toolOutput", ` (${args.language ?? "auto"})`);
+        if (args.path) text += theme.fg("toolOutput", ` in ${args.path}`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
+        const result = await findUsages(sandboxFor(cwd), params.path ?? ".", params.symbol, params.language as FindUsagesLanguage | "auto" | undefined, {
+          maxResults: params.maxResults,
+          signal,
+          ignoreGlobs,
+        });
 
-      const text = result.matches.length
-        ? result.matches.map((m) => `${m.file}:${m.line}:[${m.kind}]: ${m.text}`).join("\n") +
-          (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
-        : "No usages found.";
+        const text = result.matches.length
+          ? result.matches.map((m) => `${m.file}:${m.line}:[${m.kind}]: ${m.text}`).join("\n") +
+            (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
+          : "No usages found.";
 
-      return {
-        content: [{ type: "text", text }],
-        details: { total: result.total, filesScanned: result.filesScanned, truncated: result.truncated },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text }],
+          details: { total: result.total, filesScanned: result.filesScanned, truncated: result.truncated },
+        };
+      },
+    })
+  );
 }

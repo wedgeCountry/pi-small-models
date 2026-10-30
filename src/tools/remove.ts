@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxError} from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface RemoveOptions {
@@ -85,21 +85,21 @@ export async function removePath(sb: Sandbox, target: string, opts: RemoveOption
 }
 
 export function registerRemoveTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...REMOVE_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(REMOVE_TOOL_DEFINITION.name, REMOVE_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "remove")} ${theme.fg("accent", args.path ?? "")}`;
-      if (args.recursive) text += theme.fg("toolOutput", " (recursive)");
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      await removePath(sandboxFor(ctx.cwd), params.path, { recursive: params.recursive, signal });
+  pi.registerTool(
+    defineTool(REMOVE_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = `${callName(theme, "remove")} ${theme.fg("accent", args.path ?? "")}`;
+        if (args.recursive) text += theme.fg("toolOutput", " (recursive)");
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        await removePath(sandboxFor(cwd), params.path, { recursive: params.recursive, signal });
 
-      return {
-        content: [{ type: "text", text: `Removed ${params.path}.` }],
-        details: {},
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: `Removed ${params.path}.` }],
+          details: {},
+        };
+      },
+    })
+  );
 }

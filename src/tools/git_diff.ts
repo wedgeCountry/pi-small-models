@@ -4,7 +4,7 @@ import { GIT_DIFF_TOOL_DEFINITION } from "../tool_definitions/git_diff.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { defineTool } from "../backend/defineTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -179,34 +179,34 @@ function describeError(err: unknown): string {
 }
 
 export function registerGitDiffTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...GIT_DIFF_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(GIT_DIFF_TOOL_DEFINITION.name, GIT_DIFF_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = callName(theme, "git_diff");
-      if (args.nameOnly) text += theme.fg("toolOutput", " --name-only");
-      if (args.path) text += theme.fg("toolOutput", ` ${args.path}`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await gitDiff(sandboxFor(ctx.cwd), {
-        path: params.path,
-        nameOnly: params.nameOnly,
-        signal,
-      });
+  pi.registerTool(
+    defineTool(GIT_DIFF_TOOL_DEFINITION, {
+      renderCall(args, theme) {
+        let text = callName(theme, "git_diff");
+        if (args.nameOnly) text += theme.fg("toolOutput", " --name-only");
+        if (args.path) text += theme.fg("toolOutput", ` ${args.path}`);
+        return oneLine(text);
+      },
+      async execute(params, { signal, cwd }) {
+        const result = await gitDiff(sandboxFor(cwd), {
+          path: params.path,
+          nameOnly: params.nameOnly,
+          signal,
+        });
 
-      let text = result.text;
-      if (result.noHead) text = "The repository has no commit yet, so there is nothing to diff against.";
-      else if (text === "") text = "No changes.";
-      if (result.truncated) {
-        const what = params.nameOnly ? "File list" : "Diff";
-        text += `\n\n[${what} truncated. Narrow with path to see less at once, e.g. { path: "<subdirectory>" }.]`;
-      }
+        let text = result.text;
+        if (result.noHead) text = "The repository has no commit yet, so there is nothing to diff against.";
+        else if (text === "") text = "No changes.";
+        if (result.truncated) {
+          const what = params.nameOnly ? "File list" : "Diff";
+          text += `\n\n[${what} truncated. Narrow with path to see less at once, e.g. { path: "<subdirectory>" }.]`;
+        }
 
-      return {
-        content: [{ type: "text", text }],
-        details: { truncated: result.truncated, nameOnly: params.nameOnly === true, noHead: result.noHead === true },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text }],
+          details: { truncated: result.truncated, nameOnly: params.nameOnly === true, noHead: result.noHead === true },
+        };
+      },
+    })
+  );
 }
