@@ -6,8 +6,8 @@ import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface CopyOptions {
   recursive?: boolean;
@@ -106,10 +106,7 @@ export function registerCopyTool(pi: ToolRegistry) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       await copyFile(sandboxFor(ctx.cwd), params.path, params.destination, { recursive: params.recursive, overwrite: params.overwrite, signal });
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(`Copied ${params.path} to ${params.destination}.`) }],
-        details: {},
-      };
+      return toolOutput({}, `Copied ${params.path} to ${params.destination}.`);
     },
   });
 }

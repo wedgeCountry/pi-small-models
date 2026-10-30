@@ -5,8 +5,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 import { peekFile, renderPeekResult } from "./peek.ts";
 import type { PeekVisibility } from "./previewManagers/types.ts";
@@ -371,16 +371,13 @@ export function registerReadTool(pi: ToolRegistry) {
             maxDepth: params.maxDepth,
             signal,
           });
-          return {
-            content: [{ type: "text", text: escapeTripleBackticks(renderPeekResult(params.path, result, visibility)) }],
-            details: {
-              peek: true,
-              language: result.language,
-              shownLines: result.lines.length,
-              totalLines: result.totalLines,
-              truncated: result.truncated,
-            },
-          };
+          return toolOutput({
+            peek: true,
+            language: result.language,
+            shownLines: result.lines.length,
+            totalLines: result.totalLines,
+            truncated: result.truncated,
+          }, renderPeekResult(params.path, result, visibility));
         } catch (err) {
           if (!/does not support/.test((err as Error).message)) throw err;
         }
@@ -394,10 +391,7 @@ export function registerReadTool(pi: ToolRegistry) {
         text += `\n\n[Showing lines ${result.lines[0]!.line}-${lastLine} of ${result.totalLines}. Use offset=${lastLine + 1} to continue.]`;
       }
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(text) }],
-        details: { peek: false, totalLines: result.totalLines, truncated: result.truncated },
-      };
+      return toolOutput({ peek: false, totalLines: result.totalLines, truncated: result.truncated }, text);
     },
   });
 }

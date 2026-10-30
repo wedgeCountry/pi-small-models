@@ -8,8 +8,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -109,10 +109,7 @@ export function registerListTool(pi: ToolRegistry) {
           (result.truncated ? `\n… ${remaining} more entr${remaining === 1 ? "y" : "ies"} truncated` : "")
         : "(empty directory)";
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(text) }],
-        details: result,
-      };
+      return toolOutput(result, text);
     },
   });
 }

@@ -9,6 +9,7 @@ import {
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { callName, oneLine } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 
@@ -184,14 +185,14 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
       const request = resolveSkillRequest(skills, params.skill, params.path, ctx.cwd);
 
       if (!request) {
-        return {
-          content: [{ type: "text", text: escapeTripleBackticks(formatSkillListing(skills)) }],
-          details: {
+        return toolOutput(
+          {
             kind: "list",
             count: skills.length,
             skills: skills.map((s) => ({ name: s.name, source: s.source, skillFile: s.skillFile })),
           },
-        };
+          formatSkillListing(skills)
+        );
       }
 
       const result = await readSkillFile(request.skill, request.file, {
@@ -199,9 +200,8 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
         limit: params.limit,
         signal,
       });
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(renderSkillFile(request, result)) }],
-        details: {
+      return toolOutput(
+        {
           kind: "file",
           skill: request.skill.name,
           source: request.skill.source,
@@ -210,7 +210,8 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
           totalLines: result.totalLines,
           truncated: result.truncated,
         },
-      };
+        renderSkillFile(request, result)
+      );
     },
   });
 }

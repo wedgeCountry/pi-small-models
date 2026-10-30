@@ -5,8 +5,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -126,10 +126,10 @@ export function registerGitStatusTool(pi: ToolRegistry) {
           )
         : ["(clean — no changes)"];
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks([branchLine, ...entryLines].join("\n")) }],
-        details: { branch: result.branch, ahead: result.ahead, behind: result.behind, entries: result.entries },
-      };
+      return toolOutput(
+        { branch: result.branch, ahead: result.ahead, behind: result.behind, entries: result.entries },
+        [branchLine, ...entryLines].join("\n")
+      );
     },
   });
 }

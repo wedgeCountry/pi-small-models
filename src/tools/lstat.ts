@@ -4,8 +4,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface LstatResult {
   isFile: boolean;
@@ -47,10 +47,7 @@ export function registerLstatTool(pi: ToolRegistry) {
       const type = result.isSymbolicLink ? "symlink" : result.isDirectory ? "directory" : result.isFile ? "file" : "other";
       const text = `${params.path}: ${type}, ${result.size} bytes, modified ${result.mtime}`;
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(text) }],
-        details: result,
-      };
+      return toolOutput(result, text);
     },
   });
 }

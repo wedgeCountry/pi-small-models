@@ -5,8 +5,8 @@ import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../backend/mutationQueue.ts";
 import {oneLine, callName} from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface EditOptions {
   /** If true, replace every occurrence of oldText instead of requiring a unique match. */
@@ -257,10 +257,7 @@ export function registerEditTool(pi: ToolRegistry) {
         signal,
       });
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(`Successfully edited ${params.path}.`) }],
-        details: {},
-      };
+      return toolOutput({}, `Successfully edited ${params.path}.`);
     },
   });
 }

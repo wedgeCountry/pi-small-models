@@ -4,8 +4,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 export interface MakeDirOptions {
   signal?: AbortSignal;
@@ -39,10 +39,7 @@ export function registerMkdirTool(pi: ToolRegistry) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       await makeDir(sandboxFor(ctx.cwd), params.path, { signal });
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(`Created directory ${params.path}.`) }],
-        details: {},
-      };
+      return toolOutput({}, `Created directory ${params.path}.`);
     },
   });
 }

@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from inside the sandbox; the calling tool's own formatted error is reported instead.
 
 ### Changed
+- All tools now build their `execute()` return value through one factory, `toolOutput(details, text)`
+  (`src/backend/toolOutput.ts`): the structured `{ content: [{ type: "text", text }], details }`
+  shape — and the triple-backtick escaping of `text` — come from a single place instead of being
+  repeated per tool. `details` passes through untouched for the UI and programmatic callers.
 - Every tool now escapes triple backticks in its returned text (`src/backend/escapeBackticks.ts`):
   a file, path, diff or commit message containing ``` can no longer break into (or out of) a
   markdown code block in the model's transcript. Backtick runs of three or more are split with

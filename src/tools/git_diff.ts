@@ -5,8 +5,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { oneLine, callName } from "../backend/renderCall.ts";
 import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { toolOutput } from "../backend/toolOutput.ts";
 import { toolError } from "../backend/formatError.ts";
-import { escapeTripleBackticks } from "../backend/escapeBackticks.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -204,10 +204,10 @@ export function registerGitDiffTool(pi: ToolRegistry) {
         text += `\n\n[${what} truncated. Narrow with path to see less at once, e.g. { path: "<subdirectory>" }.]`;
       }
 
-      return {
-        content: [{ type: "text", text: escapeTripleBackticks(text) }],
-        details: { truncated: result.truncated, nameOnly: params.nameOnly === true, noHead: result.noHead === true },
-      };
+      return toolOutput(
+        { truncated: result.truncated, nameOnly: params.nameOnly === true, noHead: result.noHead === true },
+        text
+      );
     },
   });
 }
