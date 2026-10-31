@@ -17,7 +17,7 @@ export const MY_TOOL_DEFINITION = {
 ```
 
 ## Available Tools
-`find`, `grep`, `edit`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `read`, `write`, `git_status`, `git_diff`
+`find`, `grep`, `edit`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `read`, `write`, `git_status`, `git_diff`, `git_log`, `find_usages`, `peek`, `pi_docs`, `pi_skills`, `search`
 
 ## Important
 - No logic here — pure data

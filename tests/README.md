@@ -3,8 +3,8 @@
 Test suite for the Pi extension tools.
 
 ## Running Tests
-- Run all tests: `npm test`
-- Run a single file: `node --test src/tests/find.test.ts`
+- Run all tests: `npm test` (`tsx --test tests/*.test.ts tests/*/*.test.ts`)
+- Run a single file: `npx tsx --test tests/find.test.ts`
 
 ## Key Files
 - **sandbox.test.ts** – Core sandbox behavior specification

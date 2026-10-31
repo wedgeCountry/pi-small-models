@@ -30,7 +30,7 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 
 | Tool     | What it does |
 |----------|--------------|
-| `read`   | Show a file with line numbers (up to 2000 lines per call) |
+| `read`   | Structural outline of a file by default (`peek=true`); with `peek=false` or `offset`/`limit`, show raw contents with line numbers (capped at 2000 lines / 50 KB per call) |
 | `write`  | Create a file or replace its whole contents |
 | `edit`   | Replace one piece of text in a file |
 | `insert` | Insert text after a given line |
@@ -57,7 +57,14 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 | `git_diff`   | Changes vs. HEAD (staged + unstaged), optionally for one path, optionally just the file names |
 | `git_log`    | Recent commits with author, date and changed files |
 
-`read`, `write`, `edit`, `find` and `grep` replace Pi's built-in tools of the same name.
+**Pi itself** (read-only, outside the project sandbox)
+
+| Tool        | What it does |
+|-------------|--------------|
+| `pi_docs`   | Read Pi's own documentation (README, docs, examples of the installed Pi package) |
+| `pi_skills` | List the skills Pi discovered, or read one skill's `SKILL.md` and bundled files |
+
+`read`, `write`, `edit`, `find`, `grep`, `list`, `copy`, `move`, `remove`, `mkdir`, `lstat` and `insert` replace Pi's built-in tools of the same name.
 
 ## Safety: the sandbox
 
@@ -70,7 +77,7 @@ it back on. Every new session starts with the sandbox on.
 
 ## Hiding files from the model
 
-`find`, `grep` and `list` already skip folders like `node_modules`, `.git`, `dist`, `build`, `bin` and
+`find`, `grep` and `list` already skip folders like `node_modules`, `.git`, `.venv`, `__pycache__`, `dist`, `build`, `.pi`, `bin` and
 `obj`. To hide more:
 
 - **For one project:** add glob patterns, one per line, to a `.piignore` file in the project root.
