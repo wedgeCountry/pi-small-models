@@ -13,8 +13,8 @@ import {
 } from "../sandbox/piRoots.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import type { Sandbox } from "../sandbox/sandbox.ts";
-import { callName, oneLine } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { readFile, type ReadResult } from "./read.ts";
 import type { ListEntry } from "./list.ts";
@@ -237,48 +237,48 @@ async function statExisting(absolute: string, rel: string, version: string): Pro
  * the very question ("how does pi work?") that tool exists to answer.
  */
 export function registerPiDocsTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...PI_DOCS_TOOL_DEFINITION,
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    prepareArguments: withConciseValidationErrors(PI_DOCS_TOOL_DEFINITION.name, PI_DOCS_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      const target = piDocsTarget(args.path);
-      return oneLine(`${callName(theme, "pi_docs")} ${theme.fg("accent", target === "" ? "(list)" : target)}`);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const locations = await discoverPiDocs({ agentDir: getAgentDir(), cwd: ctx.cwd });
-      if (locations.length === 0) {
-        throw toolError(
-          "pi_docs",
-          `Could not find Pi's own documentation: no installed copy of ${PI_PACKAGE_NAME} with a ` +
-            `${PI_DOC_ENTRIES.join(", ")} entry was found.`
-        );
-      }
+  pi.registerTool(
+    createTool(PI_DOCS_TOOL_DEFINITION, {
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      renderCall: (args, theme) => {
+        const target = piDocsTarget(args.path);
+        return renderLine(theme, "pi_docs", target === "" ? "(list)" : target);
+      },
+      async execute(params, { signal, cwd }) {
+        const locations = await discoverPiDocs({ agentDir: getAgentDir(), cwd });
+        if (locations.length === 0) {
+          throw toolError(
+            "pi_docs",
+            `Could not find Pi's own documentation: no installed copy of ${PI_PACKAGE_NAME} with a ` +
+              `${PI_DOC_ENTRIES.join(", ")} entry was found.`
+          );
+        }
 
-      const location = locations[0]!;
-      const result = await readPiDocs(location, params.path, {
-        offset: params.offset,
-        limit: params.limit,
-        signal,
-      });
+        const location = locations[0]!;
+        const result = await readPiDocs(location, params.path, {
+          offset: params.offset,
+          limit: params.limit,
+          signal,
+        });
 
-      if (result.kind === "file") {
+        if (result.kind === "file") {
+          return {
+            content: [{ type: "text", text: renderDocsFile(result.content) }],
+            details: {
+              version: location.version,
+              kind: result.kind,
+              path: result.path,
+              totalLines: result.content.totalLines,
+              truncated: result.content.truncated,
+            },
+          };
+        }
+
         return {
-          content: [{ type: "text", text: renderDocsFile(result.content) }],
-          details: {
-            version: location.version,
-            kind: result.kind,
-            path: result.path,
-            totalLines: result.content.totalLines,
-            truncated: result.content.truncated,
-          },
+          content: [{ type: "text", text: renderDocsListing(location, result) }],
+          details: { version: location.version, kind: result.kind, path: result.path, entries: result.entries.length, truncated: result.truncated },
         };
-      }
-
-      return {
-        content: [{ type: "text", text: renderDocsListing(location, result) }],
-        details: { version: location.version, kind: result.kind, path: result.path, entries: result.entries.length, truncated: result.truncated },
-      };
-    },
-  });
+      },
+    })
+  );
 }

@@ -5,8 +5,8 @@ import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { SandboxError, sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
 import { removeRecursively } from "./remove.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface MoveOptions {
@@ -117,28 +117,22 @@ export async function moveFile(sb: Sandbox, source: string, destination: string,
 }
 
 export function registerMoveTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...MOVE_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(MOVE_TOOL_DEFINITION.name, MOVE_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "move")} ${theme.fg("accent", args.path ?? "")} ${theme.fg(
-        "toolOutput",
-        "->"
-      )} ${theme.fg("accent", args.destination ?? "")}`;
-      if (args.recursive) text += theme.fg("toolOutput", " (recursive)");
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      await moveFile(sandboxFor(ctx.cwd), params.path, params.destination, {
-        recursive: params.recursive,
-        overwrite: params.overwrite,
-        signal,
-      });
+  pi.registerTool(
+    createTool(MOVE_TOOL_DEFINITION, {
+      renderCall: (args, theme) =>
+        renderLine(theme, "move", args.path, "->", args.destination, args.recursive ? " (recursive)" : undefined),
+      async execute(params, { signal, cwd }) {
+        await moveFile(sandboxFor(cwd), params.path, params.destination, {
+          recursive: params.recursive,
+          overwrite: params.overwrite,
+          signal,
+        });
 
-      return {
-        content: [{ type: "text", text: `Moved ${params.path} to ${params.destination}.` }],
-        details: {},
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: `Moved ${params.path} to ${params.destination}.` }],
+          details: {},
+        };
+      },
+    })
+  );
 }

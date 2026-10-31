@@ -6,8 +6,8 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { GREP_TOOL_DEFINITION } from "../tool_definitions/grep.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import path from "node:path";
 
@@ -179,37 +179,31 @@ function scanInWorker(input: ScanInput, timeoutMs: number, signal?: AbortSignal)
 
 
 export function registerGrepTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...GREP_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(GREP_TOOL_DEFINITION.name, GREP_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "grep")} ${theme.fg("accent", `/${args.regex ?? ""}/`)}`;
-      text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-      if (args.glob) text += theme.fg("toolOutput", ` (${args.glob})`);
-      if (args.ignoreCase) text += theme.fg("toolOutput", " -i");
-      if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` limit ${args.maxResults}`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await grepFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.regex, {
-        glob: params.glob,
-        ignoreCase: params.ignoreCase,
-        maxResults: params.maxResults,
-        contextLines: params.contextLines,
-        signal,
-        ignoreGlobs,
-      });
+  pi.registerTool(
+    createTool(GREP_TOOL_DEFINITION, {
+      renderCall: (args, theme) =>
+        renderLine(theme, "grep", `/${args.regex ?? ""}/`, ` in ${args.path ?? "."}`, args.glob ? ` (${args.glob})` : undefined, args.ignoreCase ? " -i" : undefined, args.maxResults !== undefined ? ` limit ${args.maxResults}` : undefined),
+      async execute(params, { signal, cwd }) {
+        const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
+        const result = await grepFiles(sandboxFor(cwd), params.path ?? ".", params.regex, {
+          glob: params.glob,
+          ignoreCase: params.ignoreCase,
+          maxResults: params.maxResults,
+          contextLines: params.contextLines,
+          signal,
+          ignoreGlobs,
+        });
 
-      const text = result.lines.length
-        ? result.lines.map((l) => `${l.file}${l.isMatch ? ":" : "-"}${l.line}${l.isMatch ? ":" : "-"}${l.text}`).join("\n") +
-          (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
-        : "No matches found.";
+        const text = result.lines.length
+          ? result.lines.map((l) => `${l.file}${l.isMatch ? ":" : "-"}${l.line}${l.isMatch ? ":" : "-"}${l.text}`).join("\n") +
+            (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
+          : "No matches found.";
 
-      return {
-        content: [{ type: "text", text }],
-        details: { matchCount: result.matchCount, filesScanned: result.filesScanned, truncated: result.truncated },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text }],
+          details: { matchCount: result.matchCount, filesScanned: result.filesScanned, truncated: result.truncated },
+        };
+      },
+    })
+  );
 }

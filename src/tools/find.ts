@@ -6,8 +6,8 @@ import {getAgentDir} from "@earendil-works/pi-coding-agent";
 import {FIND_TOOL_DEFINITION} from "../tool_definitions/find.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
-import {oneLine, callName} from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface FindOptions {
@@ -112,28 +112,24 @@ function streamGlob(base: string, pattern: string, ignoreGlobs: string[], signal
 }
 
 export function registerFindTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...FIND_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(FIND_TOOL_DEFINITION.name, FIND_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "find")} ${theme.fg("accent", args.pattern ?? "")}`;
-      text += theme.fg("toolOutput", ` in ${args.path ?? "."}`);
-      if (args.maxResults !== undefined) text += theme.fg("toolOutput", ` (limit ${args.maxResults})`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const ignoreGlobs = await getEffectiveIgnoreGlobs(ctx.cwd, getAgentDir());
-      const result = await findFiles(sandboxFor(ctx.cwd), params.path ?? ".", params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
+  pi.registerTool(
+    createTool(FIND_TOOL_DEFINITION, {
+      renderCall: (args, theme) =>
+        renderLine(theme, "find", args.pattern, ` in ${args.path ?? "."}`, args.maxResults !== undefined ? ` (limit ${args.maxResults})` : undefined),
+      async execute(params, { signal, cwd }) {
+        const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
+        const result = await findFiles(sandboxFor(cwd), params.path ?? ".", params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
 
-      const text = result.matches.length
-          ? result.matches.join("\n") +
-          (result.truncated ? `\n… ${result.total - result.matches.length} more result(s) truncated` : "")
-          : "No files matched.";
+        const text = result.matches.length
+            ? result.matches.join("\n") +
+            (result.truncated ? `\n… ${result.total - result.matches.length} more result(s) truncated` : "")
+            : "No files matched.";
 
-      return {
-        content: [{type: "text", text}],
-        details: result,
-      };
-    },
-  });
+        return {
+          content: [{type: "text", text}],
+          details: result,
+        };
+      },
+    })
+  );
 }

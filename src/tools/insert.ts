@@ -3,8 +3,8 @@ import { INSERT_TOOL_DEFINITION } from "../tool_definitions/insert.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { withFileMutationQueue } from "../backend/mutationQueue.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface InsertOptions {
@@ -51,20 +51,17 @@ export async function insertText(sb: Sandbox, target: string, line: number, text
 }
 
 export function registerInsertTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...INSERT_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(INSERT_TOOL_DEFINITION.name, INSERT_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      const text = `${callName(theme, "insert")} ${theme.fg("accent", args.path ?? "")}`;
-      return oneLine(text + theme.fg("toolOutput", ` after line ${args.line}`));
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      await insertText(sandboxFor(ctx.cwd), params.path, params.line, params.text, { signal });
+  pi.registerTool(
+    createTool(INSERT_TOOL_DEFINITION, {
+      renderCall: (args, theme) => renderLine(theme, "insert", args.path, ` after line ${args.line}`),
+      async execute(params, { signal, cwd }) {
+        await insertText(sandboxFor(cwd), params.path, params.line, params.text, { signal });
 
-      return {
-        content: [{ type: "text", text: `Inserted text into ${params.path} after line ${params.line}.` }],
-        details: {},
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: `Inserted text into ${params.path} after line ${params.line}.` }],
+          details: {},
+        };
+      },
+    })
+  );
 }

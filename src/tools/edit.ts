@@ -3,8 +3,8 @@ import {EDIT_TOOL_DEFINITION} from "../tool_definitions/edit.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import {withFileMutationQueue} from "../backend/mutationQueue.ts";
-import {oneLine, callName} from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface EditOptions {
@@ -236,30 +236,23 @@ export async function editFile(
 }
 
 export function registerEditTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...EDIT_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(EDIT_TOOL_DEFINITION.name, EDIT_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = `${callName(theme, "edit")} ${theme.fg("accent", args.path ?? "")}`;
-      text += theme.fg("toolOutput", "");
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const sb = sandboxFor(ctx.cwd);
-      const hasSingle = params.oldText !== undefined || params.newText !== undefined;
+  pi.registerTool(
+    createTool(EDIT_TOOL_DEFINITION, {
+      renderCall: (args, theme) => renderLine(theme, "edit", args.path, ""),
+      async execute(params, { signal, cwd }) {
+        if (params.oldText === undefined || params.newText === undefined) {
+          throw toolError("edit", "Specify oldText and newText", { path: params.path });
+        }
+        await editFile(sandboxFor(cwd), params.path, params.oldText, params.newText, {
+          allowMultipleMatches: params.allowMultipleMatches,
+          signal,
+        });
 
-      if (params.oldText === undefined || params.newText === undefined) {
-        throw toolError("edit", "Specify oldText and newText", { path: params.path });
-      }
-      await editFile(sb, params.path, params.oldText, params.newText, {
-        allowMultipleMatches: params.allowMultipleMatches,
-        signal,
-      });
-
-      return {
-        content: [{ type: "text", text: `Successfully edited ${params.path}.` }],
-        details: {},
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: `Successfully edited ${params.path}.` }],
+          details: {},
+        };
+      },
+    })
+  );
 }

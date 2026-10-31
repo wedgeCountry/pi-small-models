@@ -164,19 +164,6 @@ export class Sandbox {
         `Path "${target}" contains Unicode lookalike characters which are not allowed in sandboxed paths`
       );
     }
-    // Additional targeted check for specific path variations that could bypass RESTRICTED_GLOBS
-    // This catches patterns like .git., .git..., ..git, .venv., node_modules., etc. that might not be caught by globs
-    const pathVariationPattern = /(\.git\.+|\.\.+git|\.venv\.+|\.\.+venv|node_modules\.+|\.\.+node_modules|bower_components\.+|jspm_packages\.+)/;
-    if (pathVariationPattern.test(target)) {
-      throw new SandboxError(
-        "restricted",
-        `Path "${target}" contains a variation of a restricted directory name`
-      );
-    }
-
-
-
-
     // Decode URL-encoded characters to prevent bypass via encoding
     // This handles %2e (.), %2f (/), %5c (\), etc.
     try {

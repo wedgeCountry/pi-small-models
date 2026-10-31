@@ -3,8 +3,8 @@ import { promisify } from "node:util";
 import { GIT_STATUS_TOOL_DEFINITION } from "../tool_definitions/git_status.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -104,31 +104,28 @@ function describeError(err: unknown): string {
 }
 
 export function registerGitStatusTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...GIT_STATUS_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(GIT_STATUS_TOOL_DEFINITION.name, GIT_STATUS_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      const text = callName(theme, "git_status");
-      return oneLine(args.path ? text + theme.fg("toolOutput", ` ${args.path}`) : text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await gitStatus(sandboxFor(ctx.cwd), { path: params.path, signal });
+  pi.registerTool(
+    createTool(GIT_STATUS_TOOL_DEFINITION, {
+      renderCall: (args, theme) => renderLine(theme, "git_status", undefined, args.path ? ` ${args.path}` : undefined),
+      async execute(params, { signal, cwd }) {
+        const result = await gitStatus(sandboxFor(cwd), { path: params.path, signal });
 
-      const branchLine = result.branch
-        ? `On branch ${result.branch}` +
-          (result.ahead ? `, ahead ${result.ahead}` : "") +
-          (result.behind ? `, behind ${result.behind}` : "")
-        : "Not on any branch";
-      const entryLines = result.entries.length
-        ? result.entries.map(
-            (e) => `${e.indexStatus}${e.worktreeStatus} ${e.renamedFrom ? `${e.renamedFrom} -> ` : ""}${e.path}`
-          )
-        : ["(clean — no changes)"];
+        const branchLine = result.branch
+          ? `On branch ${result.branch}` +
+            (result.ahead ? `, ahead ${result.ahead}` : "") +
+            (result.behind ? `, behind ${result.behind}` : "")
+          : "Not on any branch";
+        const entryLines = result.entries.length
+          ? result.entries.map(
+              (e) => `${e.indexStatus}${e.worktreeStatus} ${e.renamedFrom ? `${e.renamedFrom} -> ` : ""}${e.path}`
+            )
+          : ["(clean — no changes)"];
 
-      return {
-        content: [{ type: "text", text: [branchLine, ...entryLines].join("\n") }],
-        details: { branch: result.branch, ahead: result.ahead, behind: result.behind, entries: result.entries },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: [branchLine, ...entryLines].join("\n") }],
+          details: { branch: result.branch, ahead: result.ahead, behind: result.behind, entries: result.entries },
+        };
+      },
+    })
+  );
 }

@@ -2,8 +2,8 @@ import * as fs from "node:fs/promises";
 import { MKDIR_TOOL_DEFINITION } from "../tool_definitions/mkdir.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 export interface MakeDirOptions {
@@ -29,19 +29,17 @@ export async function makeDir(sb: Sandbox, target: string, opts: MakeDirOptions 
 }
 
 export function registerMkdirTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...MKDIR_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(MKDIR_TOOL_DEFINITION.name, MKDIR_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      return oneLine(`${callName(theme, "mkdir")} ${theme.fg("accent", args.path ?? "")}`);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      await makeDir(sandboxFor(ctx.cwd), params.path, { signal });
+  pi.registerTool(
+    createTool(MKDIR_TOOL_DEFINITION, {
+      renderCall: (args, theme) => renderLine(theme, "mkdir", args.path),
+      async execute(params, { signal, cwd }) {
+        await makeDir(sandboxFor(cwd), params.path, { signal });
 
-      return {
-        content: [{ type: "text", text: `Created directory ${params.path}.` }],
-        details: {},
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: `Created directory ${params.path}.` }],
+          details: {},
+        };
+      },
+    })
+  );
 }

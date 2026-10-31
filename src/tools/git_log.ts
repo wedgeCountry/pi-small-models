@@ -3,8 +3,8 @@ import { promisify } from "node:util";
 import { GIT_LOG_TOOL_DEFINITION } from "../tool_definitions/git_log.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
-import { oneLine, callName } from "../backend/renderCall.ts";
-import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 
 const execFile = promisify(execFileCb);
@@ -96,22 +96,18 @@ export function formatGitLog(result: GitLogResult): string {
 }
 
 export function registerGitLogTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...GIT_LOG_TOOL_DEFINITION,
-    prepareArguments: withConciseValidationErrors(GIT_LOG_TOOL_DEFINITION.name, GIT_LOG_TOOL_DEFINITION.parameters),
-    renderCall(args, theme) {
-      let text = callName(theme, "git_log");
-      if (args.maxCount) text += theme.fg("toolOutput", ` -${args.maxCount}`);
-      if (args.path) text += theme.fg("toolOutput", ` ${args.path}`);
-      return oneLine(text);
-    },
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await gitLog(sandboxFor(ctx.cwd), { maxCount: params.maxCount, path: params.path, signal });
+  pi.registerTool(
+    createTool(GIT_LOG_TOOL_DEFINITION, {
+      renderCall: (args, theme) =>
+        renderLine(theme, "git_log", undefined, args.maxCount ? ` -${args.maxCount}` : undefined, args.path ? ` ${args.path}` : undefined),
+      async execute(params, { signal, cwd }) {
+        const result = await gitLog(sandboxFor(cwd), { maxCount: params.maxCount, path: params.path, signal });
 
-      return {
-        content: [{ type: "text", text: formatGitLog(result) }],
-        details: { count: result.commits.length },
-      };
-    },
-  });
+        return {
+          content: [{ type: "text", text: formatGitLog(result) }],
+          details: { count: result.commits.length },
+        };
+      },
+    })
+  );
 }
