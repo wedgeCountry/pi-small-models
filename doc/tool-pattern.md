@@ -13,7 +13,7 @@ Each tool has two files:
 
 **2. `src/tools/<tool>.ts`** — two exports:
 - Plain async function (`toolName`) — takes `Sandbox` first, then args
-- `registerXTool(pi)` — registers with `pi.registerTool`, calls plain function via sandbox
+- `registerXTool(pi)` — builds the tool with `createTool(definition, hooks)` (`src/backend/createTool.ts`) and registers it through the gated registry
 
 `index.ts` imports and calls all `registerXTool` functions.
 
@@ -33,6 +33,7 @@ import { Type } from "typebox";
 
 export const TOUCH_TOOL_DEFINITION = {
   name: "touch",
+  label: "Touch",
   description: "Create an empty file.",
   promptSnippet: "touch: create empty file, includes missing parents",
   parameters: Type.Object({
@@ -45,6 +46,8 @@ export const TOUCH_TOOL_DEFINITION = {
 ```ts
 import { TOUCH_TOOL_DEFINITION } from "../tool_definitions/touch.ts";
 import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { renderLine } from "../backend/renderCall.ts";
+import { createTool } from "../backend/createTool.ts";
 import type { ToolRegistry } from "../sandbox/permissionGate.ts";
 
 export async function touchFile(sb: Sandbox, target: string): Promise<void> {
@@ -53,14 +56,15 @@ export async function touchFile(sb: Sandbox, target: string): Promise<void> {
 }
 
 export function registerTouchTool(pi: ToolRegistry) {
-  pi.registerTool({
-    ...TOUCH_TOOL_DEFINITION,
-    renderCall(args, theme) { return `touch ${args.path}`; },
-    async execute(_id, params, signal, _onUpdate, ctx) {
-      await touchFile(sandboxFor(ctx.cwd), params.path, { signal });
-      return { content: [{ type: "text", text: `Created ${params.path}.` }], details: {} };
-    },
-  });
+  pi.registerTool(
+    createTool(TOUCH_TOOL_DEFINITION, {
+      renderCall: (args, theme) => renderLine(theme, "touch", args.path),
+      async execute(params, { signal, cwd }) {
+        await touchFile(sandboxFor(cwd), params.path);
+        return { content: [{ type: "text", text: `Created ${params.path}.` }], details: {} };
+      },
+    })
+  );
 }
 ```
 

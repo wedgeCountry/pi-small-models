@@ -26,7 +26,7 @@ Each tool exports a plain function (`findFiles`, `grepFiles`, `listDir`, etc.) t
 Tests call these plain functions directly with `new Sandbox(fixtureDir)`.
 
 ## Available Tools
-`find`, `grep`, `edit`, `read`, `write`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `git_status`, `git_diff`
+`find`, `grep`, `edit`, `read`, `write`, `mkdir`, `remove`, `copy`, `move`, `lstat`, `insert`, `list`, `git_status`, `git_diff`, `git_log`, `find_usages`, `pi_docs`, `pi_skills` (plus the deactivated `search` and `peek`)
 
 ## Special Cases
 - **grep**: Runs in a worker thread (`grepWorker.mjs`) — can be killed to stop runaway regex

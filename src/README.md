@@ -17,4 +17,4 @@ Implementation of the Pi extension registered in `../index.ts`.
 See `../tests/README.md` for test suite details.
 
 ## Architecture
-See `doc/architecture.md` for overview or `../AGENTS.md` for full writeup.
+See `../doc/architecture.md` for overview or `../AGENTS.md` for full writeup.
