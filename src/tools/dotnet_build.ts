@@ -1,0 +1,121 @@
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+import { DOTNET_BUILD_TOOL_DEFINITION } from "../tool_definitions/dotnet_build.ts";
+import type { ToolRegistry } from "../sandbox/permissionGate.ts";
+import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
+import { oneLine, callName } from "../backend/renderCall.ts";
+import { withConciseValidationErrors } from "../backend/toolValidation.ts";
+
+const execFile = promisify(execFileCb);
+
+const MAX_BUFFER = 10 * 1024 * 1024; // 10MB — builds can produce substantial output
+
+export interface DotnetBuildOptions {
+  /** Path (resolved through the sandbox) to the project or solution to build. Omit for the current directory. */
+  path?: string;
+  /** Build configuration: Debug or Release. */
+  configuration?: "Debug" | "Release";
+  signal?: AbortSignal;
+}
+
+export interface DotnetBuildResult {
+  success: boolean;
+  output: string;
+  /** Exit code from dotnet (0 = success, non-zero = failure). */
+  exitCode: number;
+}
+
+/**
+ * Runs `dotnet build` on a project or solution.
+ */
+export async function dotnetBuild(sb: Sandbox, opts: DotnetBuildOptions = {}): Promise<DotnetBuildResult> {
+  const args = ["build"];
+  
+  const scope = opts.path ? sb.relative(opts.path) : "";
+  if (scope) {
+    args.push(scope);
+  }
+  
+  if (opts.configuration) {
+    args.push("--configuration", opts.configuration);
+  }
+
+  let stdout: string;
+  let stderr: string;
+  let exitCode = 0;
+  
+  try {
+    const result = await execFile("dotnet", args, { 
+      cwd: sb.root, 
+      signal: opts.signal, 
+      maxBuffer: MAX_BUFFER,
+    });
+    stdout = result.stdout;
+    stderr = result.stderr;
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
+    if (e.name === "AbortError") throw err;
+    if (e.code === "ENOENT") {
+      return {
+        success: false,
+        output: "dotnet is not installed or not on PATH",
+        exitCode: -1,
+      };
+    }
+    // execFile rejects on non-zero exit, with `code` = exit code and stdout/stderr attached.
+    if (typeof e.code === "number") {
+      stdout = e.stdout ?? "";
+      stderr = e.stderr ?? "";
+      exitCode = e.code;
+    } else {
+      return {
+        success: false,
+        output: `dotnet build failed: ${describeError(err)}`,
+        exitCode: -1,
+      };
+    }
+  }
+
+  const output = [stdout, stderr].filter(Boolean).join("\n").trim() || "(no output)";
+  const success = exitCode === 0;
+
+  return { success, output, exitCode };
+}
+
+function describeError(err: unknown): string {
+  const e = err as NodeJS.ErrnoException & { stderr?: string };
+  return e.stderr?.trim() || e.message || String(err);
+}
+
+export function registerDotnetBuildTool(pi: ToolRegistry) {
+  pi.registerTool({
+    ...DOTNET_BUILD_TOOL_DEFINITION,
+    prepareArguments: withConciseValidationErrors(DOTNET_BUILD_TOOL_DEFINITION.name, DOTNET_BUILD_TOOL_DEFINITION.parameters),
+    renderCall(args, theme) {
+      let text = callName(theme, "dotnet_build");
+      if (args.path) {
+        text += theme.fg("toolOutput", ` ${args.path}`);
+      }
+      if (args.configuration) {
+        text += theme.fg("toolOutput", ` --configuration ${args.configuration}`);
+      }
+      return oneLine(text);
+    },
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const result = await dotnetBuild(sandboxFor(ctx.cwd), { 
+        path: params.path, 
+        configuration: params.configuration as "Debug" | "Release" | undefined,
+        signal 
+      });
+
+      const statusLine = result.success 
+        ? "✓ Build succeeded" 
+        : `✗ Build failed (exit code ${result.exitCode})`;
+
+      return {
+        content: [{ type: "text", text: `${statusLine}\n\n${result.output}` }],
+        details: result,
+      };
+    },
+  });
+}
