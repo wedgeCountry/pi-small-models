@@ -13,13 +13,14 @@ export const READ_TOOL_DEFINITION = {
     limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines to read." })),
     peek: Type.Optional(
       Type.Boolean({
-        description: "If true, show a compact outline of the file instead of its contents. Defaults to true.",
+        description: "If true, show a compact outline of the file. Usually sufficient in most cases.",
         default: true,
       })
     ),
     visibility: Type.Optional(
       Type.Union([Type.Literal("public"), Type.Literal("protected"), Type.Literal("private")], {
-        description: 'Outline of the file, used to get a first impression of the file.',
+        description:
+          'Outline only: "public" (default) shows only public API, "protected" adds protected members, "private" shows everything.',
         default: "public",
       })
     ),
