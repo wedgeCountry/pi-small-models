@@ -7,8 +7,6 @@ import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
-import { peekFile, renderPeekResult } from "./peek.ts";
-import type { PeekVisibility } from "./previewManagers/types.ts";
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
@@ -340,45 +338,13 @@ export function registerReadTool(pi: ToolRegistry) {
   pi.registerTool(
     createTool(READ_TOOL_DEFINITION, {
       renderCall: (args, theme) => {
-        const flags: string[] = [];
-        if (args.peek === false) flags.push("peek=false");
-        if (args.visibility !== undefined && args.visibility !== "public") flags.push(args.visibility);
-        if (args.includeDocs) flags.push("docs");
-        if (args.maxDepth !== undefined) flags.push(`depth ${args.maxDepth}`);
         const range = args.offset !== undefined || args.limit !== undefined
           ? `:${args.offset ?? 1}${args.limit !== undefined ? `-${(args.offset ?? 1) + args.limit - 1}` : "+"}`
           : undefined;
-        return renderLine(theme, "read", args.path, flags.length ? ` (${flags.join(", ")})` : undefined, range);
+        return renderLine(theme, "read", args.path, undefined, range);
       },
       async execute(params, { signal, cwd }) {
         const sb = sandboxFor(cwd);
-
-        // `peek` defaults to true: without offset/limit, return the file's structural outline
-        // instead of its raw contents. Unsupported extensions fall through to a full read, and
-        // offset/limit always force raw contents (a range of an outline is meaningless).
-        if (params.peek !== false && params.offset === undefined && params.limit === undefined) {
-          try {
-            const visibility = (params.visibility ?? "public") as PeekVisibility;
-            const result = await peekFile(sb, params.path, {
-              visibility,
-              includeDocs: params.includeDocs,
-              maxDepth: params.maxDepth,
-              signal,
-            });
-            return {
-              content: [{ type: "text", text: renderPeekResult(params.path, result, visibility) }],
-              details: {
-                peek: true,
-                language: result.language,
-                shownLines: result.lines.length,
-                totalLines: result.totalLines,
-                truncated: result.truncated,
-              },
-            };
-          } catch (err) {
-            if (!/does not support/.test((err as Error).message)) throw err;
-          }
-        }
 
         const result = await readFile(sb, params.path, { offset: params.offset, limit: params.limit, signal });
 
@@ -390,7 +356,7 @@ export function registerReadTool(pi: ToolRegistry) {
 
         return {
           content: [{ type: "text", text }],
-          details: { peek: false, totalLines: result.totalLines, truncated: result.truncated },
+          details: { totalLines: result.totalLines, truncated: result.truncated },
         };
       },
     })

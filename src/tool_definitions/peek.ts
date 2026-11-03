@@ -10,7 +10,7 @@ export const PEEK_TOOL_DEFINITION = {
     visibility: Type.Optional(
       Type.Union([Type.Literal("public"), Type.Literal("protected"), Type.Literal("private")], {
         description:
-          'Most-private declarations to include (inclusive): "public" (default) shows only public API, ' +
+          'Declarations to include (inclusive): "public" (default) shows only public API, ' +
           '"protected" adds protected members, "private" shows everything. Ignored for Markdown.',
         default: "public",
       })

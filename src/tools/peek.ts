@@ -47,7 +47,7 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
     throw toolError(
       "peek",
       `peek does not support "${ext || path.basename(target)}" files. Supported extensions: ` +
-        `${PEEK_EXTENSIONS.join(", ")}. Use read with peek=false to view this file instead.`,
+        `${PEEK_EXTENSIONS.join(", ")}. Use read to view this file instead.`,
       { path: target }
     );
   }

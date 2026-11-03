@@ -5,7 +5,7 @@ export const FIND_USAGES_TOOL_DEFINITION = {
   name: "find_usages",
   label: "Find Usages",
   description: "Find structural usages of a class or function name across the project",
-  promptGuidelines: ["use this tool over grep when you have an exact name",],
+  promptGuidelines: ["Use the find_usages tool over grep when you have the exact name of a class or function",],
   parameters: Type.Object({
     symbol: Type.String({
       description: "The class or function name to search for. Matched case-sensitively as a whole identifier.",

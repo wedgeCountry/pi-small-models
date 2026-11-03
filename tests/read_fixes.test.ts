@@ -65,7 +65,7 @@ test("read error for a directory uses a fixed EISDIR message", async (t) => {
   );
 });
 
-test("renderCall shows peek and visibility flags alongside offset/limit", () => {
+test("renderCall shows offset/limit range", () => {
   const registered: Record<string, unknown> = {};
   registerReadTool({
     registerTool: (tool: Record<string, unknown>) => Object.assign(registered, tool),
@@ -76,13 +76,6 @@ test("renderCall shows peek and visibility flags alongside offset/limit", () => 
   ) => { render(): string[] };
 
   const theme = { fg: (_: string, s: string) => s, bold: (s: string) => s };
-  const rendered = renderCall({ path: "a.py", peek: false }, theme);
-  const flat = rendered.render().join(" ");
-  assert.match(flat, /peek=false/);
-
-  const renderedOutline = renderCall({ path: "a.py", visibility: "private" }, theme);
-  assert.match(renderedOutline.render().join(" "), /private/);
-
   const renderedRange = renderCall({ path: "a.py", offset: 5, limit: 10 }, theme);
   assert.match(renderedRange.render().join(" "), /:5-14/);
 });

@@ -12,6 +12,7 @@ import {registerListTool} from "./src/tools/list.ts";
 import {registerLstatTool} from "./src/tools/lstat.ts";
 import {registerMkdirTool} from "./src/tools/mkdir.ts";
 import {registerMoveTool} from "./src/tools/move.ts";
+import {registerPeekTool} from "./src/tools/peek.ts";
 import {registerReadTool} from "./src/tools/read.ts";
 import {registerRemoveTool} from "./src/tools/remove.ts";
 import {registerPiDocsTool} from "./src/tools/pi_docs.ts";
@@ -50,7 +51,7 @@ export default function (pi: ExtensionAPI) {
   registerLstatTool(tools);
   registerMkdirTool(tools);
   registerMoveTool(tools);
-  // registerPeekTool(tools); // contained in read
+  registerPeekTool(tools);
   registerReadTool(tools);
   registerRemoveTool(tools);
   // registerSearchTool(tools); // deactivated, ambiguous to grep and find
