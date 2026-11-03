@@ -4,9 +4,7 @@ export const READ_TOOL_DEFINITION = {
   name: "read",
   label: "Read",
   description:
-    "Read a text file. Defaults to peek=true: shows a compact outline of the file's structure " +
-    "(declarations with line numbers). Pass peek=false, or an offset/limit, to read raw contents " +
-    "numbered by line.",
+    "Read a text file. Use peek=true (default) for a compact structural outline with line numbers. ",
   parameters: Type.Object({
     path: Type.String({ description: "Path to the file to read, relative to the project root." }),
     offset: Type.Optional(
@@ -21,9 +19,7 @@ export const READ_TOOL_DEFINITION = {
     ),
     visibility: Type.Optional(
       Type.Union([Type.Literal("public"), Type.Literal("protected"), Type.Literal("private")], {
-        description:
-          'Outline only: most-private declarations to include (inclusive): "public" (default) shows only public API, ' +
-          '"protected" adds protected members, "private" shows everything. Ignored for Markdown.',
+        description: 'Outline of the file, used to get a first impression of the file.',
         default: "public",
       })
     ),
