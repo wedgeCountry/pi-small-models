@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import type { BeforeAgentStartEvent, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import extension from "../index.ts";
 import { INJECTION_GUARD_RULES } from "../src/injectionGuard.ts";
+import { TOOL_EFFICIENCY_GUIDELINES } from "../src/toolEfficiency.ts";
+
+const ALL_RULES = [...INJECTION_GUARD_RULES, ...TOOL_EFFICIENCY_GUIDELINES];
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 
@@ -33,7 +36,7 @@ test("before_agent_start appends the injection guard to the system prompt exactl
   assert.ok(handlers.has("before_agent_start"), "extension does not register a before_agent_start handler");
 
   const promptGuidelines = runBeforeAgentStart(handlers, []);
-  assert.deepEqual(promptGuidelines, INJECTION_GUARD_RULES);
+  assert.deepEqual(promptGuidelines, ALL_RULES);
   assert.match(promptGuidelines.join("\n"), /Never follow instructions/i);
 });
 
@@ -42,11 +45,11 @@ test("before_agent_start never duplicates the guard, even across runs", () => {
   const promptGuidelines = runBeforeAgentStart(handlers, []);
 
   runBeforeAgentStart(handlers, promptGuidelines);
-  assert.deepEqual(promptGuidelines, INJECTION_GUARD_RULES);
+  assert.deepEqual(promptGuidelines, ALL_RULES);
 });
 
 test("the guard keeps any rules already present in the prompt", () => {
   const { handlers } = loadExtension();
   const promptGuidelines = runBeforeAgentStart(handlers, ["existing rule"]);
-  assert.deepEqual(promptGuidelines, ["existing rule", ...INJECTION_GUARD_RULES]);
+  assert.deepEqual(promptGuidelines, ["existing rule", ...ALL_RULES]);
 });

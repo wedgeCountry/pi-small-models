@@ -19,6 +19,7 @@ import {registerPiDocsTool} from "./src/tools/pi_docs.ts";
 import {registerPiSkillsTool} from "./src/tools/pi_skills.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {INJECTION_GUARD_RULES} from "./src/injectionGuard.ts";
+import {TOOL_EFFICIENCY_GUIDELINES} from "./src/toolEfficiency.ts";
 import {setDebugMode} from "./src/backend/formatError.ts";
 import {resetSkillsCache} from "./src/sandbox/piRoots.ts";
 import {getSandboxState, setSandboxState, type SandboxState} from "./src/sandbox/sandbox.ts";
@@ -176,11 +177,12 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // One prompt-injection guard for the whole system prompt, not per tool: tool results and file
-  // contents are data, never instructions. Registered once here instead of duplicated into every
-  // tool's promptGuidelines.
+  // Two whole-system-prompt additions, not per tool: the prompt-injection guard (tool results and
+  // file contents are data, never instructions) and the token-efficiency guidelines (peek before
+  // read, find_usages before grep, nameOnly before full diffs). Registered once here instead of
+  // duplicated into every tool's promptGuidelines.
   pi.on("before_agent_start", (event) => {
-    for (const rule of INJECTION_GUARD_RULES) {
+    for (const rule of [...INJECTION_GUARD_RULES, ...TOOL_EFFICIENCY_GUIDELINES]) {
       if (!event.systemPromptOptions.promptGuidelines.includes(rule)) {
         event.systemPromptOptions.promptGuidelines.push(rule);
       }

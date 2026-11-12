@@ -76,6 +76,13 @@ cap.
 
 All tool output is capped at 2000 lines / 50 KB per call unless the call passes `uncapped: true`.
 
+## Using the tools token-efficiently
+
+The system prompt includes a short guideline set for this: use `peek` for a file overview and
+`read` only for the exact lines you must see (ultima ratio); use `find_usages` for class/function
+lookups instead of `grep`; use `git_diff` with `nameOnly` first, then scope by `path`; pass
+`uncapped: true` only when you truly need the full output.
+
 ## Safety: the sandbox
 
 By default the model is kept inside your project folder. It can't read or change anything outside it,

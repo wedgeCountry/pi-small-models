@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   turns them off again, so their schemas and guidelines no longer cost system-prompt tokens in sessions
   that never ask about pi itself.
 
+### Added
+- System-prompt tool-efficiency guidelines (`src/toolEfficiency.ts`, injected once via
+  `before_agent_start`): peek for file overviews with read as the ultima ratio, find_usages for
+  symbol lookups over grep, git_diff `nameOnly` before full diffs, `uncapped: true` only when needed.
+
 ### Changed
 - Tool errors are now message-only by default; the `Parameters:` line (the failing call's arguments,
   previously always included, truncated at 120 chars per value) only appears with the new `--debug`
