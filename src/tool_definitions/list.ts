@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const LIST_TOOL_DEFINITION = {
   name: "list",
@@ -6,7 +7,7 @@ export const LIST_TOOL_DEFINITION = {
   description: "List files and directories within the project.",
   parameters: Type.Object({
     path: Type.Optional(
-      Type.String({ description: 'Directory to list, relative to the project root. Defaults to ".".' })
+      Type.String({ description: 'Directory to list (project-relative). Defaults to ".".' })
     ),
     recursive: Type.Optional(Type.Boolean({ description: "List subdirectories recursively.", default: false })),
     maxDepth: Type.Optional(
@@ -14,5 +15,6 @@ export const LIST_TOOL_DEFINITION = {
     ),
     showHidden: Type.Optional(Type.Boolean({ description: "Include dotfiles and dot-directories.", default: false })),
     maxResults: Type.Optional(Type.Integer({ description: "Maximum number of entries to return.", default: 200 })),
+    uncapped: uncappedParam,
   }),
 };

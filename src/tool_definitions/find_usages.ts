@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 import { FIND_USAGES_LANGUAGES } from "../tools/usageRules/registry.ts";
 
 export const FIND_USAGES_TOOL_DEFINITION = {
@@ -19,10 +20,11 @@ export const FIND_USAGES_TOOL_DEFINITION = {
       })
     ),
     path: Type.Optional(
-      Type.String({ description: 'Base directory to search from, relative to the project root. Defaults to ".".' })
+      Type.String({ description: 'Base directory to search from (project-relative). Defaults to ".".' })
     ),
     maxResults: Type.Optional(
       Type.Integer({ description: "Maximum number of matching lines to return.", default: 200 })
     ),
+    uncapped: uncappedParam,
   }),
 };

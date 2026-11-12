@@ -9,6 +9,7 @@ import {sandboxFor, type Sandbox} from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 
 export interface FindOptions {
   maxResults?: number;
@@ -120,10 +121,12 @@ export function registerFindTool(pi: ToolRegistry) {
         const ignoreGlobs = await getEffectiveIgnoreGlobs(cwd, getAgentDir());
         const result = await findFiles(sandboxFor(cwd), params.path ?? ".", params.pattern, {maxResults: params.maxResults, signal, ignoreGlobs});
 
-        const text = result.matches.length
+        const raw = result.matches.length
             ? result.matches.join("\n") +
             (result.truncated ? `\n… ${result.total - result.matches.length} more result(s) truncated` : "")
             : "No files matched.";
+        const capped = capText(raw, { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
 
         return {
           content: [{type: "text", text}],

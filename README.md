@@ -66,6 +66,23 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 
 `read`, `write`, `edit`, `find`, `grep`, `list`, `copy`, `move`, `remove`, `mkdir`, `lstat` and `insert` replace Pi's built-in tools of the same name.
 
+`pi_docs` and `pi_skills` are registered but **inactive by default**, to keep the system prompt (and its token cost) small. Run `/pi-self on` to activate them for the session when working on pi itself; no argument toggles. Every new session starts with them off.
+
+## Debug mode
+
+Tool errors carry just the message by default, and are capped at 100 lines / 4 KB. Start Pi with
+`pi --debug` for the full error: the `Parameters:` line (the arguments of the failing call) and no
+cap.
+
+All tool output is capped at 2000 lines / 50 KB per call unless the call passes `uncapped: true`.
+
+## Using the tools token-efficiently
+
+The system prompt includes a short guideline set for this: use `peek` for a file overview and
+`read` only for the exact lines you must see (ultima ratio); use `find_usages` for class/function
+lookups instead of `grep`; use `git_diff` with `nameOnly` first, then scope by `path`; pass
+`uncapped: true` only when you truly need the full output.
+
 ## Safety: the sandbox
 
 By default the model is kept inside your project folder. It can't read or change anything outside it,

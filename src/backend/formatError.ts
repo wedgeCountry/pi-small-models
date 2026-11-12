@@ -1,16 +1,56 @@
+import { capText } from "./capOutput.ts";
+
 /**
  * Unified error-message formatting for every error a tool throws.
  *
  * Produces a single, predictable shape:
  *
  *   <tool> error: <message>
+ *
+ * With debug mode on (`pi --debug`, see `setDebugMode`) a second line is appended:
+ *
  *   Parameters: key=value, key=value
  *
- * The `Parameters` line lists only the arguments that were actually supplied (undefined values,
- * functions, and AbortSignals are skipped) and truncates long values, so the model gets an
- * informative but compact view of what the failing call looked like without dumping full file
- * contents or internal options into its context.
+ * listing only the arguments that were actually supplied (undefined values, functions, and
+ * AbortSignals are skipped) and truncating long values. Debug off, the model gets just the message:
+ * the parameter echo can repeat large payloads (e.g. edit's oldText/newText) into its context.
  */
+
+let debugMode = false;
+
+/** Turns the `Parameters:` line in error output on/off. Wired to the `--debug` CLI flag in index.ts. */
+export function setDebugMode(enabled: boolean): void {
+  debugMode = enabled;
+}
+
+export function isDebugMode(): boolean {
+  return debugMode;
+}
+
+/** Errors get a much tighter cap than tool output: short by default, full only in debug mode. */
+const ERROR_MAX_LINES = 100;
+const ERROR_MAX_BYTES = 4 * 1024; // 4KB
+
+/**
+ * Caps a formatted error message at ERROR_MAX_LINES lines / ERROR_MAX_BYTES bytes. Debug mode
+ * off (the default), a huge error (e.g. a git stderr dump) is trimmed with a hint; debug mode
+ * on, the full text is kept.
+ */
+export function capErrors(text: string): string {
+  if (debugMode) return text;
+  const capped = capText(text, { maxLines: ERROR_MAX_LINES, maxBytes: ERROR_MAX_BYTES });
+  let out = capped.text;
+  let truncated = capped.truncated;
+  // capText always keeps at least one line, so a single oversized line survives it — hard-trim
+  // that case too (char-slicing to maxBytes is safe: UTF-8 chars are at least one byte each).
+  if (!truncated && Buffer.byteLength(out, "utf8") > ERROR_MAX_BYTES) {
+    out = out.slice(0, ERROR_MAX_BYTES);
+    truncated = true;
+  }
+  return truncated
+    ? `${out}\n\n[Error truncated. Start pi with --debug for the full error output.]`
+    : out;
+}
 
 const MAX_VALUE_LENGTH = 120;
 
@@ -33,12 +73,14 @@ function isActiveParameter(value: unknown): boolean {
 }
 
 export function formatError(toolName: string, message: string, parameters: Record<string, unknown> = {}): string {
-  const active = Object.entries(parameters).filter(([, value]) => isActiveParameter(value));
   const lines = [`${toolName} error: ${message}`];
-  if (active.length > 0) {
-    lines.push(`Parameters: ${active.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`);
+  if (debugMode) {
+    const active = Object.entries(parameters).filter(([, value]) => isActiveParameter(value));
+    if (active.length > 0) {
+      lines.push(`Parameters: ${active.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`);
+    }
   }
-  return lines.join("\n");
+  return capErrors(lines.join("\n"));
 }
 
 /** Convenience wrapper so a tool throws with the unified format in one call. */

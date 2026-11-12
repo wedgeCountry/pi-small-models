@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const GIT_DIFF_TOOL_DEFINITION = {
   name: "git_diff",
@@ -8,15 +9,15 @@ export const GIT_DIFF_TOOL_DEFINITION = {
   parameters: Type.Object({
     path: Type.Optional(
       Type.String({
-        description: "Limit the diff to this file or directory, relative to the project root. Defaults to the whole repository.",
+        description: "Limit the diff to this file or directory (project-relative). Defaults to the whole repository.",
       })
     ),
     nameOnly: Type.Optional(
       Type.Boolean({
-        description:
-          "List only the changed file paths, one per line, without the diff body. Use it to see which files changed before asking for their diff. Defaults to false.",
+        description: "List only changed file paths, no diff body — a cheap \"what changed?\" step. Defaults to false.",
         default: false,
       })
     ),
+    uncapped: uncappedParam,
   }),
 };

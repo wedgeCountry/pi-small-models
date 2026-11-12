@@ -19,6 +19,8 @@ export interface PiSkillsOptions {
   offset?: number;
   limit?: number;
   signal?: AbortSignal;
+  /** The model's explicit opt-out: file reads skip the line/byte cap. */
+  uncapped?: boolean;
 }
 
 /** What `skill`/`path` resolve to: one discovered skill plus one file inside its own directory. */
@@ -133,7 +135,7 @@ export async function readSkillFile(
   file: string = "SKILL.md",
   opts: PiSkillsOptions = {}
 ): Promise<ReadResult> {
-  return readFile(readOnlySandbox(skill.dir), file, { offset: opts.offset, limit: opts.limit, signal: opts.signal });
+  return readFile(readOnlySandbox(skill.dir), file, { offset: opts.offset, limit: opts.limit, uncapped: opts.uncapped, signal: opts.signal });
 }
 
 /** The listing the model sees when it calls `pi_skills` with no arguments. */
@@ -179,7 +181,7 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
 
         if (!request) {
           return {
-            content: [{ type: "text", text: formatSkillListing(skills) }],
+            content: [{ type: "text", text: formatSkillListing(skills, params.uncapped ? Number.MAX_SAFE_INTEGER : LISTING_MAX_SHOWN) }],
             details: {
               kind: "list",
               count: skills.length,
@@ -191,6 +193,7 @@ export function registerPiSkillsTool(pi: ToolRegistry) {
         const result = await readSkillFile(request.skill, request.file, {
           offset: params.offset,
           limit: params.limit,
+          uncapped: params.uncapped,
           signal,
         });
         return {

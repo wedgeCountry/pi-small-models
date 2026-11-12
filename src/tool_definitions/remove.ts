@@ -5,7 +5,7 @@ export const REMOVE_TOOL_DEFINITION = {
   label: "Remove",
   description: "Delete a file, or a directory and its contents when recursive is set.",
   parameters: Type.Object({
-    path: Type.String({ description: "File or directory to remove, relative to the project root." }),
+    path: Type.String({ description: "File or directory to remove (project-relative)." }),
     recursive: Type.Optional(
       Type.Boolean({
         description: "Required to remove a directory. Removes the directory and everything inside it.",

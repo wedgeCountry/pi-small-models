@@ -1,20 +1,14 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const PI_SKILLS_TOOL_DEFINITION = {
   name: "pi_skills",
   label: "Pi Skills",
   description:
-    "List the skills Pi has discovered, or read one skill's SKILL.md and the files it bundles. Skills live outside the " +
-    "project (Pi's agent directory, ~/.agents/skills, installed packages, the project's .agents/skills), so they are not " +
-    "reachable through read. Omit skill to get the list of names, descriptions and SKILL.md paths.",
-  promptSnippet:
-    "pi_skills: no arguments lists every discovered skill (name, description, SKILL.md path); skill=\"name\" reads that " +
-    "SKILL.md; skill+path reads a file bundled with that skill",
+    "List the skills Pi discovered (they live outside the project, so read cannot reach them), or read one skill's " +
+    "SKILL.md and bundled files. Omit skill to list all.",
   promptGuidelines: [
-    "Use pi_skills when a skill listed in <available_skills> mentions a reference file or script you need, or when you " +
-      "must see a skill's own instructions before following them.",
-    "Call pi_skills with no arguments first to get the exact names and paths; a skill can also be named by its directory.",
-    "pi_skills is read-only and reaches only files inside the one skill directory you asked for.",
+    "Call pi_skills with no arguments first to get exact names and paths; reads stay inside the one skill directory named.",
   ],
   parameters: Type.Object({
     skill: Type.Optional(
@@ -34,5 +28,6 @@ export const PI_SKILLS_TOOL_DEFINITION = {
       Type.Integer({ minimum: 1, description: "1-indexed line number to start reading from. Defaults to 1." })
     ),
     limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines to read." })),
+    uncapped: uncappedParam,
   }),
 };

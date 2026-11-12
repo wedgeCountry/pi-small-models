@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -103,8 +104,11 @@ export function registerGitLogTool(pi: ToolRegistry) {
       async execute(params, { signal, cwd }) {
         const result = await gitLog(sandboxFor(cwd), { maxCount: params.maxCount, path: params.path, signal });
 
+        const capped = capText(formatGitLog(result), { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
+
         return {
-          content: [{ type: "text", text: formatGitLog(result) }],
+          content: [{ type: "text", text }],
           details: { count: result.commits.length },
         };
       },

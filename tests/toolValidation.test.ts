@@ -1,7 +1,11 @@
-import { test } from "node:test";
+import { before, test } from "node:test";
 import assert from "node:assert/strict";
 import { Type } from "typebox";
 import { withConciseValidationErrors } from "../src/backend/toolValidation.ts";
+import { setDebugMode } from "../src/backend/formatError.ts";
+
+// The Parameters line these tests assert on only appears with debug mode on.
+before(() => setDebugMode(true));
 
 const SCHEMA = Type.Object({
   path: Type.String(),
