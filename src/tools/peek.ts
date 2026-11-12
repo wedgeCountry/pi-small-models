@@ -8,15 +8,13 @@ import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
-
-/** Same caps as `read`, so one peek can't flood a small model's context either. */
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
 
 export interface PeekOptions {
   visibility?: PeekVisibility;
   includeDocs?: boolean;
   maxDepth?: number;
+  uncapped?: boolean;
   signal?: AbortSignal;
 }
 
@@ -69,17 +67,19 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
   });
 
   let truncated = false;
-  if (lines.length > DEFAULT_MAX_LINES) {
-    lines = lines.slice(0, DEFAULT_MAX_LINES);
-    truncated = true;
-  }
-  let bytes = 0;
-  for (let k = 0; k < lines.length; k++) {
-    bytes += Buffer.byteLength(lines[k]!.text, "utf8") + 1;
-    if (bytes > DEFAULT_MAX_BYTES && k > 0) {
-      lines = lines.slice(0, k);
+  if (!opts.uncapped) {
+    if (lines.length > DEFAULT_MAX_LINES) {
+      lines = lines.slice(0, DEFAULT_MAX_LINES);
       truncated = true;
-      break;
+    }
+    let bytes = 0;
+    for (let k = 0; k < lines.length; k++) {
+      bytes += Buffer.byteLength(lines[k]!.text, "utf8") + 1;
+      if (bytes > DEFAULT_MAX_BYTES && k > 0) {
+        lines = lines.slice(0, k);
+        truncated = true;
+        break;
+      }
     }
   }
 
@@ -121,6 +121,7 @@ export function registerPeekTool(pi: ToolRegistry) {
           visibility,
           includeDocs: params.includeDocs,
           maxDepth: params.maxDepth,
+          uncapped: params.uncapped,
           signal,
         });
 

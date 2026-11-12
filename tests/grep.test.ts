@@ -89,6 +89,21 @@ test("honors custom ignoreGlobs (e.g. from /ignore) on top of the hardcoded defa
   assert.equal(result.lines[0]?.file, "src/a.ts");
 });
 
+test("skips default-ignored directories (node_modules, .venv, __pycache__, .git) with default options", async (t) => {
+  const dir = await makeFixture({
+    "src/a.ts": "needle",
+    "node_modules/pkg/index.js": "needle",
+    ".venv/lib/python/site.py": "needle",
+    "pkg/__pycache__/mod.py": "needle",
+    ".git/hooks/hook.sh": "needle",
+  });
+  t.after(() => cleanupFixture(dir));
+
+  const result = await grepFiles(new Sandbox(dir), ".", "needle");
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.lines[0]?.file, "src/a.ts");
+});
+
 test("accepts a path that names a file and searches within it (legacy test)", async (t) => {
   const dir = await makeFixture({ "main.py": "print((1))\n" });
   t.after(() => cleanupFixture(dir));

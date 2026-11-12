@@ -28,6 +28,8 @@ export interface PiDocsOptions {
   signal?: AbortSignal;
   maxResults?: number;
   maxDepth?: number;
+  /** The model's explicit opt-out: file reads skip the line/byte cap, listings skip maxResults. */
+  uncapped?: boolean;
 }
 
 export type PiDocsResult =
@@ -70,7 +72,7 @@ export async function readPiDocs(
   if (rel !== "") assertInDocScope(rel, target);
 
   const sb = readOnlySandbox(location.packageRoot);
-  const maxResults = opts.maxResults ?? DEFAULT_MAX_RESULTS;
+  const maxResults = opts.uncapped ? Number.MAX_SAFE_INTEGER : (opts.maxResults ?? DEFAULT_MAX_RESULTS);
 
   if (rel === "") {
     const entries: ListEntry[] = [];
@@ -112,7 +114,7 @@ export async function readPiDocs(
     return { kind: "listing", path: rel, entries: listing.entries, truncated: listing.truncated };
   }
 
-  return { kind: "file", path: rel, content: await readFile(sb, rel, { offset: opts.offset, limit: opts.limit, signal: opts.signal }) };
+  return { kind: "file", path: rel, content: await readFile(sb, rel, { offset: opts.offset, limit: opts.limit, uncapped: opts.uncapped, signal: opts.signal }) };
 }
 
 /**
@@ -258,6 +260,7 @@ export function registerPiDocsTool(pi: ToolRegistry) {
         const result = await readPiDocs(location, params.path, {
           offset: params.offset,
           limit: params.limit,
+          uncapped: params.uncapped,
           signal,
         });
 

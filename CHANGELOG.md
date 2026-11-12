@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `/pi-self [on|off]` command: activates or deactivates the `pi_docs`/`pi_skills` tools for the session
+  (no argument toggles). Both tools are now registered but **inactive by default**, and `session_start`
+  turns them off again, so their schemas and guidelines no longer cost system-prompt tokens in sessions
+  that never ask about pi itself.
+
+### Changed
+- Tool errors are now message-only by default; the `Parameters:` line (the failing call's arguments,
+  previously always included, truncated at 120 chars per value) only appears with the new `--debug`
+  CLI flag (`pi --debug`). Pi's built-in `/debug` is only a debug-log viewer, not a mode switch, so
+  the extension registers its own flag via `pi.registerFlag`/`pi.getFlag`.
+- Smaller system prompt: dropped the redundant `promptSnippet` fields (`pi_docs`, `pi_skills`, `insert`),
+  cut the `pi_docs`/`pi_skills`/`insert` prompt guidelines down to one line each, shortened the two
+  prompt-injection guard rules, and slimmed tool descriptions and parameter boilerplate
+  ("relative to the project root" is now "project-relative" everywhere).
 - `git_diff` takes an optional `nameOnly` (git's `--name-only`): one line per changed path, no diff
   body. A cheap "what changed?" step for a small model to decide which files are worth a full diff.
   `--name-only` implies `--no-patch`, so no other flag is needed, and `path` scoping works the same

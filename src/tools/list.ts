@@ -9,6 +9,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 
 export interface ListOptions {
   recursive?: boolean;
@@ -91,10 +92,12 @@ export function registerListTool(pi: ToolRegistry) {
         });
 
         const remaining = result.total - result.entries.length;
-        const text = result.entries.length
+        const raw = result.entries.length
           ? result.entries.map((e) => (e.isDirectory ? `${e.path}/` : e.path)).join("\n") +
             (result.truncated ? `\n… ${remaining} more entr${remaining === 1 ? "y" : "ies"} truncated` : "")
           : "(empty directory)";
+        const capped = capText(raw, { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
 
         return {
           content: [{ type: "text", text }],

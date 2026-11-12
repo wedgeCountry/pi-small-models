@@ -4,13 +4,26 @@
  * Produces a single, predictable shape:
  *
  *   <tool> error: <message>
+ *
+ * With debug mode on (`pi --debug`, see `setDebugMode`) a second line is appended:
+ *
  *   Parameters: key=value, key=value
  *
- * The `Parameters` line lists only the arguments that were actually supplied (undefined values,
- * functions, and AbortSignals are skipped) and truncates long values, so the model gets an
- * informative but compact view of what the failing call looked like without dumping full file
- * contents or internal options into its context.
+ * listing only the arguments that were actually supplied (undefined values, functions, and
+ * AbortSignals are skipped) and truncating long values. Debug off, the model gets just the message:
+ * the parameter echo can repeat large payloads (e.g. edit's oldText/newText) into its context.
  */
+
+let debugMode = false;
+
+/** Turns the `Parameters:` line in error output on/off. Wired to the `--debug` CLI flag in index.ts. */
+export function setDebugMode(enabled: boolean): void {
+  debugMode = enabled;
+}
+
+export function isDebugMode(): boolean {
+  return debugMode;
+}
 
 const MAX_VALUE_LENGTH = 120;
 
@@ -33,10 +46,12 @@ function isActiveParameter(value: unknown): boolean {
 }
 
 export function formatError(toolName: string, message: string, parameters: Record<string, unknown> = {}): string {
-  const active = Object.entries(parameters).filter(([, value]) => isActiveParameter(value));
   const lines = [`${toolName} error: ${message}`];
-  if (active.length > 0) {
-    lines.push(`Parameters: ${active.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`);
+  if (debugMode) {
+    const active = Object.entries(parameters).filter(([, value]) => isActiveParameter(value));
+    if (active.length > 0) {
+      lines.push(`Parameters: ${active.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`);
+    }
   }
   return lines.join("\n");
 }

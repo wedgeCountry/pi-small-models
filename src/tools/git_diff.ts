@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -13,14 +14,11 @@ const execFile = promisify(execFileCb);
 // that a large but reasonable diff isn't rejected outright by Node's stdout buffering.
 const MAX_BUFFER = 20 * 1024 * 1024; // 20MB
 
-// Same caps as `read`'s DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES, applied here for the same reason: one
-// call shouldn't be able to flood a small model's context with an enormous diff.
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
-
 export interface GitDiffOptions {
   /** Path (resolved through the sandbox) to scope the diff to. Omit for the whole repository. */
   path?: string;
+  /** Skip the DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES output cap — the model's explicit opt-out. */
+  uncapped?: boolean;
   /**
    * Pass git's `--name-only`: report just the changed paths, one per line, with no diff body.
    * Handy for a weak model as a cheap "what changed?" step before pulling a full diff into context.
@@ -163,6 +161,8 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
   const filtered = opts.nameOnly ? filterRestrictedNameOnly(sb, stdout) : filterRestrictedDiffChunks(sb, stdout);
   if (filtered === "") return { text: "", truncated: false };
 
+  if (opts.uncapped) return { text: filtered, truncated: false };
+
   const allLines = filtered.split(/\r\n|\n/);
   let selected = allLines.slice(0, Math.min(allLines.length, DEFAULT_MAX_LINES));
   while (selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
@@ -187,6 +187,7 @@ export function registerGitDiffTool(pi: ToolRegistry) {
         const result = await gitDiff(sandboxFor(cwd), {
           path: params.path,
           nameOnly: params.nameOnly,
+          uncapped: params.uncapped,
           signal,
         });
 

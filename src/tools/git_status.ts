@@ -6,6 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -121,8 +122,11 @@ export function registerGitStatusTool(pi: ToolRegistry) {
             )
           : ["(clean — no changes)"];
 
+        const capped = capText([branchLine, ...entryLines].join("\n"), { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
+
         return {
-          content: [{ type: "text", text: [branchLine, ...entryLines].join("\n") }],
+          content: [{ type: "text", text }],
           details: { branch: result.branch, ahead: result.ahead, behind: result.behind, entries: result.entries },
         };
       },

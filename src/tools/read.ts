@@ -6,10 +6,8 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
+import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
-
-const DEFAULT_MAX_LINES = 2000;
-const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
 
 /**
  * Decodes `buffer` to text, honoring BOMs so UTF-8/UTF-16 files keep their real characters
@@ -346,7 +344,7 @@ export function registerReadTool(pi: ToolRegistry) {
       async execute(params, { signal, cwd }) {
         const sb = sandboxFor(cwd);
 
-        const result = await readFile(sb, params.path, { offset: params.offset, limit: params.limit, signal });
+        const result = await readFile(sb, params.path, { offset: params.offset, limit: params.limit, uncapped: params.uncapped, signal });
 
         let text = result.lines.map((l) => `${l.line}:${l.text}`).join("\n");
         if (result.truncated) {

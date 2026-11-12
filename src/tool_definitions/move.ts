@@ -5,8 +5,8 @@ export const MOVE_TOOL_DEFINITION = {
   label: "Move",
   description: "Move or rename a file or directory to a new path within the project.",
   parameters: Type.Object({
-    path: Type.String({ description: "File or directory to move, relative to the project root." }),
-    destination: Type.String({ description: "Path to move to, relative to the project root." }),
+    path: Type.String({ description: "File or directory to move (project-relative)." }),
+    destination: Type.String({ description: "Path to move to (project-relative)." }),
     recursive: Type.Optional(
       Type.Boolean({
         description: "Required to move a directory. Moves the directory and everything inside it.",

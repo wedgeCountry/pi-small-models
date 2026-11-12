@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const GREP_TOOL_DEFINITION = {
   name: "grep",
@@ -9,7 +10,7 @@ export const GREP_TOOL_DEFINITION = {
       description: "Regex to search for within file contents, e.g. \"foo\\s*=\\s*\\d+\"."
     }),
     path: Type.Optional(
-      Type.String({ description: 'Base directory to search from, relative to the project root. Defaults to ".".' })
+      Type.String({ description: 'Base directory to search from (project-relative). Defaults to ".".' })
     ),
     glob: Type.Optional(
       Type.String({ description: 'Glob to restrict which files are searched, e.g. "**/*.ts". Defaults to all files.' })
@@ -21,5 +22,6 @@ export const GREP_TOOL_DEFINITION = {
     contextLines: Type.Optional(
       Type.Integer({ description: "Lines of context to include before/after each match.", default: 0 })
     ),
+    uncapped: uncappedParam,
   }),
 };

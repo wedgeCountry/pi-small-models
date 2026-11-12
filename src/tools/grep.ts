@@ -9,6 +9,7 @@ import {sandboxFor, type Sandbox, SandboxState} from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 import path from "node:path";
 
 export interface GrepOptions {
@@ -194,10 +195,12 @@ export function registerGrepTool(pi: ToolRegistry) {
           ignoreGlobs,
         });
 
-        const text = result.lines.length
+        const raw = result.lines.length
           ? result.lines.map((l) => `${l.file}${l.isMatch ? ":" : "-"}${l.line}${l.isMatch ? ":" : "-"}${l.text}`).join("\n") +
             (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
           : "No matches found.";
+        const capped = capText(raw, { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
 
         return {
           content: [{ type: "text", text }],

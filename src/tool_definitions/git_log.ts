@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const GIT_LOG_TOOL_DEFINITION = {
   name: "git_log",
@@ -15,8 +16,9 @@ export const GIT_LOG_TOOL_DEFINITION = {
     ),
     path: Type.Optional(
       Type.String({
-        description: "Only show commits touching this file or directory, relative to the project root. Defaults to the whole repository.",
+        description: "Only show commits touching this file or directory (project-relative). Defaults to the whole repository.",
       })
     ),
+    uncapped: uncappedParam,
   }),
 };

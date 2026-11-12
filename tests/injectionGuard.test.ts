@@ -12,6 +12,8 @@ function loadExtension() {
   const fakePi = {
     registerTool: () => {},
     registerCommand: () => {},
+    registerFlag: () => {},
+    getFlag: () => undefined,
     on: (event: string, handler: Handler) => void handlers.set(event, handler),
     getActiveTools: () => ["bash"],
     setActiveTools: () => {},

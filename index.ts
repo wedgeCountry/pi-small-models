@@ -19,6 +19,7 @@ import {registerPiDocsTool} from "./src/tools/pi_docs.ts";
 import {registerPiSkillsTool} from "./src/tools/pi_skills.ts";
 import {registerWriteTool} from "./src/tools/write.ts";
 import {INJECTION_GUARD_RULES} from "./src/injectionGuard.ts";
+import {setDebugMode} from "./src/backend/formatError.ts";
 import {resetSkillsCache} from "./src/sandbox/piRoots.ts";
 import {getSandboxState, setSandboxState, type SandboxState} from "./src/sandbox/sandbox.ts";
 import {createGatedRegistry, createPermissionGate} from "./src/sandbox/permissionGate.ts";
@@ -29,13 +30,29 @@ import {
   readIgnoreFile,
 } from "./src/commands/ignore.ts";
 
+const ON_OFF_STATES = new Set(["on", "off"]);
 const SANDBOX_STATES = new Set<SandboxState>(["on", "off"]);
 
 // find/grep/edit/read/write override Pi's built-in tools of the same name (same-name registration
 // replaces the built-in per Pi's tool registry).
 const DISABLED_TOOLS = new Set(["bash"]);
 
+// pi_docs/pi_skills stay registered but inactive by default: their schemas and guidelines are among
+// the most expensive in the system prompt, and most sessions never need them. `/pi-self on` turns
+// them on for the session.
+const LAZY_TOOLS = new Set(["pi_docs", "pi_skills"]);
+
 export default function (pi: ExtensionAPI) {
+  // Debug mode: `pi --debug` makes tool errors include the full `Parameters:` line (see
+  // src/backend/formatError.ts); by default errors carry just the message, so a failing edit
+  // doesn't echo its whole oldText/newText payload back into the model's context.
+  pi.registerFlag("debug", {
+    description: "Verbose tool errors: append the full parameter list to every tool error (default: message only).",
+    type: "boolean",
+    default: false,
+  });
+  setDebugMode(pi.getFlag("debug") === true);
+
   // Every tool registered through `tools` is gated: with the sandbox off, it asks before running.
   const {registry: tools, gatedTools} = createGatedRegistry(pi);
   registerCopyTool(tools);
@@ -65,13 +82,45 @@ export default function (pi: ExtensionAPI) {
   registerPiDocsTool(pi);
   registerPiSkillsTool(pi);
 
+  const setPiSelfTools = (enable: boolean) => {
+    const active = new Set(pi.getActiveTools());
+    for (const name of LAZY_TOOLS) {
+      if (enable) active.add(name);
+      else active.delete(name);
+    }
+    pi.setActiveTools([...active]);
+  };
+  setPiSelfTools(false);
+
+  pi.registerCommand("pi-self", {
+    description:
+      "Activate or deactivate the pi_docs and pi_skills tools for this session. They are off by default to keep the " +
+      "system prompt small; turn them on when working on pi itself (its docs, extensions, skills). No argument toggles.",
+    getArgumentCompletions: (prefix) =>
+      [...ON_OFF_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
+    handler: async (args, ctx) => {
+      const requested = args.trim().toLowerCase();
+      let enable: boolean;
+      if (requested === "") {
+        enable = !pi.getActiveTools().includes("pi_docs");
+      } else if (ON_OFF_STATES.has(requested)) {
+        enable = requested === "on";
+      } else {
+        ctx.ui.notify(`Unknown state \"${requested}\" \u2014 expected on or off`, "error");
+        return;
+      }
+      setPiSelfTools(enable);
+      ctx.ui.notify(`pi_docs/pi_skills: ${enable ? "on" : "off"}`, enable ? "info" : "warning");
+    },
+  });
+
   pi.registerCommand("toggle-sandbox", {
     description: "Set the sandbox (src/sandbox/sandbox.ts): on (fully enforced locally — root containment plus " +
       "credential/.git glob restrictions, no confirmation prompts) or off (nothing enforced locally; " +
       "every call to one of this project's tools requires an explicit approval dialog instead, see " +
       "src/sandbox/permissionGate.ts). No argument toggles on <-> off.",
     getArgumentCompletions: (prefix) =>
-      [...SANDBOX_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
+      [...ON_OFF_STATES].filter((s) => s.startsWith(prefix)).map((value) => ({value, label: value})),
     handler: async (args, ctx) => {
       const requested = args.trim().toLowerCase();
       let state: SandboxState;
@@ -139,7 +188,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", (_event) => {
-    pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name)));
+    // bash stays gone, and pi_docs/pi_skills go back to inactive, so a previous session's `/pi-self on`
+    // never leaks into a new one.
+    pi.setActiveTools(pi.getActiveTools().filter((name) => !DISABLED_TOOLS.has(name) && !LAZY_TOOLS.has(name)));
     // The sandbox state lives for the whole process, not one session; reset it so a previous
     // session's `/toggle-sandbox off` never leaks into a new one.
     setSandboxState("on");

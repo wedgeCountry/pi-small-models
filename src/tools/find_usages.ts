@@ -8,6 +8,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
+import { capText, capHint } from "../backend/capOutput.ts";
 import { FIND_USAGES_TOOL_DEFINITION } from "../tool_definitions/find_usages.ts";
 import { LANGUAGE_RULES, type FindUsagesLanguage } from "./usageRules/registry.ts";
 import { isValidIdentifier } from "./usageRules/shared.ts";
@@ -200,10 +201,12 @@ export function registerFindUsagesTool(pi: ToolRegistry) {
           ignoreGlobs,
         });
 
-        const text = result.matches.length
+        const raw = result.matches.length
           ? result.matches.map((m) => `${m.file}:${m.line}:[${m.kind}]: ${m.text}`).join("\n") +
             (result.truncated ? `\n… results truncated at ${params.maxResults ?? 200} matches` : "")
           : "No usages found.";
+        const capped = capText(raw, { uncapped: params.uncapped });
+        const text = capped.truncated ? `${capped.text}\n\n${capHint()}` : capped.text;
 
         return {
           content: [{ type: "text", text }],

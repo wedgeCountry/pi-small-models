@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 import { PEEK_EXTENSIONS } from "../tools/previewManagers/registry.ts";
 
 export const PEEK_TOOL_DEFINITION = {
@@ -6,18 +7,17 @@ export const PEEK_TOOL_DEFINITION = {
   label: "Peek",
   description: "Show a compact outline of the file.",
   parameters: Type.Object({
-    path: Type.String({ description: "File to outline, relative to the project root." }),
+    path: Type.String({ description: "File to outline (project-relative)." }),
     visibility: Type.Optional(
       Type.Union([Type.Literal("public"), Type.Literal("protected"), Type.Literal("private")], {
         description:
-          'Declarations to include (inclusive): "public" (default) shows only public API, ' +
-          '"protected" adds protected members, "private" shows everything. Ignored for Markdown.',
+          'Declarations to include: "public" (default), "protected" or "private" (everything). Ignored for Markdown.',
         default: "public",
       })
     ),
     includeDocs: Type.Optional(
       Type.Boolean({
-        description: "Include full docstrings / JSDoc / XML doc comments. Defaults to false. Ignored for Markdown.",
+        description: "Include full docstrings/JSDoc/XML docs (default false). Ignored for Markdown.",
         default: false,
       })
     ),
@@ -25,8 +25,9 @@ export const PEEK_TOOL_DEFINITION = {
       Type.Integer({
         minimum: 1,
         maximum: 6,
-        description: "Markdown only: deepest heading level to show (1 = only # headings). Defaults to 6 (all).",
+        description: "Markdown only: deepest heading level to show (default 6 = all).",
       })
     ),
+    uncapped: uncappedParam,
   }),
 };

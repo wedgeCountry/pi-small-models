@@ -1,20 +1,15 @@
 import { Type } from "typebox";
+import { uncappedParam } from "../backend/capOutput.ts";
 
 export const PI_DOCS_TOOL_DEFINITION = {
   name: "pi_docs",
   label: "Pi Docs",
   description:
-    "Read Pi's own documentation: the README, docs pages and example extensions of the installed Pi package — the " +
-    "files to read for questions about pi itself (extensions, tools, settings, keybindings, themes, skills, the SDK, " +
-    "TUI components). Paths are relative to Pi's package root. Omit path to list every available page first.",
-  promptSnippet:
-    "pi_docs: read Pi's own documentation (README.md, docs/..., examples/...); no arguments lists the available pages",
+    "Read Pi's own documentation (README, docs, examples of the installed Pi package) for questions about pi itself. " +
+    "Omit path to list available pages.",
   promptGuidelines: [
-    "Use pi_docs whenever the question is about pi itself — how to write an extension, which tools exist, how settings " +
-      "or skills work — instead of answering from memory.",
-    "Call it with no arguments to see which pages exist, then read the page you need; follow the links it mentions.",
-    "pi_docs is read-only and reaches only Pi's own installed package: it cannot read your project, your home folder " +
-      "or anywhere else on the machine.",
+    "Use pi_docs for questions about pi itself instead of answering from memory; call with no arguments to list pages. " +
+      "Read-only, limited to Pi's installed package.",
   ],
   parameters: Type.Object({
     path: Type.Optional(
@@ -29,5 +24,6 @@ export const PI_DOCS_TOOL_DEFINITION = {
       Type.Integer({ minimum: 1, description: "1-indexed line number to start reading from. Defaults to 1." })
     ),
     limit: Type.Optional(Type.Integer({ minimum: 1, description: "Maximum number of lines to read." })),
+    uncapped: uncappedParam,
   }),
 };
