@@ -6,7 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError, isToolFormattedError } from "../backend/formatError.ts";
-import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
+import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES, capLines } from "../backend/capOutput.ts";
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 
 /**
@@ -193,23 +193,16 @@ export async function readFile(sb: Sandbox, target: string, opts: ReadOptions = 
   }
 
   const startIndex = offset - 1;
-  let endIndex = Math.min(startIndex + maxLines, totalLines);
-
-  // Cap by byte size, trimming lines off the end until under the limit (never a partial line).
-  // Accumulates per-line byte counts (each line is joined with a 1-byte "\n") instead of
-  // re-measuring the whole selection each time, so the cap stays O(n) for large ranges.
-  let selected = allLines.slice(startIndex, endIndex);
-  if (selected.length > 0 && Number.isFinite(maxBytes)) {
-    let bytes = -1; // no separator before the first line
-    let lastUnder = 0;
-    for (let i = 0; i < selected.length; i++) {
-      bytes += Buffer.byteLength(selected[i]!, "utf8") + 1;
-      if (bytes > maxBytes) break;
-      lastUnder = i + 1;
-    }
-    selected = selected.slice(0, lastUnder);
-  }
-  endIndex = startIndex + selected.length;
+  const rangeEnd = opts.uncapped ? totalLines : Math.min(startIndex + maxLines, totalLines);
+  // Cap by line count and byte size through the shared capLines helper, trimming whole lines off
+  // the end (never a partial line).
+  const capped = capLines(allLines.slice(startIndex, rangeEnd), {
+    uncapped: opts.uncapped,
+    maxLines: opts.limit,
+    sizeOf: (l) => Buffer.byteLength(l, "utf8") + 1,
+  });
+  const selected = capped.items;
+  const endIndex = startIndex + selected.length;
 
   return {
     lines: selected.map((text, i) => ({ line: startIndex + i + 1, text })),

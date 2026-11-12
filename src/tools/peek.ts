@@ -8,7 +8,7 @@ import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
 import { PEEK_EXTENSIONS, previewManagerFor } from "./previewManagers/registry.ts";
 import type { PeekLine, PeekVisibility } from "./previewManagers/types.ts";
-import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
+import { capLines } from "../backend/capOutput.ts";
 
 export interface PeekOptions {
   visibility?: PeekVisibility;
@@ -66,22 +66,12 @@ export async function peekFile(sb: Sandbox, target: string, opts: PeekOptions = 
     maxDepth,
   });
 
-  let truncated = false;
-  if (!opts.uncapped) {
-    if (lines.length > DEFAULT_MAX_LINES) {
-      lines = lines.slice(0, DEFAULT_MAX_LINES);
-      truncated = true;
-    }
-    let bytes = 0;
-    for (let k = 0; k < lines.length; k++) {
-      bytes += Buffer.byteLength(lines[k]!.text, "utf8") + 1;
-      if (bytes > DEFAULT_MAX_BYTES && k > 0) {
-        lines = lines.slice(0, k);
-        truncated = true;
-        break;
-      }
-    }
-  }
+  const capped = capLines(lines, {
+    uncapped: opts.uncapped,
+    sizeOf: (l) => Buffer.byteLength(l.text, "utf8") + 1,
+  });
+  lines = capped.items;
+  const truncated = capped.truncated;
 
   return { language: manager.language, lines, totalLines: read.totalLines, truncated };
 }

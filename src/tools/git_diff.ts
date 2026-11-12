@@ -6,7 +6,7 @@ import { sandboxFor, type Sandbox } from "../sandbox/sandbox.ts";
 import { renderLine } from "../backend/renderCall.ts";
 import { createTool } from "../backend/createTool.ts";
 import { toolError } from "../backend/formatError.ts";
-import { DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES } from "../backend/capOutput.ts";
+import { capLines } from "../backend/capOutput.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -164,12 +164,8 @@ export async function gitDiff(sb: Sandbox, opts: GitDiffOptions = {}): Promise<G
   if (opts.uncapped) return { text: filtered, truncated: false };
 
   const allLines = filtered.split(/\r\n|\n/);
-  let selected = allLines.slice(0, Math.min(allLines.length, DEFAULT_MAX_LINES));
-  while (selected.length > 1 && Buffer.byteLength(selected.join("\n"), "utf8") > DEFAULT_MAX_BYTES) {
-    selected = selected.slice(0, -1);
-  }
-
-  return { text: selected.join("\n"), truncated: selected.length < allLines.length };
+  const capped = capLines(allLines);
+  return { text: capped.items.join("\n"), truncated: capped.truncated };
 }
 
 function describeError(err: unknown): string {

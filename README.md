@@ -70,8 +70,11 @@ Start Pi as usual. The `bash` tool is gone, and the tools below are available to
 
 ## Debug mode
 
-Tool errors carry just the message by default. Start Pi with `pi --debug` to append the full
-`Parameters:` line (the arguments of the failing call) to every tool error.
+Tool errors carry just the message by default, and are capped at 100 lines / 4 KB. Start Pi with
+`pi --debug` for the full error: the `Parameters:` line (the arguments of the failing call) and no
+cap.
+
+All tool output is capped at 2000 lines / 50 KB per call unless the call passes `uncapped: true`.
 
 ## Safety: the sandbox
 

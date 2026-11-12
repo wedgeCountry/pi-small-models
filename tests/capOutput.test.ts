@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { capText, capHint, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES, uncappedParam } from "../src/backend/capOutput.ts";
+import { capText, capLines, capHint, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES, uncappedParam } from "../src/backend/capOutput.ts";
 import { readFile } from "../src/tools/read.ts";
 import { Sandbox } from "../src/sandbox/sandbox.ts";
 import { makeFixture, cleanupFixture } from "./fixtures.ts";
@@ -45,6 +45,30 @@ test("capText with uncapped returns the full text", () => {
 
 test("capHint names the cap and the opt-out parameter", () => {
   assert.match(capHint(), /uncapped: true/);
+});
+
+test("capLines caps by line count and by bytes, always keeping at least one item", () => {
+  const many = Array.from({ length: DEFAULT_MAX_LINES + 10 }, (_, i) => `line ${i}`);
+  const byLines = capLines(many);
+  assert.equal(byLines.truncated, true);
+  assert.equal(byLines.items.length, DEFAULT_MAX_LINES);
+
+  const big = ["short", "x".repeat(DEFAULT_MAX_BYTES), "short"];
+  const byBytes = capLines(big);
+  assert.equal(byBytes.truncated, true);
+  assert.deepEqual(byBytes.items, ["short"]);
+
+  const singleHuge = capLines(["x".repeat(DEFAULT_MAX_BYTES * 2)]);
+  assert.equal(singleHuge.truncated, false, "a single oversized line is kept whole");
+  assert.equal(singleHuge.items.length, 1);
+});
+
+test("capLines with uncapped or a custom sizeOf", () => {
+  const items = [{ text: "a" }, { text: "b" }];
+  assert.equal(capLines(items, { uncapped: true }).truncated, false);
+  const sized = capLines(items, { maxBytes: 2, sizeOf: (i) => i.text.length + 1 });
+  assert.deepEqual(sized.items, [{ text: "a" }]);
+  assert.equal(sized.truncated, true);
 });
 
 test("read caps at 2000 lines by default and honors the uncapped opt-out", async (t) => {

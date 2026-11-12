@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatError, toolError, setDebugMode, isDebugMode } from "../src/backend/formatError.ts";
+import { formatError, toolError, capErrors, setDebugMode, isDebugMode } from "../src/backend/formatError.ts";
 
 test("debug off (default): errors carry just the message, no Parameters line", (t) => {
   t.after(() => setDebugMode(false));
@@ -46,6 +46,19 @@ test("debug on: truncates long parameter values", (t) => {
   const message = formatError("write", "Could not write file", { path: "a.ts", content: "x".repeat(500) });
   assert.match(message, /content="x{100,}/);
   assert.ok(message.length < 300);
+});
+
+test("capErrors truncates long errors when debug is off, keeps them whole when on", (t) => {
+  t.after(() => setDebugMode(false));
+  const huge = "x".repeat(10 * 1024);
+
+  setDebugMode(false);
+  const capped = capErrors(`read error: ${huge}`);
+  assert.ok(capped.length < huge.length, "error is trimmed in default mode");
+  assert.match(capped, /\[Error truncated\..*--debug/);
+
+  setDebugMode(true);
+  assert.equal(capErrors(`read error: ${huge}`), `read error: ${huge}`);
 });
 
 test("toolError returns an Error with the formatted message", (t) => {

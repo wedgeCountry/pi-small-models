@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously always included, truncated at 120 chars per value) only appears with the new `--debug`
   CLI flag (`pi --debug`). Pi's built-in `/debug` is only a debug-log viewer, not a mode switch, so
   the extension registers its own flag via `pi.registerFlag`/`pi.getFlag`.
+- Error output is capped too (`capErrors` in `src/backend/formatError.ts`): 100 lines / 4 KB when debug
+  is off, full text with `--debug`.
+- All output capping now goes through the shared helpers in `src/backend/capOutput.ts` (`capLines` /
+  `capText`); `read`, `peek` and `git_diff` use them instead of their own cap loops.
 - Smaller system prompt: dropped the redundant `promptSnippet` fields (`pi_docs`, `pi_skills`, `insert`),
   cut the `pi_docs`/`pi_skills`/`insert` prompt guidelines down to one line each, shortened the two
   prompt-injection guard rules, and slimmed tool descriptions and parameter boilerplate

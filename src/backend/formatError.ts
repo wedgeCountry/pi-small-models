@@ -1,3 +1,5 @@
+import { capText } from "./capOutput.ts";
+
 /**
  * Unified error-message formatting for every error a tool throws.
  *
@@ -23,6 +25,31 @@ export function setDebugMode(enabled: boolean): void {
 
 export function isDebugMode(): boolean {
   return debugMode;
+}
+
+/** Errors get a much tighter cap than tool output: short by default, full only in debug mode. */
+const ERROR_MAX_LINES = 100;
+const ERROR_MAX_BYTES = 4 * 1024; // 4KB
+
+/**
+ * Caps a formatted error message at ERROR_MAX_LINES lines / ERROR_MAX_BYTES bytes. Debug mode
+ * off (the default), a huge error (e.g. a git stderr dump) is trimmed with a hint; debug mode
+ * on, the full text is kept.
+ */
+export function capErrors(text: string): string {
+  if (debugMode) return text;
+  const capped = capText(text, { maxLines: ERROR_MAX_LINES, maxBytes: ERROR_MAX_BYTES });
+  let out = capped.text;
+  let truncated = capped.truncated;
+  // capText always keeps at least one line, so a single oversized line survives it — hard-trim
+  // that case too (char-slicing to maxBytes is safe: UTF-8 chars are at least one byte each).
+  if (!truncated && Buffer.byteLength(out, "utf8") > ERROR_MAX_BYTES) {
+    out = out.slice(0, ERROR_MAX_BYTES);
+    truncated = true;
+  }
+  return truncated
+    ? `${out}\n\n[Error truncated. Start pi with --debug for the full error output.]`
+    : out;
 }
 
 const MAX_VALUE_LENGTH = 120;
@@ -53,7 +80,7 @@ export function formatError(toolName: string, message: string, parameters: Recor
       lines.push(`Parameters: ${active.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`);
     }
   }
-  return lines.join("\n");
+  return capErrors(lines.join("\n"));
 }
 
 /** Convenience wrapper so a tool throws with the unified format in one call. */
